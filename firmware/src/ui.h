@@ -55,7 +55,23 @@ void valueEditor(const char *title, const char *value, const char *caption, int 
 // Full-screen state: icon, headline, up to two lines, small hint at the bottom.
 void message(Icon icon, const char *headline, const char *line1, const char *line2,
              const char *hint);
+// Same, with key chips at the bottom instead of a hint.
+void message(Icon icon, const char *headline, const char *line1, const char *line2, Hint left,
+             Hint right);
 
 void sleepScreen(const char *title, const char *author, int percentRead, int batteryPct);
+
+// Wi-Fi transfer: QR code left, step + instructions right.
+struct WifiView {
+  const char *qr;  // QR payload (Wi-Fi join string or page URL)
+  int step;        // 1 = join the network, 2 = open the page
+  const char *headline;
+  const char *label1;
+  const char *value1;
+  const char *label2;
+  const char *value2;
+  const char *event;  // last upload/delete, or ""
+};
+void wifiScreen(const WifiView &v, Hint left, Hint right, int batteryPct);
 
 }  // namespace ui

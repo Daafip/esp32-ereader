@@ -9,7 +9,8 @@ blits pages. Full plan and phase status: `PLAN.md`. Hardware facts: `docs/hardwa
 Phases 0-5 are written and build; **no code has run on a board yet** (David has none
 yet). Waiting on the hardware checkpoints in `docs/checkpoints.md` (0, 1, 3, 4).
 Checkpoint 2 is done: Ubuntu Regular 13 px (bookprep default). Phase 6 is optional and
-not started. UI look: check `pixi run ui-preview` after any change to `ui.cpp`.
+not started except Wi-Fi transfer (done). UI look: check `pixi run ui-preview` after
+any change to `ui.cpp`; the web page opens in demo mode straight from disk.
 
 ## Commands (everything through pixi)
 
@@ -19,10 +20,11 @@ not started. UI look: check `pixi run ui-preview` after any change to `ui.cpp`.
 | Firmware unit tests (PC) | `pixi run fw-test` (`firmware/lib/core`, Unity, native env) |
 | Render all screens (PC) | `pixi run ui-preview` -> `out/ui-preview/` |
 | Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`) |
+| Images for browser/OTA flashing | `pixi run fw-dist` -> `out/firmware/` |
 | Serial monitor | `pixi run fw-monitor` |
 | Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` |
 | Font comparison | `pixi run font-sheet book.epub --font a.ttf --sizes 11 12 13` |
-| Regenerate generated headers | `pixi run devpages` (test_pages.h), `pixi run ui-fonts` (fonts/) |
+| Regenerate generated headers | `pixi run devpages` (test_pages.h), `pixi run ui-fonts` (fonts/), `pixi run web` (web_index.h from `firmware/web/index.html`) |
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
 
 ## Conventions

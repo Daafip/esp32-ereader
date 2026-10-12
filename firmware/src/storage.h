@@ -18,6 +18,7 @@ struct BookEntry {
   String author;
   uint32_t pages = 0;
   uint32_t id = 0;  // t5b::bookId, for the bookmark
+  uint32_t size = 0;
 };
 
 // Mounts the card (tries 20, 10, 4 MHz). Safe to call again.

@@ -25,7 +25,9 @@
 #include "settings.h"
 #include "storage.h"
 #include "text_util.h"
+#include "transfer.h"
 #include "ui.h"
+#include "web_util.h"
 
 namespace app {
 namespace {
@@ -44,6 +46,7 @@ enum class Screen : uint8_t {
   Library,
   SettingsMenu,
   About,
+  WifiTransfer,
 };
 
 // What the panel shows and where we are, kept through deep sleep (RTC RAM).
@@ -79,9 +82,21 @@ ListModel list;
 std::vector<storage::BookEntry> library;
 int goToPct = 0;
 
-const char *const kMainItems[] = {"Resume", "Chapters", "Go to position", "Library",
-                                  "Settings", "About", "Sleep"};
-enum MainItem { kResume, kChapters, kGoTo, kLibrary, kSettings, kAbout, kSleep, kMainCount };
+const char *const kMainItems[] = {"Resume",   "Chapters", "Go to position", "Library",
+                                  "Wi-Fi transfer", "Settings", "About",  "Sleep"};
+enum MainItem {
+  kResume,
+  kChapters,
+  kGoTo,
+  kLibrary,
+  kWifi,
+  kSettings,
+  kAbout,
+  kSleep,
+  kMainCount
+};
+bool messageOffersWifi = false;  // "No books yet": MENU starts Wi-Fi transfer
+int wifiStep = 0;                // QR shown: 0 = automatic, 1 = join Wi-Fi, 2 = open page
 
 void setScreen(Screen s) {
   screen = s;
@@ -96,6 +111,7 @@ int percentRead() {
 }
 
 [[noreturn]] void enterSleep(bool withSleepScreen) {
+  transfer::stop();
   if (withSleepScreen) {
     ui::sleepScreen(book.isOpen() ? book.header().title : nullptr,
                     book.isOpen() ? book.header().author : nullptr, percentRead(), batteryPct);
@@ -110,6 +126,7 @@ int percentRead() {
 }
 
 void showMessage(ui::Icon icon, const char *title, const char *line1, const char *line2) {
+  messageOffersWifi = false;
   ui::message(icon, title, line1, line2, kRetryHint);
   display::show(Refresh::Full);
   setScreen(Screen::Message);
@@ -263,10 +280,18 @@ void renderLibrary() {
   display::show(menuRefresh());
 }
 
+void showNoBooks() {
+  ui::message(ui::Icon::Book, "No books yet", "Upload them over Wi-Fi, or copy", ".t5b files to /books on the card",
+              {"MENU", "Wi-Fi transfer", nullptr}, {"NEXT", "retry", nullptr});
+  display::show(Refresh::Full);
+  setScreen(Screen::Message);
+  messageOffersWifi = true;
+}
+
 void openLibrary() {
   const storage::Status status = storage::listBooks(library);
   if (status != storage::Status::Ok) {
-    showMessage(ui::Icon::Book, "No books yet", "Copy .t5b files to /books", "on the SD card");
+    showNoBooks();
     return;
   }
   int selected = 0;
@@ -318,6 +343,64 @@ void openAbout() {
   setScreen(Screen::About);
 }
 
+// --- Wi-Fi transfer ---------------------------------------------------------------
+
+bool restoreBook();
+
+int transferStep() {
+  const transfer::Info &t = transfer::info();
+  if (!t.ownNetwork) return 0;  // home network: only the page QR
+  if (wifiStep) return wifiStep;
+  return t.clients ? 2 : 1;
+}
+
+void renderTransfer() {
+  const transfer::Info &t = transfer::info();
+  const int step = transferStep();
+  char qr[128];
+  ui::WifiView v;
+  if (step == 1) {
+    wifiQrPayload(t.ssid, t.password, qr, sizeof(qr));
+    v = {qr, 1, "Join the Wi-Fi", "Network", t.ssid, "Password", t.password, t.event};
+  } else {
+    strlcpy(qr, t.url, sizeof(qr));
+    v = {qr, step, "Open the page", "Address", t.address, "Code", t.code, t.event};
+  }
+  const ui::Hint other = {"NEXT", step == 1 ? "show page" : "show Wi-Fi", nullptr};
+  ui::wifiScreen(v, step ? other : kNoHint, {"MENU", "done", nullptr}, batteryPct);
+  display::show(menuRefresh());
+}
+
+void startTransfer() {
+  book.close();  // uploads may replace or delete it; reopened when done
+  input::setRepeat(false);
+  wifiStep = 0;
+  transfer::start(batteryPct);
+  transfer::takeChanged();
+  setScreen(Screen::WifiTransfer);
+  renderTransfer();
+}
+
+void stopTransfer() {
+  transfer::stop();
+  restoreBook();  // quietly; the library shows what is on the card now
+  openLibrary();
+}
+
+void transferKey(Key k) {
+  switch (k) {
+    case Key::NextShort:
+      if (transferStep()) {
+        wifiStep = transferStep() == 1 ? 2 : 1;
+        renderTransfer();
+      }
+      break;
+    case Key::MenuShort:
+    case Key::MenuLong: stopTransfer(); break;
+    default: break;
+  }
+}
+
 // --- key handling --------------------------------------------------------------
 
 enum class ListAction { None, Moved, Select, Back };
@@ -366,6 +449,7 @@ void mainMenuKey(Key k) {
         case kChapters: openChapters(); break;
         case kGoTo: openGoTo(); break;
         case kLibrary: openLibrary(); break;
+        case kWifi: startTransfer(); break;
         case kSettings: openSettings(); break;
         case kAbout: openAbout(); break;
         case kSleep: enterSleep(true);
@@ -456,8 +540,13 @@ void handle(Key k) {
     case Screen::Library: libraryKey(k); break;
     case Screen::SettingsMenu: settingsKey(k); break;
     case Screen::About: openMainMenu(); break;
+    case Screen::WifiTransfer: transferKey(k); break;
     case Screen::Message:
-      ESP.restart();  // retry from the start (card inserted, book copied)
+      if (messageOffersWifi && k == Key::MenuShort) {
+        startTransfer();
+      } else {
+        ESP.restart();  // retry from the start (card inserted, book copied)
+      }
       break;
     case Screen::Sleeping:
     case Screen::LowBattery:
@@ -539,10 +628,17 @@ void setup() {
 }
 
 void loop() {
+  const bool wifi = screen == Screen::WifiTransfer;
+  if (wifi) {
+    transfer::loop();
+    if (transfer::takeChanged()) renderTransfer();
+  }
   handle(input::poll());
+  uint32_t last = input::lastActivityMs();
+  if (wifi && int32_t(transfer::info().lastActivityMs - last) > 0) last = transfer::info().lastActivityMs;
   const uint32_t idleMs = uint32_t(settings.idleMinutes) * 60000;
-  if (millis() - input::lastActivityMs() > idleMs) enterSleep(screen != Screen::Message);
-  delay(5);
+  if (millis() - last > idleMs) enterSleep(screen != Screen::Message);
+  delay(wifi ? 1 : 5);
 }
 
 }  // namespace app

@@ -35,6 +35,10 @@ cmd = "pio run -d firmware -e {{ env }} -t upload"
 args = [{ arg = "env", default = "reader" }]
 description = "Flash one env: pixi run fw-flash [reader|calibration|panel_tester|button_test|sd_test]"
 
+[tasks.fw-dist]
+cmd = "bash tools/fw_dist.sh"
+description = "Build all envs and collect merged .bin images in out/firmware/ (browser flashing at 0x0)"
+
 [tasks.fw-monitor]
 cmd = "pio device monitor -d firmware"
 description = "Serial monitor at 115200 baud"
@@ -58,6 +62,10 @@ description = "Regenerate the menu fonts (bb_epaper fontconvert, Ubuntu, codepag
 [tasks.ui-preview]
 cmd = "bash tools/ui_preview.sh"
 description = "Render every firmware screen on the PC (real ui.cpp) to out/ui-preview/"
+
+[tasks.web]
+cmd = "python tools/embed_web.py firmware/web/index.html firmware/include/web_index.h"
+description = "Embed the Wi-Fi transfer page (gzip) into the firmware"
 
 [tasks.test]
 cmd = "pytest tools/bookprep/tests"

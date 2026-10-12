@@ -101,6 +101,11 @@ Free header GPIOs (for external page-turn buttons, Phase 6): 19 (LED), 21, 22, 2
   mode (strapping pins are normally only sampled at power-on/chip reset), and the
   sleep current with the pins held.
 
+- **Partitions** (reader env): `min_spiffs.csv`, two 1.9 MB app slots (Wi-Fi and the
+  web server need more than the default 1.25 MB; the second slot enables firmware
+  updates over Wi-Fi). NVS stays at 0x9000 in every env, so settings survive
+  flashing a diagnostic sketch in between.
+
 ## Candidate panel constants (bb_epaper 2.1.11)
 
 | Constant | Size | Controller | Comment |

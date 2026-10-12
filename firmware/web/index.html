@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>T5 Reader</title>
+<style>
+:root{--bg:#f5f4f0;--card:#fff;--ink:#1c1c1e;--muted:#6e6e73;--line:#e3e1dc;--accent:#1c1c1e;--on-accent:#fff;--danger:#b3261e;--ok:#1b7a35;--r:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#111112;--card:#1c1c1e;--ink:#ececee;--muted:#9a9aa0;--line:#2e2e31;--accent:#ececee;--on-accent:#111112;--danger:#f2b8b5;--ok:#8fd19e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Ubuntu,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:620px;margin:0 auto;padding:28px 16px 56px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:22px}
+h1{font-size:24px;margin:0;letter-spacing:-.02em}
+.meta{color:var(--muted);font-size:14px;text-align:right}
+.drop{display:block;background:var(--card);border:1.5px dashed var(--line);border-radius:var(--r);padding:30px 16px;text-align:center;cursor:pointer;transition:border-color .15s,transform .15s}
+.drop:hover,.drop.over{border-color:var(--accent)}
+.drop.over{transform:scale(1.01)}
+.drop b{display:block;font-size:17px;margin-bottom:2px}
+.drop .hint{color:var(--muted);font-size:14px}
+.drop .plus{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-size:22px;line-height:1;margin-bottom:10px}
+h2{display:flex;justify-content:space-between;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:30px 4px 10px}
+ul{list-style:none;margin:0;padding:0}
+.queue{margin-top:12px}
+.card{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.grow{flex:1;min-width:0}
+.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub.err{color:var(--danger);white-space:normal}
+.sub.ok{color:var(--ok)}
+.bar{height:4px;background:var(--line);border-radius:2px;margin-top:9px;overflow:hidden}
+.prog{display:flex;align-items:center;gap:10px}
+.prog .bar{flex:1;margin-top:0}
+.prog small{color:var(--muted);font-size:12px;min-width:3ch;text-align:right}
+.card .prog{margin-top:9px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .2s}
+.del{flex:none;border:0;background:none;color:var(--muted);font:inherit;font-size:14px;padding:7px 10px;border-radius:9px;cursor:pointer}
+.del:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
+.fw{cursor:pointer}
+.empty{justify-content:center;color:var(--muted);font-size:14px;padding:22px}
+.note{color:var(--muted);font-size:13px;margin:26px 4px 0}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--card);border:1px solid var(--line);padding:1px 6px;border-radius:6px}
+.keybox{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:26px 20px;text-align:center}
+.keybox p{color:var(--muted);margin:4px 0 18px}
+.keybox input{font:600 28px/1 ui-monospace,Menlo,monospace;letter-spacing:.35em;text-align:center;width:9ch;padding:10px 0 10px .35em;border:1.5px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
+.keybox input:focus{outline:none;border-color:var(--accent)}
+.btn{display:block;margin:16px auto 0;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:600 15px/1 inherit;padding:12px 26px;cursor:pointer}
+.demo{background:var(--accent);color:var(--on-accent);border-radius:999px;font-size:12px;padding:3px 10px;margin-left:8px;vertical-align:3px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>T5 Reader<span class="demo" id="demo" hidden>demo</span></h1>
+    <div class="meta" id="meta">Connecting…</div>
+  </header>
+
+  <form class="keybox" id="keybox" hidden>
+    <b>Enter the code</b>
+    <p>It is shown on the reader's screen.</p>
+    <input id="key" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" required>
+    <button class="btn">Continue</button>
+  </form>
+
+  <div id="app" hidden>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".t5b" multiple hidden>
+      <span class="plus">+</span>
+      <b>Add books</b>
+      <span class="hint">Drop .t5b files here, or tap to choose</span>
+    </label>
+    <ul class="queue" id="queue"></ul>
+    <h2><span>On the reader</span><span id="count"></span></h2>
+    <ul id="books"></ul>
+    <h2><span>Firmware</span><span id="fwver"></span></h2>
+    <label class="card fw">
+      <input type="file" id="fw" accept=".bin" hidden>
+      <div class="grow">
+        <div class="title">Update firmware</div>
+        <div class="sub" id="fwsub">The -ota.bin from pixi run fw-dist</div>
+        <div class="bar"><i id="fwbar"></i></div>
+      </div>
+      <span class="del">Choose</span>
+    </label>
+    <p class="note">Convert EPUB or TXT on your computer first with
+      <code>pixi run prep book.epub</code>, then upload the <code>.t5b</code> file.</p>
+  </div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const demo = location.protocol === "file:";
+const params = new URLSearchParams(location.search);
+let key = params.get("k") || sessionStorage.getItem("k") || "";
+if (params.has("k")) { sessionStorage.setItem("k", key); history.replaceState(null, "", location.pathname); }
+
+const demoData = {
+  version: "0.6.0", battery: 72, free: 7.2e9, total: 7.9e9,
+  books: [
+    { file: "max_havelaar.t5b", title: "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", author: "Multatuli", pages: 3596, size: 14071000, progress: 37 },
+    { file: "de_kleine_johannes.t5b", title: "De Kleine Johannes", author: "Frederik van Eeden", pages: 512, size: 2010000, progress: 64 },
+    { file: "alice.t5b", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, progress: 0 },
+  ],
+};
+
+async function api(path, opts = {}) {
+  if (demo) return demoApi(path, opts);
+  const sep = path.includes("?") ? "&" : "?";
+  const r = await fetch(path + sep + "k=" + encodeURIComponent(key), opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || r.statusText), { status: r.status });
+  return j;
+}
+
+function demoApi(path, opts) {
+  if (opts.method === "DELETE") {
+    const f = new URLSearchParams(path.split("?")[1]).get("file");
+    demoData.books = demoData.books.filter((b) => b.file !== f);
+  }
+  return Promise.resolve(demoData);
+}
+
+const size = (b) =>
+  b >= 1e9 ? (b / 1073741824).toFixed(1) + " GB"
+  : b >= 1048576 ? (b / 1048576).toFixed(1) + " MB"
+  : Math.max(1, Math.round(b / 1024)) + " KB";
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x !== id; };
+
+async function refresh() {
+  try {
+    render(await api("/api/info"));
+    show("app");
+  } catch (e) {
+    if (e.status === 403) {
+      sessionStorage.removeItem("k");
+      $("#meta").textContent = "";
+      show("keybox");
+      $("#key").focus();
+    } else {
+      $("#meta").textContent = "Reader not reachable";
+    }
+  }
+}
+
+function render(info) {
+  const battery = info.battery >= 0 ? info.battery + "% battery · " : "";
+  $("#meta").textContent = battery + size(info.free) + " free";
+  $("#fwver").textContent = "v" + info.version;
+  $("#count").textContent = info.books.length || "";
+  $("#books").innerHTML = info.books.length
+    ? info.books.map((b) => `
+      <li class="card">
+        <div class="grow">
+          <div class="title">${esc(b.title)}</div>
+          <div class="sub">${esc(b.author || "Unknown author")} · ${b.pages} pages · ${size(b.size)}</div>
+          <div class="prog"><div class="bar"><i style="width:${b.progress}%"></i></div><small>${b.progress ? b.progress + "%" : "new"}</small></div>
+        </div>
+        <button class="del" data-file="${esc(b.file)}" aria-label="Delete ${esc(b.title)}">Delete</button>
+      </li>`).join("")
+    : `<li class="card empty">No books yet. Add one above.</li>`;
+}
+
+$("#books").addEventListener("click", async (e) => {
+  const file = e.target.dataset?.file;
+  if (!file || !confirm("Delete this book from the reader?")) return;
+  try {
+    await api("/api/book?file=" + encodeURIComponent(file), { method: "DELETE" });
+    refresh();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+function upload(file) {
+  return new Promise((resolve) => {
+    const li = document.createElement("li");
+    li.className = "card";
+    li.innerHTML = `<div class="grow"><div class="title">${esc(file.name)}</div>
+      <div class="sub">Waiting…</div><div class="bar"><i></i></div></div>`;
+    $("#queue").append(li);
+    const sub = li.querySelector(".sub");
+    const bar = li.querySelector("i");
+    const done = (text, cls) => { sub.textContent = text; sub.className = "sub " + cls; resolve(); };
+    if (!/[.]t5b$/i.test(file.name)) return done("Not a .t5b file: convert it with bookprep first.", "err");
+    if (demo) { bar.style.width = "100%"; return done("Demo mode: nothing was sent.", "ok"); }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload?k=" + encodeURIComponent(key));
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const p = (e.loaded / e.total) * 100;
+      bar.style.width = p + "%";
+      sub.textContent = `Uploading · ${Math.round(p)}% of ${size(e.total)}`;
+    };
+    xhr.onload = () => {
+      let j = {};
+      try { j = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status === 200) { bar.style.width = "100%"; done("Added · " + (j.title || file.name), "ok"); }
+      else done(j.error || "Upload failed (" + xhr.status + ")", "err");
+    };
+    xhr.onerror = () => done("Connection lost. Is the reader still in Wi-Fi mode?", "err");
+    const form = new FormData();
+    form.append("file", file, file.name);
+    xhr.send(form);
+  });
+}
+
+async function uploadAll(files) {
+  for (const f of files) await upload(f);
+  refresh();
+}
+
+const drop = $("#drop");
+$("#file").addEventListener("change", (e) => { uploadAll([...e.target.files]); e.target.value = ""; });
+for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
+for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => { e.preventDefault(); uploadAll([...e.dataTransfer.files]); });
+
+$("#fw").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const sub = $("#fwsub"), bar = $("#fwbar");
+  const say = (text, cls = "") => { sub.textContent = text; sub.className = "sub " + cls; };
+  if (!/-ota[.]bin$/i.test(file.name) && !confirm("This doesn't look like a t5-reader-…-ota.bin file. Send it anyway?")) return;
+  if (demo) return say("Demo mode: nothing was sent.", "ok");
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/firmware?k=" + encodeURIComponent(key));
+  xhr.upload.onprogress = (ev) => {
+    if (!ev.lengthComputable) return;
+    const p = (ev.loaded / ev.total) * 100;
+    bar.style.width = p + "%";
+    say(`Sending · ${Math.round(p)}%`);
+  };
+  xhr.onload = () => {
+    let j = {};
+    try { j = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status === 200) { bar.style.width = "100%"; say("Updated. The reader restarts and leaves Wi-Fi mode.", "ok"); }
+    else say(j.error || "Update failed (" + xhr.status + ")", "err");
+  };
+  xhr.onerror = () => say("Connection lost.", "err");
+  const form = new FormData();
+  form.append("firmware", file, file.name);
+  xhr.send(form);
+});
+
+$("#keybox").addEventListener("submit", (e) => {
+  e.preventDefault();
+  key = $("#key").value.trim();
+  sessionStorage.setItem("k", key);
+  refresh();
+});
+
+$("#demo").hidden = !demo;
+refresh();
+</script>
+</body>
+</html>

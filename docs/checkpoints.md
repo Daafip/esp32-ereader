@@ -76,6 +76,20 @@ monitor keeps working; it logs every page with refresh type and timing.
 **Send:** latency feel, ghosting, legibility of text and status bar, anything odd in
 the menus (Chapters, Go to %, Library, Settings, About).
 
+## Wi-Fi transfer (after Checkpoint 3)
+
+1. Menu → Wi-Fi transfer. Scan the first QR code with a phone: it should join
+   `T5-Reader-XXXX`. The screen should switch to the second QR code by itself.
+2. Scan it (or open `http://192.168.4.1` and type the code). Upload a `.t5b`, try a
+   non-`.t5b` file (must be refused), delete a book. Watch the e-ink event line.
+3. Optional: "Update firmware" with `t5-reader-<version>-ota.bin` from
+   `pixi run fw-dist`; also try the merged `t5-reader-<version>.bin` (must be refused
+   with "Magic byte is wrong").
+4. MENU on the reader: back to the library, new books listed.
+
+**Send:** anything that didn't work, upload speed for a big book (serial log shows
+sizes), and whether the phone complained about "no internet".
+
 ## Checkpoint 4: power
 
 Set "Sleep after page: on" (default). Each page turn is now a wake from deep sleep.

@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "test_pages.h"
 #include "ui.h"
+#include "web_util.h"
 
 namespace {
 
@@ -121,7 +122,7 @@ int main(int argc, char **argv) {
   save("07-settings");
 
   const char *labels[] = {"Firmware", "Battery", "Book", "Position", "Memory", "Wake to page"};
-  const char *values[] = {"0.5.0", "3.92 V" DOT "72%", title, "page 27/3596" DOT "ch. 3/25",
+  const char *values[] = {"0.6.0", "3.92 V" DOT "72%", title, "page 27/3596" DOT "ch. 3/25",
                           "7580 MB card" DOT "214 KB free", "812 ms" DOT "1532 wakes"};
   ui::details("About", labels, values, 6, {nullptr, nullptr, nullptr}, {"MENU", "back", nullptr},
               72);
@@ -131,8 +132,9 @@ int main(int argc, char **argv) {
               "Press any button to try again");
   save("09-no-card");
 
-  ui::message(ui::Icon::Book, "No books yet", "Copy .t5b files to /books", "on the SD card",
-              "Press any button to try again");
+  ui::message(ui::Icon::Book, "No books yet", "Upload them over Wi-Fi, or copy",
+              ".t5b files to /books on the card", {"MENU", "Wi-Fi transfer", nullptr},
+              {"NEXT", "retry", nullptr});
   save("10-no-books");
 
   ui::message(ui::Icon::Warning, "Cannot open book", "old.t5b", "made for another screen size",
@@ -148,5 +150,16 @@ int main(int argc, char **argv) {
   ui::message(ui::Icon::Battery, "Battery low", "Charge the reader,", "then press a button",
               nullptr);
   save("14-low-battery");
+
+  char join[96];
+  wifiQrPayload("T5-Reader-1A2B", "k7m4q9xp", join, sizeof(join));
+  ui::wifiScreen({join, 1, "Join the Wi-Fi", "Network", "T5-Reader-1A2B", "Password", "k7m4q9xp", ""},
+                 {"NEXT", "show page", nullptr}, {"MENU", "done", nullptr}, 72);
+  save("15-wifi-join");
+
+  ui::wifiScreen({"http://192.168.4.1/?k=4821", 2, "Open the page", "Address", "192.168.4.1",
+                  "Code", "4821", "Received Max Havelaar"},
+                 {"NEXT", "show Wi-Fi", nullptr}, {"MENU", "done", nullptr}, 72);
+  save("16-wifi-page");
   return 0;
 }

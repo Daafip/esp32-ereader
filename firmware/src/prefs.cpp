@@ -37,6 +37,10 @@ void setLastBook(const char *path) {
   if (lastBook() != path) store.putString("lastBook", path);
 }
 
+String apPassword() { return store.getString("apPass", ""); }
+
+void setApPassword(const char *password) { store.putString("apPass", password); }
+
 uint32_t bookmark(uint32_t bookId) {
   char key[10];
   t5b::bookmarkKey(bookId, key);

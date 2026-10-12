@@ -152,7 +152,7 @@ Goal: e-paper keeps the image, so the MCU should deep-sleep after every turn.
 
 ## Phase 6 — Optional extensions (pick later)
 
-- [ ] Wi-Fi upload mode: menu item starts AP or STA + tiny web server to upload `.t5b` to SD; Wi-Fi off otherwise
+- [x] Wi-Fi upload mode: menu item starts AP or STA + tiny web server to upload `.t5b` to SD; Wi-Fi off otherwise *(done 2026-10-12: own WPA2 network or home Wi-Fi via `secrets.h`; QR codes on the e-ink to join and to open the page; 4-digit session code; upload with validation, list with progress, delete; plus firmware update over Wi-Fi (OTA, min_spiffs partitions). See `docs/usage.md`)*
 - [ ] Two font sizes in one `.t5b` (page sets + position mapping by character offset)
 - [ ] 4-gray anti-aliased rendering (only if the panel is the 4-gray variant; expect full refresh per page)
 - [ ] On-device `.txt` layout with a bb_epaper compressed font (no host step)

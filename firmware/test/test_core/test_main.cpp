@@ -9,6 +9,7 @@
 #include "settings.h"
 #include "t5b_format.h"
 #include "text_util.h"
+#include "web_util.h"
 
 void setUp() {}
 void tearDown() {}
@@ -318,6 +319,61 @@ static void test_wrap_text() {
   TEST_ASSERT_EQUAL(0, wrapText("   ", 60, measure6, nullptr, ell, lines[0], sizeof(lines[0]), 2));
 }
 
+// --- web_util ---------------------------------------------------------------
+
+static void test_json_escape() {
+  char out[64];
+  TEST_ASSERT_TRUE(jsonEscape("Een \"ABC\" \\ tab\there", out, sizeof(out)));
+  TEST_ASSERT_EQUAL_STRING("Een \\\"ABC\\\" \\\\ tab\\u0009here", out);
+  TEST_ASSERT_TRUE(jsonEscape("\xC3\xA9\xC3\xA9n", out, sizeof(out)));  // UTF-8 passes through
+  TEST_ASSERT_EQUAL_STRING("\xC3\xA9\xC3\xA9n", out);
+  TEST_ASSERT_FALSE(jsonEscape("abcdef", out, 4));
+  TEST_ASSERT_EQUAL_STRING("abc", out);
+}
+
+static void test_safe_book_name() {
+  TEST_ASSERT_TRUE(isSafeBookName("max_havelaar.t5b"));
+  TEST_ASSERT_TRUE(isSafeBookName("Mijn boek (2).T5B"));
+  TEST_ASSERT_TRUE(isSafeBookName("Caf\xC3\xA9.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookName("../secrets.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookName("books/x.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookName(".hidden.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookName("book.epub"));
+  TEST_ASSERT_FALSE(isSafeBookName(".t5b"));
+  TEST_ASSERT_FALSE(isSafeBookName("a\nb.t5b"));
+  char longName[80];
+  memset(longName, 'a', 61);
+  memcpy(longName + 61, ".t5b", 5);  // 65 bytes
+  TEST_ASSERT_FALSE(isSafeBookName(longName));
+}
+
+static void test_wifi_qr_payload() {
+  char out[96];
+  TEST_ASSERT_TRUE(wifiQrPayload("T5-Reader-1A2B", "k7m4q9xp", out, sizeof(out)));
+  TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:T5-Reader-1A2B;P:k7m4q9xp;;", out);
+  TEST_ASSERT_TRUE(wifiQrPayload("Thuis;5G", "a:b\\c", out, sizeof(out)));
+  TEST_ASSERT_EQUAL_STRING("WIFI:T:WPA;S:Thuis\\;5G;P:a\\:b\\\\c;;", out);
+  TEST_ASSERT_FALSE(wifiQrPayload("ssid", "password", out, 20));
+}
+
+static void test_credentials() {
+  char ssid[16], pass[9], code[5];
+  makeSsid(0x12341A2B, ssid);
+  TEST_ASSERT_EQUAL_STRING("T5-Reader-1A2B", ssid);
+  makePassword(123, 456, pass);
+  TEST_ASSERT_EQUAL(8, strlen(pass));
+  for (int i = 0; i < 8; i++) TEST_ASSERT_NULL(strchr("ilo01", pass[i]));
+  char again[9];
+  makePassword(123, 456, again);
+  TEST_ASSERT_EQUAL_STRING(pass, again);
+  makePassword(124, 456, again);
+  TEST_ASSERT_TRUE(strcmp(pass, again) != 0);
+  makeCode(7, code);
+  TEST_ASSERT_EQUAL_STRING("0007", code);
+  makeCode(123456, code);
+  TEST_ASSERT_EQUAL_STRING("3456", code);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_golden_header_from_python_writer);
@@ -339,5 +395,9 @@ int main() {
   RUN_TEST(test_list_model_scrolls_and_wraps);
   RUN_TEST(test_settings_cycle_value_sanitize);
   RUN_TEST(test_wrap_text);
+  RUN_TEST(test_json_escape);
+  RUN_TEST(test_safe_book_name);
+  RUN_TEST(test_wifi_qr_payload);
+  RUN_TEST(test_credentials);
   return UNITY_END();
 }

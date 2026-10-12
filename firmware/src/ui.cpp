@@ -9,6 +9,7 @@
 #include "fonts/ui_display.h"
 #include "fonts/ui_small.h"
 #include "fonts/ui_title.h"
+#include "qrcodegen.h"
 #include "text_util.h"
 
 namespace ui {
@@ -291,14 +292,26 @@ void valueEditor(const char *title, const char *value, const char *caption, int 
   footer(left, right);
 }
 
-void message(Icon which, const char *headline, const char *line1, const char *line2,
-             const char *hint) {
+namespace {
+void messageBody(Icon which, const char *headline, const char *line1, const char *line2) {
   display::clear();
   icon(which, kW / 2, 8);
   text(ui_title, headline, kMargin, 52, kW - 2 * kMargin, kBlack, Align::Center);
   text(ui_body, line1, kMargin, 70, kW - 2 * kMargin, kBlack, Align::Center);
   text(ui_body, line2, kMargin, 85, kW - 2 * kMargin, kBlack, Align::Center);
+}
+}  // namespace
+
+void message(Icon which, const char *headline, const char *line1, const char *line2,
+             const char *hint) {
+  messageBody(which, headline, line1, line2);
   text(ui_small, hint, kMargin, kH - 6, kW - 2 * kMargin, kBlack, Align::Center);
+}
+
+void message(Icon which, const char *headline, const char *line1, const char *line2, Hint left,
+             Hint right) {
+  messageBody(which, headline, line1, line2);
+  footer(left, right);
 }
 
 void sleepScreen(const char *title, const char *author, int percentRead, int batteryPct) {
@@ -338,6 +351,46 @@ void sleepScreen(const char *title, const char *author, int percentRead, int bat
   const int hx = (kW - hw - 12) / 2;
   moon(hx + 4, kH - 10);
   text(ui_small, hint, hx + 12, kH - 6, hw, kBlack);
+}
+
+void wifiScreen(const WifiView &v, Hint left, Hint right, int batteryPct) {
+  display::clear();
+  // QR code: up to version 6 (41 modules), as large as fits in 104 px with a
+  // 2-module quiet zone.
+  uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(6)];
+  uint8_t tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(6)];
+  int qrRight = kMargin;
+  if (v.qr && qrcodegen_encodeText(v.qr, tmp, qr, qrcodegen_Ecc_LOW, 1, 6, qrcodegen_Mask_AUTO,
+                                   true)) {
+    const int size = qrcodegen_getSize(qr);
+    const int scale = 104 / (size + 4);
+    const int px = (size + 4) * scale;
+    const int x0 = 2 + 2 * scale;
+    const int y0 = (kFooterTop - px) / 2 + 2 * scale;
+    for (int y = 0; y < size; y++) {
+      for (int x = 0; x < size; x++) {
+        if (qrcodegen_getModule(qr, x, y)) {
+          epd().fillRect(x0 + x * scale, y0 + y * scale, scale, scale, kBlack);
+        }
+      }
+    }
+    qrRight = 2 + px + 6;
+  }
+  const int x = qrRight;
+  const int w = kW - x - kMargin;
+  const int batteryLeft = battery(kW - kMargin, 12, batteryPct, kBlack);
+  if (v.step > 0) {
+    char step[24];
+    snprintf(step, sizeof(step), "Step %d of 2", v.step);
+    text(ui_small, step, x, 12, batteryLeft - x - 6, kBlack);
+  }
+  text(ui_title, v.headline, x, 30, w, kBlack);
+  text(ui_small, v.label1, x, 46, w, kBlack);
+  text(ui_title, v.value1, x, 61, w, kBlack);
+  text(ui_small, v.label2, x, 76, w, kBlack);
+  text(ui_title, v.value2, x, 91, w, kBlack);
+  text(ui_small, v.event, x, 104, w, kBlack);
+  footer(left, right);
 }
 
 }  // namespace ui

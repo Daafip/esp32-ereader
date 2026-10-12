@@ -10,10 +10,11 @@ bb=firmware/.pio/libdeps/reader/bb_epaper/src
 build=firmware/.pio/host
 out=out/ui-preview
 mkdir -p "$build" "$out"
+cc -std=c99 -O1 -w -c firmware/lib/qrcodegen/src/qrcodegen.c -o "$build/qrcodegen.o"
 c++ -std=gnu++17 -O1 -w \
-  -I"$bb" -Ifirmware/include -Ifirmware/src -Ifirmware/lib/core/src \
+  -I"$bb" -Ifirmware/include -Ifirmware/src -Ifirmware/lib/core/src -Ifirmware/lib/qrcodegen/src \
   firmware/host/host_bb_epaper.cpp firmware/host/display_host.cpp firmware/host/ui_preview.cpp \
-  firmware/src/ui.cpp firmware/lib/core/src/*.cpp \
+  firmware/src/ui.cpp firmware/lib/core/src/*.cpp "$build/qrcodegen.o" \
   -o "$build/ui_preview"
 rm -f "$out"/*.pbm "$out"/*.png
 "$build/ui_preview" "$out" >/dev/null
