@@ -60,7 +60,14 @@ struct RtcState {
 RTC_DATA_ATTR RtcState rtc;
 
 constexpr uint32_t kNoBatteryMv = 2500;  // below this the ADC sees no battery (USB only)
-const char *const kListHint = "NEXT:down hold:up  MENU:ok hold:back";
+// Footer hints: key chip, short-press action, long-press action.
+const ui::Hint kNoHint = {nullptr, nullptr, nullptr};
+const ui::Hint kListNext = {"NEXT", ui::kArrowDown, ui::kArrowUp};
+const ui::Hint kListOpen = {"MENU", "open", "back"};
+const ui::Hint kListGo = {"MENU", "go", "back"};
+const ui::Hint kListChange = {"MENU", "edit", "back"};
+const ui::Hint kBack = {"MENU", "back", nullptr};
+const char *const kRetryHint = "Press any button to try again";
 
 Settings settings;
 Book book;
@@ -72,7 +79,7 @@ ListModel list;
 std::vector<storage::BookEntry> library;
 int goToPct = 0;
 
-const char *const kMainItems[] = {"Resume", "Chapters", "Go to %", "Library",
+const char *const kMainItems[] = {"Resume", "Chapters", "Go to position", "Library",
                                   "Settings", "About", "Sleep"};
 enum MainItem { kResume, kChapters, kGoTo, kLibrary, kSettings, kAbout, kSleep, kMainCount };
 
@@ -83,10 +90,15 @@ void setScreen(Screen s) {
 
 // --- sleep -------------------------------------------------------------------
 
+int percentRead() {
+  if (!book.isOpen()) return -1;
+  return book.pageCount() > 1 ? int(uint64_t(page) * 100 / (book.pageCount() - 1)) : 100;
+}
+
 [[noreturn]] void enterSleep(bool withSleepScreen) {
   if (withSleepScreen) {
     ui::sleepScreen(book.isOpen() ? book.header().title : nullptr,
-                    book.isOpen() ? book.header().author : nullptr, batteryPct);
+                    book.isOpen() ? book.header().author : nullptr, percentRead(), batteryPct);
     display::show(Refresh::Full);
     setScreen(Screen::Sleeping);
   }
@@ -97,8 +109,8 @@ void setScreen(Screen s) {
   power::deepSleep(reading ? uint32_t(settings.idleMinutes) * 60 : 0);
 }
 
-void showMessage(const char *title, const char *line1, const char *line2) {
-  ui::message(title, line1, line2, "any button: try again");
+void showMessage(ui::Icon icon, const char *title, const char *line1, const char *line2) {
+  ui::message(icon, title, line1, line2, kRetryHint);
   display::show(Refresh::Full);
   setScreen(Screen::Message);
   Serial.printf("message: %s / %s / %s\n", title, line1 ? line1 : "", line2 ? line2 : "");
@@ -115,7 +127,7 @@ const char *baseName(const char *path) {
 bool openBook(const char *path, bool quiet = false) {
   if (!book.open(path)) {
     Serial.printf("cannot open %s: %s\n", path, book.error());
-    if (!quiet) showMessage("Cannot open book", baseName(path), book.error());
+    if (!quiet) showMessage(ui::Icon::Warning, "Cannot open book", baseName(path), book.error());
     rtc.bookPath[0] = '\0';
     return false;
   }
@@ -129,7 +141,7 @@ bool openBook(const char *path, bool quiet = false) {
 
 void showReading(Refresh requested) {
   if (!book.readPage(page, display::framebuffer())) {
-    showMessage("Read error", baseName(book.path()), "card removed?");
+    showMessage(ui::Icon::Card, "Read error", baseName(book.path()), "Was the card removed?");
     return;
   }
   const int chapter = book.chapterForPage(page);
@@ -177,10 +189,14 @@ Refresh menuRefresh() {
                        settings.fullEvery);
 }
 
-void mainItemText(int i, char *out, size_t n, void *) { strlcpy(out, kMainItems[i], n); }
+void mainItem(int i, ui::Item &it, void *) {
+  strlcpy(it.label, kMainItems[i], sizeof(it.label));
+  it.chevron = i != kResume && i != kSleep;
+  if (i == kResume) snprintf(it.detail, sizeof(it.detail), "%d%%", percentRead());
+}
 
 void renderMainMenu() {
-  ui::menu(book.header().title, list, mainItemText, nullptr, kListHint, batteryPct);
+  ui::menu(book.header().title, list, mainItem, nullptr, kListNext, kListOpen, batteryPct);
   display::show(menuRefresh());
 }
 
@@ -191,23 +207,15 @@ void openMainMenu() {
   renderMainMenu();
 }
 
-void chapterText(int i, char *out, size_t n, void *) {
+void chapterItem(int i, ui::Item &it, void *) {
   t5b::TocEntry e;
-  if (!book.tocEntry(i, e)) {
-    strlcpy(out, "?", n);
-    return;
-  }
-  const bool current = i == book.chapterForPage(page);
-  snprintf(out, n, "%s%s", current ? "\xE2\x80\xA2 " : "", e.title);
+  strlcpy(it.label, book.tocEntry(i, e) ? e.title : "?", sizeof(it.label));
+  snprintf(it.detail, sizeof(it.detail), "%u", unsigned(book.chapterStart(i) + 1));
+  it.current = i == book.chapterForPage(page);
 }
 
 void renderChapters() {
-  char hint[48] = "no chapters";
-  if (list.count()) {
-    snprintf(hint, sizeof(hint), "p%u  NEXT:down hold:up MENU:go",
-             unsigned(book.chapterStart(list.selected()) + 1));
-  }
-  ui::menu("Chapters", list, chapterText, nullptr, hint, batteryPct);
+  ui::menu("Chapters", list, chapterItem, nullptr, kListNext, kListGo, batteryPct);
   display::show(menuRefresh());
 }
 
@@ -221,38 +229,44 @@ void openChapters() {
 uint32_t pctToPage(int pct) { return uint32_t(uint64_t(book.pageCount() - 1) * pct / 100); }
 
 void renderGoTo() {
-  char value[32];
-  snprintf(value, sizeof(value), "%d%%  (p %u)", goToPct, unsigned(pctToPage(goToPct) + 1));
-  ui::valueEditor("Go to", value, goToPct, "NEXT:+1 hold:+10  MENU:go hold:back");
+  char value[8];
+  char caption[40];
+  snprintf(value, sizeof(value), "%d%%", goToPct);
+  snprintf(caption, sizeof(caption), "Page %u of %u", unsigned(pctToPage(goToPct) + 1),
+           unsigned(book.pageCount()));
+  ui::valueEditor("Go to position", value, caption, goToPct, {"NEXT", "+1", "+10"},
+                  kListGo, batteryPct);
   display::show(menuRefresh());
 }
 
 void openGoTo() {
-  goToPct = book.pageCount() > 1 ? int(uint64_t(page) * 100 / (book.pageCount() - 1)) : 0;
+  goToPct = percentRead();
   setScreen(Screen::GoTo);
   renderGoTo();
 }
 
-void libraryText(int i, char *out, size_t n, void *) {
-  const bool current = book.isOpen() && library[i].path == book.path();
-  snprintf(out, n, "%s%s", current ? "\xE2\x80\xA2 " : "", library[i].title.c_str());
+void libraryItem(int i, ui::Item &it, void *) {
+  const storage::BookEntry &e = library[i];
+  strlcpy(it.label, e.title.c_str(), sizeof(it.label));
+  it.current = book.isOpen() && e.path == book.path();
+  const uint32_t mark = it.current ? page : prefs::bookmark(e.id);
+  if (mark == 0) {
+    strlcpy(it.detail, "new", sizeof(it.detail));
+  } else {
+    const uint32_t last = e.pages > 1 ? e.pages - 1 : 1;
+    snprintf(it.detail, sizeof(it.detail), "%u%%", unsigned(uint64_t(mark) * 100 / last));
+  }
 }
 
 void renderLibrary() {
-  String hint = kListHint;
-  if (list.count()) {
-    const storage::BookEntry &e = library[list.selected()];
-    hint = e.author.length() ? e.author : String("(no author)");
-    hint += "  " + String(e.pages) + "p";
-  }
-  ui::menu("Library", list, libraryText, nullptr, hint.c_str(), batteryPct);
+  ui::menu("Library", list, libraryItem, nullptr, kListNext, kListOpen, batteryPct);
   display::show(menuRefresh());
 }
 
 void openLibrary() {
   const storage::Status status = storage::listBooks(library);
   if (status != storage::Status::Ok) {
-    showMessage("No books", "Copy .t5b files to /books", "on the SD card");
+    showMessage(ui::Icon::Book, "No books yet", "Copy .t5b files to /books", "on the SD card");
     return;
   }
   int selected = 0;
@@ -265,11 +279,13 @@ void openLibrary() {
   renderLibrary();
 }
 
-void settingText(int i, char *out, size_t n, void *) { describeSetting(settings, SettingId(i), out, n); }
+void settingItem(int i, ui::Item &it, void *) {
+  strlcpy(it.label, settingLabel(SettingId(i)), sizeof(it.label));
+  settingValue(settings, SettingId(i), it.detail, sizeof(it.detail));
+}
 
 void renderSettings() {
-  ui::menu("Settings", list, settingText, nullptr, "NEXT:down hold:up  MENU:change hold:back",
-           batteryPct);
+  ui::menu("Settings", list, settingItem, nullptr, kListNext, kListChange, batteryPct);
   display::show(menuRefresh());
 }
 
@@ -280,23 +296,24 @@ void openSettings() {
 }
 
 void openAbout() {
-  char l[6][80];
-  snprintf(l[0], sizeof(l[0]), "Firmware %s, bb_epaper 2.1.11+", FW_VERSION);
+  char v[6][72];
+  snprintf(v[0], sizeof(v[0]), "%s", FW_VERSION);
   if (batteryPct >= 0) {
-    snprintf(l[1], sizeof(l[1]), "Battery %u.%02u V (%d%%)", unsigned(batteryMv / 1000),
+    snprintf(v[1], sizeof(v[1]), "%u.%02u V  \xC2\xB7  %d%%", unsigned(batteryMv / 1000),
              unsigned(batteryMv % 1000 / 10), batteryPct);
   } else {
-    snprintf(l[1], sizeof(l[1]), "Battery: none (USB power)");
+    snprintf(v[1], sizeof(v[1]), "USB power");
   }
-  snprintf(l[2], sizeof(l[2]), "%s", book.header().title);
-  snprintf(l[3], sizeof(l[3]), "Page %u of %u, chapter %d of %d", unsigned(page + 1),
+  snprintf(v[2], sizeof(v[2]), "%s", book.header().title);
+  snprintf(v[3], sizeof(v[3]), "page %u/%u  \xC2\xB7  ch. %d/%d", unsigned(page + 1),
            unsigned(book.pageCount()), book.chapterForPage(page) + 1, book.tocCount());
-  snprintf(l[4], sizeof(l[4]), "SD %u MB, free heap %u KB", unsigned(storage::cardSizeMb()),
+  snprintf(v[4], sizeof(v[4]), "%u MB card  \xC2\xB7  %u KB free", unsigned(storage::cardSizeMb()),
            unsigned(ESP.getFreeHeap() / 1024));
-  snprintf(l[5], sizeof(l[5]), "Wake to image %u ms, wakes %u", unsigned(rtc.imageMs),
+  snprintf(v[5], sizeof(v[5]), "%u ms  \xC2\xB7  %u wakes", unsigned(rtc.imageMs),
            unsigned(rtc.wakes));
-  const char *lines[] = {l[0], l[1], l[2], l[3], l[4], l[5]};
-  ui::textScreen("About", lines, 6, "any button: back");
+  const char *labels[] = {"Firmware", "Battery", "Book", "Position", "Memory", "Wake to page"};
+  const char *values[] = {v[0], v[1], v[2], v[3], v[4], v[5]};
+  ui::details("About", labels, values, 6, kNoHint, kBack, batteryPct);
   display::show(menuRefresh());
   setScreen(Screen::About);
 }
@@ -495,7 +512,8 @@ void setup() {
   display::begin();
   if (batteryMv > kNoBatteryMv && batteryMv < kBatteryLowMv) {
     if (shown != Screen::LowBattery) {
-      ui::message("Battery low", "Please charge the reader", nullptr, "");
+      ui::message(ui::Icon::Battery, "Battery low", "Charge the reader,", "then press a button",
+                  nullptr);
       display::show(Refresh::Full);
       setScreen(Screen::LowBattery);
     }
@@ -503,7 +521,7 @@ void setup() {
     power::deepSleep(0);
   }
   if (!storage::mount()) {
-    showMessage("No SD card", "Insert a FAT32 card", "with books in /books");
+    showMessage(ui::Icon::Card, "No SD card", "Insert a FAT32 card", "with books in /books");
     return;
   }
   if (!restoreBook()) {

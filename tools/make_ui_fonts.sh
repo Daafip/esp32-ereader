@@ -13,9 +13,12 @@ bin=firmware/.pio/fontconvert
 cc -O2 -w -I"$CONDA_PREFIX/include/freetype2" "$src" \
   -L"$CONDA_PREFIX/lib" -lfreetype -Wl,-rpath,"$CONDA_PREFIX/lib" -o "$bin"
 
-font="$CONDA_PREFIX/fonts/Ubuntu-R.ttf"
+fonts="$CONDA_PREFIX/fonts"
 out=firmware/include/fonts
 mkdir -p "$out"
-# fontconvert sizes are points at 141 dpi: 6 pt ~ 12 px, 8 pt ~ 16 px
-"$bin" "$font" "$out/ui_font_12.h" 6 32 255
-"$bin" "$font" "$out/ui_font_16.h" 8 32 255
+rm -f "$out"/*.h
+# fontconvert sizes are points at 141 dpi: 5 pt ~ 10 px, 6 pt ~ 12 px, 7 pt ~ 14 px, 9 pt ~ 18 px
+"$bin" "$fonts/Ubuntu-M.ttf" "$out/ui_small.h" 5 32 255    # status bar, footer, details
+"$bin" "$fonts/Ubuntu-R.ttf" "$out/ui_body.h" 6 32 255     # list items, body text
+"$bin" "$fonts/Ubuntu-B.ttf" "$out/ui_title.h" 7 32 255    # headers, headlines
+"$bin" "$fonts/Ubuntu-M.ttf" "$out/ui_display.h" 9 32 255  # sleep screen title, big values

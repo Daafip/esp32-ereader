@@ -44,7 +44,7 @@ constexpr int kPageW = 250;
 constexpr int kPageH = 122;
 constexpr int kPageStride = (kPageW + 7) / 8;     // 32
 constexpr int kPageBytes = kPageStride * kPageH;  // 3904
-constexpr int kStatusBarH = 10;                   // bottom rows, drawn on the device
+constexpr int kStatusBarH = 14;                   // bottom rows, drawn on the device
 
 // --- Button roles --------------------------------------------------------------
 // NEXT: short = next page / next item, long = previous page / previous item.

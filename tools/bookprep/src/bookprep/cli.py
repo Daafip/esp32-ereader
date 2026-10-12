@@ -38,7 +38,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--lang", help="hyphenation language (default: EPUB metadata, else nl)")
     p.add_argument("--out", type=Path, default=Path("out"), help="output directory")
     p.add_argument("--margin", type=int, default=4, help="left/right/top margin in px")
-    p.add_argument("--status-bar", type=int, default=10, help="rows reserved for the status bar")
+    p.add_argument("--status-bar", type=int, default=14, help="rows reserved for the status bar")
     p.add_argument("--indent", type=int, help="first-line indent in px (default: size)")
     p.add_argument("--paragraph-spacing", type=int, default=0, help="extra px between paragraphs")
     p.add_argument("--no-justify", action="store_true", help="ragged right instead of justified")
@@ -197,11 +197,13 @@ def main(argv: list[str] | None = None) -> int:
         preview_dir.mkdir(exist_ok=True)
         framed = []
         for n in chosen:
+            pct = 100 * n // max(len(images) - 1, 1)
             status = with_status_bar(
                 images[n],
                 geometry,
-                chapter_title_at(toc, n)[:32],
-                f"{n + 1}/{len(images)}  {100 * (n + 1) // len(images)}%",
+                chapter_title_at(toc, n),
+                f"{n + 1}/{len(images)}  \N{MIDDLE DOT}  {pct}%",
+                progress=(n + 1) / len(images),
             )
             enlarge(status, 3).save(preview_dir / f"page-{n + 1:04d}.png")
             framed.append(enlarge(status, 2))

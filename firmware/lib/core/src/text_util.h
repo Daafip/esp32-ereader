@@ -21,5 +21,10 @@ using MeasureFn = int (*)(const char *text, void *ctx);
 bool fitText(const char *text, int maxWidth, MeasureFn measure, void *ctx, const char *ellipsis,
              char *out, size_t outSize);
 
-// "27/3596  1%"  (page is 0-based; shown 1-based)
+// Greedy word wrap into at most maxLines lines of lineSize bytes each. If text
+// is left over, the last line is cut with `ellipsis`. Returns the line count.
+int wrapText(const char *text, int maxWidth, MeasureFn measure, void *ctx, const char *ellipsis,
+             char *lines, size_t lineSize, int maxLines);
+
+// "27/3596  ·  1%" (UTF-8 middle dot; page is 0-based, shown 1-based)
 void formatProgress(uint32_t page, uint32_t pageCount, char *out, size_t outSize);

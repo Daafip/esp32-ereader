@@ -59,6 +59,7 @@ Status listBooks(std::vector<BookEntry> &out, size_t max) {
     e.title = h.title[0] ? h.title : f.name();
     e.author = h.author;
     e.pages = h.pageCount;
+    e.id = t5b::bookId(h.title, h.pageCount);
     out.push_back(e);
   }
   std::sort(out.begin(), out.end(), [](const BookEntry &a, const BookEntry &b) {

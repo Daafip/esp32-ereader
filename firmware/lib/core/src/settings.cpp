@@ -48,21 +48,31 @@ void cycleSetting(Settings &s, SettingId id) {
   }
 }
 
-void describeSetting(const Settings &s, SettingId id, char *out, size_t n) {
+const char *settingLabel(SettingId id) {
+  switch (id) {
+    case SettingId::FullEvery: return "Full refresh";
+    case SettingId::LongPress: return "Long press";
+    case SettingId::IdleMinutes: return "Idle sleep";
+    case SettingId::DeepSleep: return "Sleep after page";
+    case SettingId::WakeRefresh: return "Wake refresh";
+    case SettingId::Count: break;
+  }
+  return "?";
+}
+
+void settingValue(const Settings &s, SettingId id, char *out, size_t n) {
   switch (id) {
     case SettingId::FullEvery:
       if (s.fullEvery) {
-        snprintf(out, n, "Full refresh: every %u", unsigned(s.fullEvery));
+        snprintf(out, n, "every %u", unsigned(s.fullEvery));
       } else {
-        snprintf(out, n, "Full refresh: chapters only");
+        snprintf(out, n, "chapters only");
       }
       break;
-    case SettingId::LongPress: snprintf(out, n, "Long press: %u ms", unsigned(s.longPressMs)); break;
-    case SettingId::IdleMinutes: snprintf(out, n, "Idle sleep: %u min", unsigned(s.idleMinutes)); break;
-    case SettingId::DeepSleep: snprintf(out, n, "Sleep after page: %s", s.deepSleep ? "on" : "off"); break;
-    case SettingId::WakeRefresh:
-      snprintf(out, n, "Wake refresh: %s", wakeRefreshName(s.wakeRefresh));
-      break;
+    case SettingId::LongPress: snprintf(out, n, "%u ms", unsigned(s.longPressMs)); break;
+    case SettingId::IdleMinutes: snprintf(out, n, "%u min", unsigned(s.idleMinutes)); break;
+    case SettingId::DeepSleep: snprintf(out, n, "%s", s.deepSleep ? "on" : "off"); break;
+    case SettingId::WakeRefresh: snprintf(out, n, "%s", wakeRefreshName(s.wakeRefresh)); break;
     case SettingId::Count: snprintf(out, n, "?"); break;
   }
 }

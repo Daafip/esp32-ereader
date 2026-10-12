@@ -1,8 +1,11 @@
 // Screens drawn into the display framebuffer (call display::show() afterwards).
 //
-// Layout on the 250x122 landscape panel:
-//   reading  page bitmap from the book, status bar in the bottom 10 rows
-//   menus    16 px title bar, up to 6 rows of 15 px, footer hint (6x8 font)
+// Layout on the 250x122 landscape panel, Ubuntu throughout:
+//   reading  book page, status bar in the bottom 14 rows: a thin reading-progress
+//            line, chapter left, page/percentage and battery right
+//   lists    title + hairline, 5 rows of 17 px with a rounded selection pill,
+//            right-aligned values, chevrons, slim scrollbar, key-chip footer
+//   messages icon, headline, body: no chrome
 #pragma once
 
 #include <stddef.h>
@@ -12,26 +15,47 @@
 
 namespace ui {
 
-constexpr int kMenuRows = 6;
+constexpr int kMenuRows = 5;
 
-// Fills `out` with the text of list item `index`.
-using ItemText = void (*)(int index, char *out, size_t outSize, void *ctx);
+// One list row: label left, optional detail right, optional chevron.
+struct Item {
+  char label[96] = "";
+  char detail[32] = "";
+  bool chevron = false;  // opens another screen
+  bool current = false;  // dot before the label (current chapter / book)
+};
+using ItemFn = void (*)(int index, Item &item, void *ctx);
+
+// Footer hint: [KEY] action (hold) holdAction. key == nullptr: no hint.
+// kArrowDown / kArrowUp as an action draw an arrow instead of text.
+constexpr const char *kArrowDown = "\xE2\x96\xBC";  // U+25BC
+constexpr const char *kArrowUp = "\xE2\x96\xB2";    // U+25B2
+struct Hint {
+  const char *key;
+  const char *action;
+  const char *holdAction;  // long press; nullptr if none
+};
+
+enum class Icon : uint8_t { Card, Book, Battery, Warning };
 
 // Status bar over the bottom rows of a book page. batteryPct < 0 = unknown.
 void statusBar(const char *chapter, uint32_t page, uint32_t pageCount, int batteryPct);
 
-void menu(const char *title, const ListModel &model, ItemText itemText, void *ctx,
-          const char *footer, int batteryPct);
+void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hint left,
+          Hint right, int batteryPct);
 
-// Centred message with up to two lines and a footer hint.
-void message(const char *title, const char *line1, const char *line2, const char *footer);
+// Label/value rows (About).
+void details(const char *title, const char *const *labels, const char *const *values, int count,
+             Hint left, Hint right, int batteryPct);
 
-// Title + lines of plain text (About screen).
-void textScreen(const char *title, const char *const *lines, int count, const char *footer);
+// Large value with a progress bar and a caption (Go to position).
+void valueEditor(const char *title, const char *value, const char *caption, int percent, Hint left,
+                 Hint right, int batteryPct);
 
-// Large value with a progress bar (Go to %).
-void valueEditor(const char *title, const char *value, int percent, const char *footer);
+// Full-screen state: icon, headline, up to two lines, small hint at the bottom.
+void message(Icon icon, const char *headline, const char *line1, const char *line2,
+             const char *hint);
 
-void sleepScreen(const char *title, const char *author, int batteryPct);
+void sleepScreen(const char *title, const char *author, int percentRead, int batteryPct);
 
 }  // namespace ui

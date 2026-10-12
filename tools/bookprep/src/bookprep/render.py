@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
+from functools import cache
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -54,15 +57,49 @@ def render_page(
 # --- previews ----------------------------------------------------------------
 
 
-def with_status_bar(page_img: Image.Image, geometry: PageGeometry, left: str, right: str):
-    """Mock of the on-device status bar, for previews only (not stored in .t5b)."""
+@cache
+def _status_font() -> ImageFont.FreeTypeFont:
+    for base in (Path(sys.prefix) / "fonts", Path(sys.prefix) / "Library" / "fonts"):
+        if (base / "Ubuntu-M.ttf").exists():
+            return ImageFont.truetype(str(base / "Ubuntu-M.ttf"), 10)
+    return ImageFont.load_default(size=9)
+
+
+def with_status_bar(
+    page_img: Image.Image,
+    geometry: PageGeometry,
+    left: str,
+    right: str,
+    progress: float = 0.0,
+) -> Image.Image:
+    """Approximation of the device's status bar (firmware ui::statusBar), for previews
+    only; the .t5b keeps these rows white."""
     img = page_img.convert("L")
     draw = ImageDraw.Draw(img)
-    top = geometry.height - geometry.status_bar
-    draw.line((0, top, geometry.width - 1, top), fill=BLACK)
-    font = ImageFont.load_default(size=8)
-    draw.text((2, top + 1), left, font=font, fill=BLACK)
-    draw.text((geometry.width - 2, top + 1), right, font=font, fill=BLACK, anchor="ra")
+    w, h = geometry.width, geometry.height
+    top = h - geometry.status_bar
+    x0, x1 = 4, w - 5
+    for x in range(x0, x1 + 1, 2):  # dotted track, solid reading progress
+        draw.point((x, top + 1), fill=BLACK)
+    fill = round((x1 - x0 + 1) * max(0.0, min(1.0, progress)))
+    if fill:
+        draw.rectangle((x0, top, x0 + fill - 1, top + 1), fill=BLACK)
+    baseline = h - 3
+    bx = x1 + 1 - 16  # battery icon
+    draw.rounded_rectangle((bx, baseline - 7, bx + 13, baseline), radius=2, outline=BLACK)
+    draw.rectangle((bx + 14, baseline - 5, bx + 15, baseline - 2), fill=BLACK)
+    draw.rectangle((bx + 2, baseline - 5, bx + 8, baseline - 2), fill=BLACK)
+    font = _status_font()
+    draw.text((bx - 7, baseline), right, font=font, fill=BLACK, anchor="rs")
+    right_w = font.getlength(right)
+    room = bx - 7 - right_w - 12 - x0
+    text = left
+    if font.getlength(text) > room:
+        ellipsis = "\N{HORIZONTAL ELLIPSIS}"
+        while text and font.getlength(text + ellipsis) > room:
+            text = text[:-1]
+        text = text.rstrip() + ellipsis if text else ""
+    draw.text((x0, baseline), text, font=font, fill=BLACK, anchor="ls")
     return img
 
 

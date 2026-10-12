@@ -27,8 +27,9 @@ constexpr int kSettingCount = int(SettingId::Count);
 // Advances one setting to its next allowed value (wrapping).
 void cycleSetting(Settings &s, SettingId id);
 
-// "Full refresh: every 10" etc.
-void describeSetting(const Settings &s, SettingId id, char *out, size_t outSize);
+// Row text for the Settings list: label left, current value right.
+const char *settingLabel(SettingId id);                                   // "Full refresh"
+void settingValue(const Settings &s, SettingId id, char *out, size_t outSize);  // "every 10"
 
 // Replaces values that aren't in the allowed lists (e.g. from old NVS data) by defaults.
 void sanitizeSettings(Settings &s);

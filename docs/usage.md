@@ -11,20 +11,23 @@ The reader reopens the last book at the last page. Each book remembers its own p
 
 ## Buttons
 
+The footer of each menu shows the keys: a black chip is the button (NEXT or MENU),
+an outlined "hold" chip is the long press.
+
 | | NEXT (GPIO39) | MENU (BOOT, GPIO0) |
 |---|---|---|
 | Reading, short | next page | menu |
 | Reading, long (≥ 600 ms) | previous page | sleep screen |
 | Lists, short | next item | select / change |
 | Lists, long | previous item (repeats while held) | back |
-| Go to %, short / long | +1 % / +10 % | go / back |
+| Go to position, short / long | +1 % / +10 % | go / back |
 
 ## Menu
 
 - **Resume**: back to the page.
-- **Chapters**: jump to a chapter (• marks the current one).
-- **Go to %**: jump to a position in the book.
-- **Library**: all books in `/books`, author and page count at the bottom.
+- **Chapters**: jump to a chapter; start page on the right, a dot marks the current one.
+- **Go to position**: jump to a percentage of the book.
+- **Library**: all books in `/books` with how far you've read each ("new" if unopened).
 - **Settings** (select changes the value):
   - *Full refresh*: a full (flashing) refresh after this many page turns to clear ghosting.
     Chapter changes always get one.
@@ -37,5 +40,6 @@ The reader reopens the last book at the last page. Each book remembers its own p
 - **About**: firmware, battery, book, position, card, wake timing.
 - **Sleep**: show the sleep screen now.
 
-The status bar shows the chapter, page/total, percentage and battery.
+The status bar shows a reading-progress line, the chapter, page/total, percentage
+and battery.
 Below 3.4 V the reader shows "Battery low" and stays asleep until charged.

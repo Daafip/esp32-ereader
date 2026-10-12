@@ -137,11 +137,48 @@ bool fitText(const char *text, int maxWidth, MeasureFn measure, void *ctx, const
   return true;
 }
 
+int wrapText(const char *text, int maxWidth, MeasureFn measure, void *ctx, const char *ellipsis,
+             char *lines, size_t lineSize, int maxLines) {
+  int count = 0;
+  while (*text == ' ') text++;
+  while (*text && count < maxLines) {
+    char *line = lines + size_t(count) * lineSize;
+    if (count == maxLines - 1) {  // last line: whatever is left, cut if needed
+      fitText(text, maxWidth, measure, ctx, ellipsis, line, lineSize);
+      return count + 1;
+    }
+    // longest run of whole words that fits
+    size_t best = 0;
+    for (size_t end = 0;; end++) {
+      if (text[end] == ' ' || text[end] == '\0') {
+        if (end >= lineSize) break;
+        memcpy(line, text, end);
+        line[end] = '\0';
+        if (measure(line, ctx) > maxWidth) break;
+        best = end;
+        if (text[end] == '\0') break;
+      }
+    }
+    if (best == 0) {  // a single word wider than the line: cut it
+      fitText(text, maxWidth, measure, ctx, ellipsis, line, lineSize);
+      const char *space = strchr(text, ' ');
+      text = space ? space : text + strlen(text);
+    } else {
+      memcpy(line, text, best);
+      line[best] = '\0';
+      text += best;
+    }
+    while (*text == ' ') text++;
+    count++;
+  }
+  return count;
+}
+
 void formatProgress(uint32_t page, uint32_t pageCount, char *out, size_t outSize) {
   if (pageCount == 0) {
     snprintf(out, outSize, "-");
     return;
   }
   const unsigned pct = unsigned(uint64_t(page + 1) * 100 / pageCount);
-  snprintf(out, outSize, "%u/%u  %u%%", unsigned(page + 1), unsigned(pageCount), pct);
+  snprintf(out, outSize, "%u/%u  \xC2\xB7  %u%%", unsigned(page + 1), unsigned(pageCount), pct);
 }

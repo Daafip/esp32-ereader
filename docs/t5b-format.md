@@ -38,7 +38,7 @@ Identical to bb_epaper's local framebuffer for the landscape 250×122 panel
 - **1 = white, 0 = black**
 - the 6 padding bits at the end of each row are 1
 
-The bottom 10 rows (status bar) are white. The firmware draws the status bar
+The bottom 14 rows (status bar) are white. The firmware draws the status bar
 there after copying the page into the framebuffer.
 
 ## Firmware sketch

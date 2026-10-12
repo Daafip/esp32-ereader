@@ -30,26 +30,56 @@ void save(const char *name) {
   printf("%s\n", path);
 }
 
-const char *const kMain[] = {"Resume", "Chapters", "Go to %", "Library", "Settings", "About", "Sleep"};
-const char *const kChapters[] = {
-    "OF DE", "AAN DE", "EERSTE HOOFDSTUK", "TWEEDE HOOFDSTUK", "DERDE HOOFDSTUK",
-    "VIERDE HOOFDSTUK", "VYFDE HOOFDSTUK", "\xE2\x80\xA2 ZESDE HOOFDSTUK", "ZEVENDE HOOFDSTUK",
-    "ACHTSTE HOOFDSTUK", "NEGENDE HOOFDSTUK", "TIENDE HOOFDSTUK",
-};
-const char *const kBooks[] = {
-    "Alice's Adventures in Wonderland",
-    "\xE2\x80\xA2 Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy",
-    "De Kleine Johannes", "Een Nederlandsch \xE2\x80\x9C" "ABC\xE2\x80\x9D voor \xC3\xA9\xC3\xA9n en al",
+#define DOT "  \xC2\xB7  "
+const ui::Hint kNext = {"NEXT", ui::kArrowDown, ui::kArrowUp};
+const ui::Hint kOpen = {"MENU", "open", "back"};
+const ui::Hint kGo = {"MENU", "go", "back"};
+
+struct Row {
+  const char *label;
+  const char *detail;
+  bool chevron;
+  bool current;
 };
 
-void strings(int i, char *out, size_t n, void *ctx) {
-  strncpy(out, static_cast<const char *const *>(ctx)[i], n - 1);
-  out[n - 1] = '\0';
+void rowItem(int i, ui::Item &it, void *ctx) {
+  const Row &r = static_cast<const Row *>(ctx)[i];
+  strncpy(it.label, r.label, sizeof(it.label) - 1);
+  strncpy(it.detail, r.detail, sizeof(it.detail) - 1);
+  it.chevron = r.chevron;
+  it.current = r.current;
 }
 
-void settingText(int i, char *out, size_t n, void *) {
+const Row kMain[] = {
+    {"Resume", "1%", false, false},        {"Chapters", "", true, false},
+    {"Go to position", "", true, false},   {"Library", "", true, false},
+    {"Settings", "", true, false},         {"About", "", true, false},
+    {"Sleep", "", false, false},
+};
+const Row kChapters[] = {
+    {"OF DE", "6", false, false},
+    {"AAN DE", "8", false, false},
+    {"EERSTE HOOFDSTUK", "26", false, true},
+    {"TWEEDE HOOFDSTUK", "82", false, false},
+    {"DERDE HOOFDSTUK", "151", false, false},
+    {"VIERDE HOOFDSTUK", "217", false, false},
+    {"VYFDE HOOFDSTUK", "394", false, false},
+    {"ZESDE HOOFDSTUK", "553", false, false},
+    {"ZEVENDE HOOFDSTUK", "712", false, false},
+    {"ACHTSTE HOOFDSTUK", "898", false, false},
+};
+const Row kBooks[] = {
+    {"Alice's Adventures in Wonderland", "new", false, false},
+    {"Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", "1%", false, true},
+    {"De Kleine Johannes", "64%", false, false},
+    {"Een Nederlandsch \xE2\x80\x9C" "ABC\xE2\x80\x9D voor \xC3\xA9\xC3\xA9n en al", "100%", false,
+     false},
+};
+
+void settingItem(int i, ui::Item &it, void *) {
   Settings s;
-  describeSetting(s, SettingId(i), out, n);
+  strncpy(it.label, settingLabel(SettingId(i)), sizeof(it.label) - 1);
+  settingValue(s, SettingId(i), it.detail, sizeof(it.detail));
 }
 
 }  // namespace
@@ -57,53 +87,66 @@ void settingText(int i, char *out, size_t n, void *) {
 int main(int argc, char **argv) {
   if (argc > 1) outDir = argv[1];
   display::begin();
-  const char *hint = "NEXT:down hold:up  MENU:ok hold:back";
   ListModel list;
+  const char *title = "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy";
 
   memcpy(display::framebuffer(), kSamplePages[0], kPageBytes);
   ui::statusBar("EERSTE HOOFDSTUK", 26, 3596, 72);
   save("01-reading");
 
   memcpy(display::framebuffer(), kSamplePages[1], kPageBytes);
-  ui::statusBar("Hoofdstuk \xC3\xA9\xC3\xA9n \xE2\x80\x94 De koffiveilingen der Nederlandsche Handelsmaatschappy",
-                3595, 3596, 8);
+  ui::statusBar("Hoofdstuk \xC3\xA9\xC3\xA9n \xE2\x80\x94 De koffiveilingen der Nederlandsche "
+                "Handelsmaatschappy",
+                2400, 3596, 8);
   save("02-reading-long-title");
 
-  list.reset(7, ui::kMenuRows, 1);
-  ui::menu("Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", list,
-           strings, (void *)kMain, hint, 72);
+  list.reset(7, ui::kMenuRows, 0);
+  ui::menu(title, list, rowItem, (void *)kMain, kNext, kOpen, 72);
   save("03-main-menu");
 
-  list.reset(12, ui::kMenuRows, 7);
-  ui::menu("Chapters", list, strings, (void *)kChapters, "p553  NEXT:down hold:up MENU:go", 72);
+  list.reset(10, ui::kMenuRows, 2);
+  ui::menu("Chapters", list, rowItem, (void *)kChapters, kNext, kGo, 72);
   save("04-chapters");
 
-  ui::valueEditor("Go to", "37%  (p 1330)", 37, "NEXT:+1 hold:+10  MENU:go hold:back");
+  ui::valueEditor("Go to position", "37%", "Page 1330 of 3596", 37, {"NEXT", "+1", "+10"}, kGo,
+                  72);
   save("05-go-to");
 
   list.reset(4, ui::kMenuRows, 1);
-  ui::menu("Library", list, strings, (void *)kBooks, "Multatuli  3596p", 72);
+  ui::menu("Library", list, rowItem, (void *)kBooks, kNext, kOpen, 72);
   save("06-library");
 
   list.reset(kSettingCount, ui::kMenuRows, 4);
-  ui::menu("Settings", list, settingText, nullptr, "NEXT:down hold:up  MENU:change hold:back", 72);
+  ui::menu("Settings", list, settingItem, nullptr, kNext, {"MENU", "edit", "back"}, 72);
   save("07-settings");
 
-  const char *about[] = {"Firmware 0.5.0, bb_epaper 2.1.11+", "Battery 3.92 V (72%)",
-                         "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy",
-                         "Page 27 of 3596, chapter 3 of 25", "SD 7580 MB, free heap 214 KB",
-                         "Wake to image 812 ms, wakes 1532"};
-  ui::textScreen("About", about, 6, "any button: back");
+  const char *labels[] = {"Firmware", "Battery", "Book", "Position", "Memory", "Wake to page"};
+  const char *values[] = {"0.5.0", "3.92 V" DOT "72%", title, "page 27/3596" DOT "ch. 3/25",
+                          "7580 MB card" DOT "214 KB free", "812 ms" DOT "1532 wakes"};
+  ui::details("About", labels, values, 6, {nullptr, nullptr, nullptr}, {"MENU", "back", nullptr},
+              72);
   save("08-about");
 
-  ui::message("No SD card", "Insert a FAT32 card", "with books in /books", "any button: try again");
-  save("09-message");
+  ui::message(ui::Icon::Card, "No SD card", "Insert a FAT32 card", "with books in /books",
+              "Press any button to try again");
+  save("09-no-card");
 
-  ui::sleepScreen("Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy",
-                  "Multatuli", 72);
-  save("10-sleep");
+  ui::message(ui::Icon::Book, "No books yet", "Copy .t5b files to /books", "on the SD card",
+              "Press any button to try again");
+  save("10-no-books");
 
-  ui::message("Battery low", "Please charge the reader", nullptr, "");
-  save("11-low-battery");
+  ui::message(ui::Icon::Warning, "Cannot open book", "old.t5b", "made for another screen size",
+              "Press any button to try again");
+  save("11-error");
+
+  ui::sleepScreen(title, "Multatuli", 37, 72);
+  save("12-sleep");
+
+  ui::sleepScreen("De Kleine Johannes", "Frederik van Eeden", 64, 15);
+  save("13-sleep-short-title");
+
+  ui::message(ui::Icon::Battery, "Battery low", "Charge the reader,", "then press a button",
+              nullptr);
+  save("14-low-battery");
   return 0;
 }

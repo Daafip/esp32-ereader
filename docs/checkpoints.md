@@ -45,7 +45,11 @@ I then set the panel constant and pins in `board.h`.
    default "Full refresh: every N"), and the "partial refresh average" line.
 3. Short press MENU: fast refresh timing. **Send:** the timing line.
 
-## Checkpoint 2: font (no board needed)
+## Checkpoint 2: font (no board needed) — done
+
+Decided 2026-10-12: **Ubuntu Regular 13 px**, threshold rendering, default margins.
+These are bookprep's defaults, so `pixi run prep book.epub` needs no font options.
+The rest of this section is for revisiting the choice later.
 
 Look at `out/checkpoint2/font-comparison.png` and `font-comparison-mono.png`, or make
 your own with any fonts and book:

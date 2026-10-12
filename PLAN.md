@@ -98,7 +98,7 @@ t5-reader/
 - [x] `extract.py`: DRM-free EPUB → ordered chapters of paragraphs (`ebooklib` + `beautifulsoup4`); also plain `.txt`. Keep chapter titles for the TOC. Drop images in v1 (placeholder `[image]`) *(chapters split at TOC targets incl. `#fragment` anchors, so Gutenberg's size-split files work; `.txt`: Gutenberg header/footer stripped, `HOOFDSTUK`/`Chapter`/roman-numeral headings)*
 - [x] Text normalisation: NFC, smart quotes, ellipsis, soft hyphens, nbsp; map characters missing from the font to fallbacks and report them *(`normalize.py`; Dutch elisions ’s/’t/’n; font coverage from the cmap via fontTools)*
 - [x] `layout.py`: greedy line breaking with font metrics from Pillow (`ImageFont.getlength`), hyphenation via `pyphen` (language from EPUB metadata, `nl`/`en` default), optional justification, widow/orphan control light *(also: break after em/en dash, headings kept with the next line, chapters start a new page)*
-- [x] Page model: text area = 250×122 minus margins (≈4 px) minus status bar (≈10 px, rendered **on device**, not baked in)
+- [x] Page model: text area = 250×122 minus margins (≈4 px) minus status bar (≈10 px, rendered **on device**, not baked in) *(now 14 px: a reading-progress line + text; at 13 px the page still holds 6 lines)*
 - [x] `render.py`: Pillow 1-bit render (no dithering; threshold anti-aliasing at a tuned level) *(`--threshold N`, or `--mono` for FreeType hinted mono rendering; measured with the same hinting)*
 - [x] `t5b.py`: binary format, little-endian *(byte-level spec: `docs/t5b-format.md`)*:
   ```
@@ -111,7 +111,7 @@ t5-reader/
 - [x] CLI: `pixi run prep book.epub --font fonts/X.ttf --size 13 --lang nl --out out/ --preview` → writes `.t5b` + preview PNGs of first 10 pages + a contact sheet
 - [x] Tests: round-trip header, page offset math, hyphenation on NL/EN samples, character fallback report, golden-image test for one page *(57 tests, `pixi run test`)*
 
-**🧑 HUMAN CHECKPOINT 2 (no board):** David reviews preview PNGs, picks font + size + margins. *(Comparison sheets: `out/checkpoint2/font-comparison.png` (threshold) and `font-comparison-mono.png`; 5 fonts × 11–14 px on Max Havelaar.)*
+**🧑 HUMAN CHECKPOINT 2 (no board):** David reviews preview PNGs, picks font + size + margins. *(Comparison sheets: `out/checkpoint2/font-comparison.png` (threshold) and `font-comparison-mono.png`; 5 fonts × 11–14 px on Max Havelaar.)* **Done 2026-10-12: Ubuntu Regular 13 px, threshold rendering, default margins** (= bookprep defaults: 6 lines × ~38 chars).
 
 ## Phase 3 — Reader firmware v1
 
@@ -121,7 +121,7 @@ t5-reader/
   - GPIO39 short = next page · GPIO39 long (>600 ms) = previous page
   - GPIO0 short = menu · GPIO0 long = sleep now
   - (remap in `board.h` if the 4-button variant)
-- [x] `ui.cpp`: status bar — page x/y, %, chapter short title, battery icon *(built-in 6x8 font; menus in a converted Ubuntu font. Every screen renders on the PC: `pixi run ui-preview`)*
+- [x] `ui.cpp`: status bar — page x/y, %, chapter short title, battery icon *(Ubuntu UI fonts; restyled 2026-10-12: progress line, rounded selection, key-chip hints, icon empty states. Every screen renders on the PC: `pixi run ui-preview`)*
 - [x] Bookmark per book (hash of title+page_count) in NVS (`Preferences`); restore on boot
 - [x] Refresh policy: partial for page turns, full every `FULL_REFRESH_EVERY` turns and on chapter change
 

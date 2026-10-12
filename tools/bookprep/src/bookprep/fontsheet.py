@@ -42,7 +42,8 @@ def tile(raw: Book, chapter, font_path: Path, size: int, mono: bool, threshold: 
     )
     page = max(pages[:12], key=lambda p: sum(len(line.text) for _, line in p.lines))
     img = render_page(page, font, geometry, RenderOptions(line_height, threshold, mono))
-    img = enlarge(with_status_bar(img, geometry, chapter.title or "", "27/412  6%"), 2)
+    status = "27/412  \N{MIDDLE DOT}  6%"
+    img = enlarge(with_status_bar(img, geometry, chapter.title or "", status, 27 / 412), 2)
     canvas = Image.new("L", (img.width, img.height + 30), 255)
     canvas.paste(img, (0, 30))
     lines = geometry.text_height // line_height

@@ -7,8 +7,9 @@ blits pages. Full plan and phase status: `PLAN.md`. Hardware facts: `docs/hardwa
 ## Current phase
 
 Phases 0-5 are written and build; **no code has run on a board yet** (David has none
-yet). Waiting on the hardware checkpoints in `docs/checkpoints.md` (0, 1, 3, 4) and on
-Checkpoint 2 (font choice). Phase 6 is optional and not started.
+yet). Waiting on the hardware checkpoints in `docs/checkpoints.md` (0, 1, 3, 4).
+Checkpoint 2 is done: Ubuntu Regular 13 px (bookprep default). Phase 6 is optional and
+not started. UI look: check `pixi run ui-preview` after any change to `ui.cpp`.
 
 ## Commands (everything through pixi)
 

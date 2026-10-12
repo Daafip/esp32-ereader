@@ -224,9 +224,9 @@ static void test_fit_text() {
 static void test_format_progress() {
   char out[32];
   formatProgress(0, 3596, out, sizeof(out));
-  TEST_ASSERT_EQUAL_STRING("1/3596  0%", out);
+  TEST_ASSERT_EQUAL_STRING("1/3596  \xC2\xB7  0%", out);
   formatProgress(3595, 3596, out, sizeof(out));
-  TEST_ASSERT_EQUAL_STRING("3596/3596  100%", out);
+  TEST_ASSERT_EQUAL_STRING("3596/3596  \xC2\xB7  100%", out);
 }
 
 // --- menu -------------------------------------------------------------------
@@ -258,25 +258,30 @@ static void test_list_model_scrolls_and_wraps() {
 
 // --- settings ---------------------------------------------------------------
 
-static void test_settings_cycle_describe_sanitize() {
+static void test_settings_cycle_value_sanitize() {
   Settings s;
   char text[48];
-  describeSetting(s, SettingId::FullEvery, text, sizeof(text));
-  TEST_ASSERT_EQUAL_STRING("Full refresh: every 10", text);
+  TEST_ASSERT_EQUAL_STRING("Full refresh", settingLabel(SettingId::FullEvery));
+  settingValue(s, SettingId::FullEvery, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("every 10", text);
   cycleSetting(s, SettingId::FullEvery);
   TEST_ASSERT_EQUAL(15, s.fullEvery);
   for (int i = 0; i < 3; i++) cycleSetting(s, SettingId::FullEvery);
   TEST_ASSERT_EQUAL(0, s.fullEvery);
-  describeSetting(s, SettingId::FullEvery, text, sizeof(text));
-  TEST_ASSERT_EQUAL_STRING("Full refresh: chapters only", text);
+  settingValue(s, SettingId::FullEvery, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("chapters only", text);
   cycleSetting(s, SettingId::FullEvery);
   TEST_ASSERT_EQUAL(5, s.fullEvery);
 
   cycleSetting(s, SettingId::WakeRefresh);
   TEST_ASSERT_EQUAL(int(WakeRefresh::Retain), int(s.wakeRefresh));
+  settingValue(s, SettingId::WakeRefresh, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("retain", text);
   cycleSetting(s, SettingId::DeepSleep);
-  describeSetting(s, SettingId::DeepSleep, text, sizeof(text));
-  TEST_ASSERT_EQUAL_STRING("Sleep after page: off", text);
+  settingValue(s, SettingId::DeepSleep, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("off", text);
+  settingValue(s, SettingId::LongPress, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("600 ms", text);
 
   s.fullEvery = 7;
   s.longPressMs = 1;
@@ -288,6 +293,29 @@ static void test_settings_cycle_describe_sanitize() {
   TEST_ASSERT_EQUAL(d.longPressMs, s.longPressMs);
   TEST_ASSERT_EQUAL(d.idleMinutes, s.idleMinutes);
   TEST_ASSERT_EQUAL(int(d.wakeRefresh), int(s.wakeRefresh));
+}
+
+static void test_wrap_text() {
+  char lines[3][32];
+  const char *ell = "...";
+  // 10 code points per line at 6 px each
+  int n = wrapText("Max Havelaar of de koffiveilingen", 60, measure6, nullptr, ell, lines[0],
+                   sizeof(lines[0]), 2);
+  TEST_ASSERT_EQUAL(2, n);
+  TEST_ASSERT_EQUAL_STRING("Max", lines[0]);  // "Max Havelaar" is 12 > 10
+  TEST_ASSERT_EQUAL_STRING("Havelaa...", lines[1]);
+  n = wrapText("een twee drie", 60, measure6, nullptr, ell, lines[0], sizeof(lines[0]), 3);
+  TEST_ASSERT_EQUAL(2, n);
+  TEST_ASSERT_EQUAL_STRING("een twee", lines[0]);
+  TEST_ASSERT_EQUAL_STRING("drie", lines[1]);
+  n = wrapText("kort", 60, measure6, nullptr, ell, lines[0], sizeof(lines[0]), 2);
+  TEST_ASSERT_EQUAL(1, n);
+  TEST_ASSERT_EQUAL_STRING("kort", lines[0]);
+  n = wrapText("abcdefghijklmnop qr", 60, measure6, nullptr, ell, lines[0], sizeof(lines[0]), 3);
+  TEST_ASSERT_EQUAL(2, n);
+  TEST_ASSERT_EQUAL_STRING("abcdefg...", lines[0]);  // over-long word cut
+  TEST_ASSERT_EQUAL_STRING("qr", lines[1]);
+  TEST_ASSERT_EQUAL(0, wrapText("   ", 60, measure6, nullptr, ell, lines[0], sizeof(lines[0]), 2));
 }
 
 int main() {
@@ -309,6 +337,7 @@ int main() {
   RUN_TEST(test_fit_text);
   RUN_TEST(test_format_progress);
   RUN_TEST(test_list_model_scrolls_and_wraps);
-  RUN_TEST(test_settings_cycle_describe_sanitize);
+  RUN_TEST(test_settings_cycle_value_sanitize);
+  RUN_TEST(test_wrap_text);
   return UNITY_END();
 }

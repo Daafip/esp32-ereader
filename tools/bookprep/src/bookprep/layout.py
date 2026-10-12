@@ -57,8 +57,8 @@ class PageGeometry:
     margin_left: int = 4
     margin_right: int = 4
     margin_top: int = 4
-    margin_bottom: int = 1
-    status_bar: int = 10
+    margin_bottom: int = 4
+    status_bar: int = 14
 
     @property
     def text_left(self) -> int:
