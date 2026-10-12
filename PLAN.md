@@ -115,15 +115,15 @@ t5-reader/
 
 ## Phase 3 — Reader firmware v1
 
-- [ ] `storage.cpp`: mount SD (HSPI with Phase-0 pins) as the only storage; clear error screen if no card / no `/books`. LittleFS fallback (custom `partitions.csv`) only if Phase 0 SD test failed
-- [ ] `book.cpp`: open `.t5b`, validate header vs. compiled page format, read page n into the framebuffer, read TOC
-- [ ] `input.cpp`: debounced buttons. Default mapping for 1 user button + BOOT:
+- [x] `storage.cpp`: mount SD (HSPI with Phase-0 pins) as the only storage; clear error screen if no card / no `/books`. LittleFS fallback (custom `partitions.csv`) only if Phase 0 SD test failed *(LittleFS fallback not built: only if Checkpoint 0 shows SD trouble)*
+- [x] `book.cpp`: open `.t5b`, validate header vs. compiled page format, read page n into the framebuffer, read TOC
+- [x] `input.cpp`: debounced buttons. Default mapping for 1 user button + BOOT: *(pure state machine in `lib/core/button.cpp`, unit-tested; in lists NEXT long = previous item with auto-repeat)*
   - GPIO39 short = next page · GPIO39 long (>600 ms) = previous page
   - GPIO0 short = menu · GPIO0 long = sleep now
   - (remap in `board.h` if the 4-button variant)
-- [ ] `ui.cpp`: status bar — page x/y, %, chapter short title, battery icon
-- [ ] Bookmark per book (hash of title+page_count) in NVS (`Preferences`); restore on boot
-- [ ] Refresh policy: partial for page turns, full every `FULL_REFRESH_EVERY` turns and on chapter change
+- [x] `ui.cpp`: status bar — page x/y, %, chapter short title, battery icon *(built-in 6x8 font; menus in a converted Ubuntu font. Every screen renders on the PC: `pixi run ui-preview`)*
+- [x] Bookmark per book (hash of title+page_count) in NVS (`Preferences`); restore on boot
+- [x] Refresh policy: partial for page turns, full every `FULL_REFRESH_EVERY` turns and on chapter change
 
 **🧑 HUMAN CHECKPOINT 3:** read a real chapter on the device. Report latency, ghosting, legibility.
 
@@ -131,24 +131,24 @@ t5-reader/
 
 Goal: e-paper keeps the image, so the MCU should deep-sleep after every turn.
 
-- [ ] After render: panel to deep sleep, ESP32 deep sleep; wake via `ext0` on GPIO39 and `ext1` (ALL_LOW, single pin) on GPIO0
-- [ ] Keep current book/page in RTC memory (fast path) + NVS (persistent)
-- [ ] On wake, detect short vs. long press (sample pin after wake) to decide next/prev
-- [ ] **Spike — partial refresh after deep sleep.** SSD16xx partial updates need the *previous* image in the controller's second RAM, which may be lost. Try in order, keep the first that gives clean results:
+- [x] After render: panel to deep sleep, ESP32 deep sleep; wake via `ext0` on GPIO39 and `ext1` (ALL_LOW, single pin) on GPIO0
+- [x] Keep current book/page in RTC memory (fast path) + NVS (persistent)
+- [x] On wake, detect short vs. long press (sample pin after wake) to decide next/prev
+- [ ] **Spike — partial refresh after deep sleep.** SSD16xx partial updates need the *previous* image in the controller's second RAM, which may be lost. Try in order, keep the first that gives clean results: *(all three implemented, switchable at runtime: Settings > Wake refresh = rewrite (2, default) / retain (1) / full (3); the shown image lives in RTC RAM. Which works: Checkpoint 4)*
   1. Panel sleep mode that retains RAM, partial refresh as-is
   2. Re-write previous page into the "old" plane and new page into the "new" plane, then partial refresh (we can always re-read page n−1 from storage)
   3. Fallback: fast/full refresh on every wake
-- [ ] Measure wake-to-image latency (target < 1.5 s) and sleep current; log to `docs/hardware.md`
-- [ ] Idle timeout (e.g. 10 min) → sleep screen (book title + "sleeping") with full refresh
-- [ ] Battery read + low-battery screen
+- [ ] Measure wake-to-image latency (target < 1.5 s) and sleep current; log to `docs/hardware.md` *(the reader logs `page ... at N ms` on serial; needs the board)*
+- [x] Idle timeout (e.g. 10 min) → sleep screen (book title + "sleeping") with full refresh *(timer wake while a page is shown -> sleep screen; awake in menus -> same)*
+- [x] Battery read + low-battery screen *(< 3.4 V; ignored below 2.5 V (USB without battery))*
 
 **🧑 HUMAN CHECKPOINT 4:** David measures sleep current (USB meter / multimeter) and confirms page-turn feel.
 
 ## Phase 5 — Library & navigation
 
-- [ ] Book list from `/books/*.t5b` (title/author from headers), select with buttons
-- [ ] Menu: Resume · Chapters (TOC jump) · Go to % · Library · Settings (full-refresh interval, long-press time, idle timeout) · About (battery, version)
-- [ ] Menu text via bb_epaper fonts; convert one UI font with the bb_epaper font converter incl. Latin-1 (é, ë, ï, ü …)
+- [x] Book list from `/books/*.t5b` (title/author from headers), select with buttons
+- [x] Menu: Resume · Chapters (TOC jump) · Go to % · Library · Settings (full-refresh interval, long-press time, idle timeout) · About (battery, version) *(plus Sleep; user guide: `docs/usage.md`)*
+- [x] Menu text via bb_epaper fonts; convert one UI font with the bb_epaper font converter incl. Latin-1 (é, ë, ï, ü …) *(`pixi run ui-fonts`: bb_epaper's fontconvert built from the pinned library, Ubuntu 12/16 px, codepage 1252)*
 
 ## Phase 6 — Optional extensions (pick later)
 

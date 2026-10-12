@@ -52,12 +52,10 @@ void showCalibration(Refresh mode) {
 }
 
 void drawStep(int step) {
-  BBEPAPER &epd = display::epd();
   char text[16];
   snprintf(text, sizeof(text), " %2d/%d ", step, kGhostSteps);
-  epd.setFont(FONT_6x8);
-  epd.setTextColor(BBEP_WHITE, BBEP_BLACK);
-  epd.drawString(text, kPageW - 6 * int(strlen(text)) - 2, kPageH - 9);
+  display::drawText6x8(text, kPageW - 6 * int(strlen(text)) - 2, kPageH - 9, BBEP_WHITE,
+                       BBEP_BLACK);
 }
 
 void ghostingTest() {

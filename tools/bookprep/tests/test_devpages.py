@@ -45,3 +45,13 @@ def test_main_writes_header_and_t5b(tmp_path, font_path):
     book = T5BFile(t5b)
     assert book.header.page_count == 3
     assert [e.title for e in book.toc] == ["Calibration", "Sample text"]
+
+
+def test_font_sheet(sample_epub, tmp_path, font_path):
+    from PIL import Image
+
+    from bookprep.fontsheet import main as font_sheet
+
+    out = tmp_path / "sheet.png"
+    assert font_sheet([str(sample_epub), "--sizes", "11", "13", "--out", str(out)]) == 0
+    assert Image.open(out).width > 1000  # two tiles side by side

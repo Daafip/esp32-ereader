@@ -38,6 +38,11 @@ Refresh show(Refresh mode);
 
 void setRotation(int degrees);  // 90 or 270 (Phase 1 calibration)
 
+// ASCII text in bb_epaper's built-in 6x8 font, top-left at (x, y), drawn one
+// character at a time: in buffered mode bb_epaper's FONT_6x8 path draws every
+// character of a string at the same x (bug in 2.1.11 and upstream main).
+void drawText6x8(const char *ascii, int x, int y, int color, int bg);
+
 bool shownValid();
 uint16_t partialsSinceFull();
 Timing lastTiming();

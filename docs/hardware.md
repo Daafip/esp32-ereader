@@ -51,11 +51,18 @@ Free header GPIOs (for external page-turn buttons, Phase 6): 19 (LED), 21, 22, 2
 
 ## Display library
 
-- `bb_epaper` **2.1.11** (latest tag, 2026-06-15), pinned in `firmware/platformio.ini`.
+- `bb_epaper` **2.1.11 + upstream commit `1d92424`** (2026-07-09), pinned by commit
+  hash in `firmware/platformio.ini`. The only changes after the 2.1.11 tag up to that
+  commit are M5 Paper Mono support and a one-line font fix: 2.1.11 skips glyphs that
+  are 1 px wide in custom fonts, so `i . : '` vanish from small menu fonts.
   Licence: **GPL-3.0-or-later**, so the firmware binary is GPL as well if we ever
   distribute it.
-- When reading library source, use the `2.1.11` tag, not `main`: `main` already has
-  panel types (e.g. `EP213B_122x250_4GRAY`) that 2.1.11 doesn't.
+- **Bug, still on upstream `main`:** in buffered mode the built-in `FONT_6x8` draws every
+  character of a string at the same x (it advances `iCursorX` but draws at a local `x`).
+  Workaround: `display::drawText6x8()` draws one character at a time. Found with
+  `pixi run ui-preview`. Could be reported upstream.
+- When reading library source, use the pinned commit, not `main`: `main` already has
+  panel types (e.g. `EP213B_122x250_4GRAY`) that our version doesn't.
 - Verified API facts (from the 2.1.11 source):
   - `initIO()` immediately sends the panel's full init sequence. Do a hardware reset
     first if the panel may be in deep sleep.
@@ -67,8 +74,34 @@ Free header GPIOs (for external page-turn buttons, Phase 6): 19 (LED), 21, 22, 2
     activates. Partial uses RAM 0x24 (new, `PLANE_0`) against RAM 0x26 (old, `PLANE_1`).
     `writePlane(PLANE_0_TO_1)` sends the local buffer to the "old" RAM, so a single
     3.9 KB buffer is enough: write old page → `PLANE_0_TO_1`, new page → `PLANE_0`.
+  - Custom fonts (fontconvert output): `y` is the baseline; text is converted from
+    UTF-8 to codepage 1252. `getStringBox()` converts into an 80-byte stack buffer and
+    `drawString()` into 256 bytes, both unchecked: keep strings short.
+  - Built-in fonts: `y` is the top row; characters index the glyph table as `c - 32`
+    unchecked, so pass ASCII only (`asciiFold()`).
+  - `pfnSetPixelFast` has no bounds check: fit text before drawing.
 
-### Candidate panel constants (bb_epaper 2.1.11)
+## Firmware design notes
+
+- **RTC memory** (survives deep sleep, 8 KB): the image on the panel (3904 B, for the
+  "old" plane of a partial refresh after wake), current book path/page/chapter, which
+  screen is shown, refresh counters. NVS keeps settings, last book and one bookmark
+  per book (written on every page turn; NVS skips unchanged values).
+- **Wake refresh strategies** (Settings → Wake refresh), the Phase 4 spike:
+  - `rewrite` (default): panel power cut in deep sleep (V2.4, GPIO12 held low); on
+    wake the previous image is sent from RTC RAM as "old", then a partial refresh.
+  - `retain`: panel stays powered in its RAM-keeping sleep, RST/CS held high through
+    ESP32 deep sleep; only the new image is sent. Depends on the controller keeping
+    RAM through the hardware reset that wakes it: unverified.
+  - `full`: fast refresh (full if the panel has none) on every page turn.
+- **Wake-up**: NEXT = ext0 (GPIO39, low), MENU = ext1 (GPIO0, all-low, single pin,
+  RTC pull-up on). The idle timer (Settings → Idle sleep) only runs while a page is
+  shown; when it fires, the sleep screen is drawn and only buttons wake the reader.
+- **Unverified on hardware**: that waking by holding GPIO0 low doesn't enter download
+  mode (strapping pins are normally only sampled at power-on/chip reset), and the
+  sleep current with the pins held.
+
+## Candidate panel constants (bb_epaper 2.1.11)
 
 | Constant | Size | Controller | Comment |
 |---|---|---|---|
@@ -100,9 +133,11 @@ So a `.t5b` page can be `memcpy`'d into `epd.getBuffer()` and sent with
 (`kEpdRotation` in `board.h`) and doesn't change the file format. Phase 1's calibration
 pattern confirms all of this on the real panel.
 
-## Checkpoint 0 results
+## Checkpoint results
 
-To be filled in from David's report.
+Filled in from David's reports; see `docs/checkpoints.md` for what to run.
+
+### Checkpoint 0 (hardware identification)
 
 - Board version / FPC label: _
 - Controller-ID line from the panel tester: _
@@ -110,3 +145,16 @@ To be filled in from David's report.
 - Panel tester RESULT lines: _
 - Buttons (GPIO, idle level, bounce): _
 - SD test output (bus check, mount speed, random read timing, boot with card in): _
+
+### Checkpoint 1 (calibration)
+
+- Upright rotation (90/270): _
+- Calibration page correct (border, corners, staircase `\\`): _
+- Full / fast / partial refresh time: _
+- Ghosting after N partial updates → `FULL_REFRESH_EVERY` (Settings default): _
+
+### Checkpoint 3/4 (reading, power)
+
+- Wake-to-image latency per strategy (rewrite / retain / full): _
+- Deep sleep current (rewrite / retain): _
+- Long-press feel (threshold): _

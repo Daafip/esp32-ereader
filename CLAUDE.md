@@ -6,27 +6,33 @@ blits pages. Full plan and phase status: `PLAN.md`. Hardware facts: `docs/hardwa
 
 ## Current phase
 
-- Phase 0 code done → **waiting on HUMAN CHECKPOINT 0** (panel tester, button test and
-  SD test on the board). Phase 1 starts after that.
-- Phase 2 (host tool `bookprep`) done → **waiting on HUMAN CHECKPOINT 2** (David picks
-  font, size, margins, threshold vs mono from `out/checkpoint2/*.png`).
+Phases 0-5 are written and build; **no code has run on a board yet** (David has none
+yet). Waiting on the hardware checkpoints in `docs/checkpoints.md` (0, 1, 3, 4) and on
+Checkpoint 2 (font choice). Phase 6 is optional and not started.
 
 ## Commands (everything through pixi)
 
 | Task | Command |
 |---|---|
 | Build all firmware envs | `pixi run fw-build` |
-| Flash one env | `pixi run fw-flash panel_tester` (`reader`, `button_test`, `sd_test`) |
+| Firmware unit tests (PC) | `pixi run fw-test` (`firmware/lib/core`, Unity, native env) |
+| Render all screens (PC) | `pixi run ui-preview` -> `out/ui-preview/` |
+| Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`) |
 | Serial monitor | `pixi run fw-monitor` |
-| Convert a book | `pixi run prep book.epub --font tools/bookprep/fonts/X.ttf --out out/` |
+| Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` |
+| Font comparison | `pixi run font-sheet book.epub --font a.ttf --sizes 11 12 13` |
+| Regenerate generated headers | `pixi run devpages` (test_pages.h), `pixi run ui-fonts` (fonts/) |
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
 
 ## Conventions
 
 - All pins and the panel constant live in `firmware/include/board.h`, nowhere else.
-- `bb_epaper` is pinned to **2.1.11**. When checking its API, read the source of *that
-  tag* (`main` has newer panel enums that don't compile against 2.1.11). Don't trust
-  API names from memory or from the plan.
+- `bb_epaper` is pinned to **2.1.11 + commit 1d92424** (font fix). When checking its API,
+  read `firmware/.pio/libdeps/reader/bb_epaper/src`, not upstream `main`. Don't trust
+  API names from memory or from the plan. Its built-in 6x8 font is broken in buffered
+  mode: use `display::drawText6x8()`.
+- Hardware-independent logic goes in `firmware/lib/core` (no Arduino includes) with a
+  Unity test. UI drawing stays free of Arduino APIs so `ui-preview` can build it.
 - Firmware must build without hardware (`pixi run fw-build`). Hardware-dependent
   steps end at a 🧑 checkpoint in `PLAN.md`: stop there and ask David.
 - Diagnostic sketches live in `firmware/diag/<name>/main.cpp`, one PlatformIO env each.

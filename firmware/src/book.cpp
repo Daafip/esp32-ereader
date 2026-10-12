@@ -1,0 +1,70 @@
+#include "book.h"
+
+#include <SD.h>
+
+#include "board.h"
+
+bool Book::open(const char *path) {
+  close();
+  strlcpy(path_, path, sizeof(path_));
+  file_ = SD.open(path, FILE_READ);
+  if (!file_) {
+    error_ = "file not found";
+    return false;
+  }
+  uint8_t buf[t5b::kHeaderSize];
+  if (file_.read(buf, sizeof(buf)) != sizeof(buf)) {
+    error_ = t5b::errorText(t5b::Error::TooShort);
+    file_.close();
+    return false;
+  }
+  t5b::Error err = t5b::parseHeader(buf, sizeof(buf), header_);
+  if (err == t5b::Error::None) err = t5b::validate(header_, kPageW, kPageH, uint32_t(file_.size()));
+  if (err != t5b::Error::None) {
+    error_ = t5b::errorText(err);
+    file_.close();
+    return false;
+  }
+  const int n = header_.tocCount < kMaxToc ? header_.tocCount : kMaxToc;
+  starts_.resize(n);
+  uint8_t entry[t5b::kTocEntrySize];
+  for (int i = 0; i < n; i++) {
+    if (file_.read(entry, sizeof(entry)) != sizeof(entry)) {
+      starts_.resize(i);
+      break;
+    }
+    starts_[i] = uint32_t(entry[0]) | (uint32_t(entry[1]) << 8) | (uint32_t(entry[2]) << 16) |
+                 (uint32_t(entry[3]) << 24);
+  }
+  id_ = t5b::bookId(header_.title, header_.pageCount);
+  error_ = "";
+  open_ = true;
+  return true;
+}
+
+void Book::close() {
+  if (file_) file_.close();
+  starts_.clear();
+  open_ = false;
+}
+
+bool Book::readPage(uint32_t n, uint8_t *dst) {
+  if (!open_ || n >= header_.pageCount) return false;
+  const uint32_t bytes = header_.pageBytes();
+  return file_.seek(header_.pageOffset(n)) && file_.read(dst, bytes) == bytes;
+}
+
+int Book::chapterForPage(uint32_t page) const {
+  return t5b::chapterForPage(starts_.data(), int(starts_.size()), page);
+}
+
+bool Book::tocEntry(int i, t5b::TocEntry &out) {
+  if (!open_ || i < 0 || i >= int(starts_.size())) return false;
+  uint8_t entry[t5b::kTocEntrySize];
+  if (!file_.seek(t5b::kHeaderSize + uint32_t(i) * t5b::kTocEntrySize) ||
+      file_.read(entry, sizeof(entry)) != sizeof(entry)) {
+    return false;
+  }
+  t5b::parseTocEntry(entry, out);
+  return true;
+}
