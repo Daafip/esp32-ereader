@@ -1,0 +1,46 @@
+[workspace]
+name = "t5-reader"
+description = "Pocket e-reader for the LilyGo T5-2.13 (host pre-renders, device blits)"
+authors = ["David Haasnoot <D.Haasnoot@hkv.nl>"]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = "3.12.*"
+platformio = ">=6.1,<7"
+pillow = ">=11"
+pyphen = ">=0.17"
+ebooklib = ">=0.17"
+beautifulsoup4 = ">=4.12"
+lxml = ">=5"
+pytest = ">=8"
+ruff = ">=0.6"
+
+[pypi-dependencies]
+bookprep = { path = "tools/bookprep", editable = true }
+
+[tasks.fw-build]
+cmd = "pio run -d firmware"
+description = "Build every firmware env (reader + diagnostic sketches); no hardware needed"
+
+[tasks.fw-flash]
+cmd = "pio run -d firmware -e {{ env }} -t upload"
+args = [{ arg = "env", default = "reader" }]
+description = "Flash one env: pixi run fw-flash [reader|panel_tester|button_test|sd_test]"
+
+[tasks.fw-monitor]
+cmd = "pio device monitor -d firmware"
+description = "Serial monitor at 115200 baud"
+
+[tasks.prep]
+cmd = "bookprep"
+description = "Convert EPUB/TXT to .t5b: pixi run prep book.epub --font ... --out out/"
+
+[tasks.test]
+cmd = "pytest tools/bookprep/tests"
+
+[tasks.lint]
+cmd = "ruff check tools/bookprep && ruff format --check tools/bookprep"
+
+[tasks.fmt]
+cmd = "ruff format tools/bookprep && ruff check --fix tools/bookprep"

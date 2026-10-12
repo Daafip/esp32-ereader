@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bookprep"
+version = "0.1.0"
+description = "Pre-render EPUB/TXT books to .t5b page bitmaps for the T5-2.13 e-reader"
+requires-python = ">=3.11"
+# Runtime deps come from conda-forge via pixi.toml; listed here for pip users.
+dependencies = ["pillow", "pyphen", "ebooklib", "beautifulsoup4", "lxml"]
+
+[project.scripts]
+bookprep = "bookprep.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bookprep"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

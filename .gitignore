@@ -1,0 +1,22 @@
+# pixi
+.pixi/
+*.egg-info/
+
+# PlatformIO
+firmware/.pio/
+firmware/.vscode/
+
+# Python
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# bookprep output
+out/
+
+# secrets (Wi-Fi credentials etc.)
+firmware/include/secrets.h
+
+# fonts are user-supplied; keep only the README
+tools/bookprep/fonts/*
+!tools/bookprep/fonts/README.md
