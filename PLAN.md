@@ -95,12 +95,12 @@ t5-reader/
 
 ## Phase 2 — Host tool `bookprep` (no hardware needed)
 
-- [ ] `extract.py`: DRM-free EPUB → ordered chapters of paragraphs (`ebooklib` + `beautifulsoup4`); also plain `.txt`. Keep chapter titles for the TOC. Drop images in v1 (placeholder `[image]`)
-- [ ] Text normalisation: NFC, smart quotes, ellipsis, soft hyphens, nbsp; map characters missing from the font to fallbacks and report them
-- [ ] `layout.py`: greedy line breaking with font metrics from Pillow (`ImageFont.getlength`), hyphenation via `pyphen` (language from EPUB metadata, `nl`/`en` default), optional justification, widow/orphan control light
-- [ ] Page model: text area = 250×122 minus margins (≈4 px) minus status bar (≈10 px, rendered **on device**, not baked in)
-- [ ] `render.py`: Pillow 1-bit render (no dithering; threshold anti-aliasing at a tuned level)
-- [ ] `t5b.py`: binary format, little-endian:
+- [x] `extract.py`: DRM-free EPUB → ordered chapters of paragraphs (`ebooklib` + `beautifulsoup4`); also plain `.txt`. Keep chapter titles for the TOC. Drop images in v1 (placeholder `[image]`) *(chapters split at TOC targets incl. `#fragment` anchors, so Gutenberg's size-split files work; `.txt`: Gutenberg header/footer stripped, `HOOFDSTUK`/`Chapter`/roman-numeral headings)*
+- [x] Text normalisation: NFC, smart quotes, ellipsis, soft hyphens, nbsp; map characters missing from the font to fallbacks and report them *(`normalize.py`; Dutch elisions ’s/’t/’n; font coverage from the cmap via fontTools)*
+- [x] `layout.py`: greedy line breaking with font metrics from Pillow (`ImageFont.getlength`), hyphenation via `pyphen` (language from EPUB metadata, `nl`/`en` default), optional justification, widow/orphan control light *(also: break after em/en dash, headings kept with the next line, chapters start a new page)*
+- [x] Page model: text area = 250×122 minus margins (≈4 px) minus status bar (≈10 px, rendered **on device**, not baked in)
+- [x] `render.py`: Pillow 1-bit render (no dithering; threshold anti-aliasing at a tuned level) *(`--threshold N`, or `--mono` for FreeType hinted mono rendering; measured with the same hinting)*
+- [x] `t5b.py`: binary format, little-endian *(byte-level spec: `docs/t5b-format.md`)*:
   ```
   header:  magic "T5B1", version u16, page_w u16, page_h u16, stride u16,
            page_count u32, toc_count u16, title[64] utf-8, author[64] utf-8
@@ -108,10 +108,10 @@ t5-reader/
   pages:   page_count × raw 1-bpp bitmap in the Phase-1 format (fixed size → page n at offset = header+toc+n*page_bytes)
   ```
   Fixed-size pages = O(1) seek, no index needed.
-- [ ] CLI: `pixi run prep book.epub --font fonts/X.ttf --size 13 --lang nl --out out/ --preview` → writes `.t5b` + preview PNGs of first 10 pages + a contact sheet
-- [ ] Tests: round-trip header, page offset math, hyphenation on NL/EN samples, character fallback report, golden-image test for one page
+- [x] CLI: `pixi run prep book.epub --font fonts/X.ttf --size 13 --lang nl --out out/ --preview` → writes `.t5b` + preview PNGs of first 10 pages + a contact sheet
+- [x] Tests: round-trip header, page offset math, hyphenation on NL/EN samples, character fallback report, golden-image test for one page *(57 tests, `pixi run test`)*
 
-**🧑 HUMAN CHECKPOINT 2 (no board):** David reviews preview PNGs, picks font + size + margins.
+**🧑 HUMAN CHECKPOINT 2 (no board):** David reviews preview PNGs, picks font + size + margins. *(Comparison sheets: `out/checkpoint2/font-comparison.png` (threshold) and `font-comparison-mono.png`; 5 fonts × 11–14 px on Max Havelaar.)*
 
 ## Phase 3 — Reader firmware v1
 

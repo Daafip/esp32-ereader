@@ -6,8 +6,10 @@ blits pages. Full plan and phase status: `PLAN.md`. Hardware facts: `docs/hardwa
 
 ## Current phase
 
-**Phase 0 code done; waiting on HUMAN CHECKPOINT 0** (panel tester, button test and
-SD test run on the board). Phase 2 (host tool) doesn't need the board.
+- Phase 0 code done → **waiting on HUMAN CHECKPOINT 0** (panel tester, button test and
+  SD test on the board). Phase 1 starts after that.
+- Phase 2 (host tool `bookprep`) done → **waiting on HUMAN CHECKPOINT 2** (David picks
+  font, size, margins, threshold vs mono from `out/checkpoint2/*.png`).
 
 ## Commands (everything through pixi)
 
@@ -29,7 +31,12 @@ SD test run on the board). Phase 2 (host tool) doesn't need the board.
   steps end at a 🧑 checkpoint in `PLAN.md`: stop there and ask David.
 - Diagnostic sketches live in `firmware/diag/<name>/main.cpp`, one PlatformIO env each.
 - Host tool: Python 3.12, ruff (line length 100), pytest. Package in
-  `tools/bookprep/src/bookprep`.
+  `tools/bookprep/src/bookprep`. `.t5b` spec: `docs/t5b-format.md`.
+- In Python sources, write non-ASCII characters as escapes (`\N{EM DASH}` or a
+  backslash-u escape), never as literal invisible characters (`normalize.py` handles
+  soft hyphens, zero-width and odd spaces).
+- Golden image (`tests/golden/`): regenerate with `BOOKPREP_UPDATE_GOLDEN=1 pixi run test`
+  only after an intended rendering change, and look at it before committing.
 - No secrets in the repo (`firmware/include/secrets.h` is gitignored).
 - Commit per phase; tick `PLAN.md` checkboxes as work lands.
 
