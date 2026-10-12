@@ -12,11 +12,12 @@ from PIL import ImageFont
 from . import __version__
 from .extract import Block, Book, Chapter, extract
 from .layout import (
+    DEFAULT_SCREEN,
+    SCREENS,
     FontMeasurer,
     Hyphenator,
     LayoutOptions,
     Page,
-    PageGeometry,
     layout_book,
     line_height_for,
 )
@@ -40,12 +41,17 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="bookprep", description=__doc__)
     p.add_argument("input", type=Path, help="DRM-free .epub or .txt")
     p.add_argument("--font", type=Path, help="TTF/OTF file (default: Ubuntu from the pixi env)")
-    p.add_argument("--size", type=int, default=13, help="font size in pixels (default 13)")
+    p.add_argument(
+        "--screen", choices=sorted(SCREENS), default=DEFAULT_SCREEN,
+        help=f"target reader (default {DEFAULT_SCREEN}): "
+        + ", ".join(f"{s.id} = {s.name} {s.width}x{s.height}" for s in SCREENS.values()),
+    )  # fmt: skip
+    p.add_argument("--size", type=int, help="font size in pixels (default: 13, t5-47: 28)")
     p.add_argument("--line-height", type=int, help="pixels per line (default: 1.2 x size)")
     p.add_argument("--lang", help="hyphenation language (default: EPUB metadata, else nl)")
     p.add_argument("--out", type=Path, default=Path("out"), help="output directory")
-    p.add_argument("--margin", type=int, default=4, help="left/right/top margin in px")
-    p.add_argument("--status-bar", type=int, default=14, help="rows reserved for the status bar")
+    p.add_argument("--margin", type=int, help="left/right/top margin in px (default: 4, t5-47: 24)")
+    p.add_argument("--status-bar", type=int, help="rows reserved for the status bar (default: 14)")
     p.add_argument("--indent", type=int, help="first-line indent in px (default: size)")
     p.add_argument("--paragraph-spacing", type=int, default=0, help="extra px between paragraphs")
     p.add_argument("--no-justify", action="store_true", help="ragged right instead of justified")
@@ -124,17 +130,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"warning: no hyphenation dictionary for {lang!r}; hyphenation off")
         hyphenator = None
 
-    font = ImageFont.truetype(str(font_path), args.size, layout_engine=ImageFont.Layout.BASIC)
-    line_height = args.line_height or line_height_for(args.size)
-    geometry = PageGeometry(
-        margin_left=args.margin,
-        margin_right=args.margin,
-        margin_top=args.margin,
-        status_bar=args.status_bar,
-    )
+    screen = SCREENS[args.screen]
+    size = args.size or screen.font_size
+    font = ImageFont.truetype(str(font_path), size, layout_engine=ImageFont.Layout.BASIC)
+    line_height = args.line_height or line_height_for(size)
+    geometry = screen.geometry(margin=args.margin, status_bar=args.status_bar)
     layout_opts = LayoutOptions(
         line_height=line_height,
-        indent=args.size if args.indent is None else args.indent,
+        indent=size if args.indent is None else args.indent,
         paragraph_spacing=args.paragraph_spacing,
         justify=not args.no_justify,
         chapter_page_break=not args.no_chapter_break,
@@ -177,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         f"title:    {title}",
         f"author:   {author}",
         f"language: {lang} (hyphenation: {hyphenator.lang if hyphenator else 'off'})",
-        f"font:     {font_path.name} {args.size}px, line height {line_height}px, "
+        f"font:     {font_path.name} {size}px, line height {line_height}px, "
         f"{'mono' if args.mono else f'threshold {args.threshold}'}",
         f"page:     {geometry.width}x{geometry.height}, text area "
         f"{geometry.text_width}x{geometry.text_height} at ({geometry.text_left},"

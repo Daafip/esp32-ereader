@@ -58,11 +58,11 @@ def render_page(
 
 
 @cache
-def _status_font() -> ImageFont.FreeTypeFont:
+def _status_font(scale: int = 1) -> ImageFont.FreeTypeFont:
     for base in (Path(sys.prefix) / "fonts", Path(sys.prefix) / "Library" / "fonts"):
         if (base / "Ubuntu-M.ttf").exists():
-            return ImageFont.truetype(str(base / "Ubuntu-M.ttf"), 10)
-    return ImageFont.load_default(size=9)
+            return ImageFont.truetype(str(base / "Ubuntu-M.ttf"), 10 * scale)
+    return ImageFont.load_default(size=9 * scale)
 
 
 def with_status_bar(
@@ -77,22 +77,26 @@ def with_status_bar(
     img = page_img.convert("L")
     draw = ImageDraw.Draw(img)
     w, h = geometry.width, geometry.height
+    s = max(1, round(geometry.status_bar / 14))  # the firmware's UI scale (kUiScale)
     top = h - geometry.status_bar
-    x0, x1 = 4, w - 5
-    for x in range(x0, x1 + 1, 2):  # dotted track, solid reading progress
-        draw.point((x, top + 1), fill=BLACK)
-    fill = round((x1 - x0 + 1) * max(0.0, min(1.0, progress)))
+    x0, x1 = 4 * s, w - 5 * s
+    for x in range(x0, x1 + 1, 2 * s):  # dotted track, solid reading progress
+        draw.rectangle((x, top + s, x + s - 1, top + 2 * s - 1), fill=BLACK)
+    fill = round((x1 - x0 + s) * max(0.0, min(1.0, progress)))
     if fill:
-        draw.rectangle((x0, top, x0 + fill - 1, top + 1), fill=BLACK)
-    baseline = h - 3
-    bx = x1 + 1 - 16  # battery icon
-    draw.rounded_rectangle((bx, baseline - 7, bx + 13, baseline), radius=2, outline=BLACK)
-    draw.rectangle((bx + 14, baseline - 5, bx + 15, baseline - 2), fill=BLACK)
-    draw.rectangle((bx + 2, baseline - 5, bx + 8, baseline - 2), fill=BLACK)
-    font = _status_font()
-    draw.text((bx - 7, baseline), right, font=font, fill=BLACK, anchor="rs")
+        draw.rectangle((x0, top, x0 + fill - 1, top + 2 * s - 1), fill=BLACK)
+    baseline = h - 3 * s
+    bx = x1 + s - 16 * s  # battery icon
+    draw.rounded_rectangle(
+        (bx, baseline - 7 * s, bx + 14 * s - 1, baseline + s - 1), radius=2 * s, outline=BLACK,
+        width=s,
+    )  # fmt: skip
+    draw.rectangle((bx + 14 * s, baseline - 5 * s, bx + 16 * s - 1, baseline - s - 1), fill=BLACK)
+    draw.rectangle((bx + 2 * s, baseline - 5 * s, bx + 9 * s - 1, baseline - s - 1), fill=BLACK)
+    font = _status_font(s)
+    draw.text((bx - 7 * s, baseline), right, font=font, fill=BLACK, anchor="rs")
     right_w = font.getlength(right)
-    room = bx - 7 - right_w - 12 - x0
+    room = bx - 7 * s - right_w - 12 * s - x0
     text = left
     if font.getlength(text) > room:
         ellipsis = "\N{HORIZONTAL ELLIPSIS}"

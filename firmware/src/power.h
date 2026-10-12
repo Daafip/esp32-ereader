@@ -14,7 +14,7 @@ const char *wakeName(Wake w);
 // reading is meaningless (no battery, USB only).
 uint32_t batteryMv();
 
-// Deep sleep until NEXT (ext0) or MENU (ext1) is pressed, or after
+// Deep sleep until NEXT (ext0) or MENU (ext1, two-button boards) is pressed, or after
 // `timerSeconds` (0 = no timer). Does not return.
 [[noreturn]] void deepSleep(uint32_t timerSeconds);
 

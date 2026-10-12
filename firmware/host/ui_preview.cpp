@@ -1,6 +1,8 @@
 // Renders every UI screen with the real ui.cpp into PBM files:
-//   ui_preview <out_dir>
-// Driven by `pixi run ui-preview`, which also converts them to PNG.
+//   ui_preview <out_dir> <sample.t5b>
+// The last two pages of the .t5b (made for this board's screen) are the book
+// pages behind the status bar. Built once per board by `pixi run ui-preview`,
+// which also converts the PBMs to PNG.
 #include <stdio.h>
 #include <string.h>
 
@@ -8,7 +10,7 @@
 #include "display.h"
 #include "menu.h"
 #include "settings.h"
-#include "test_pages.h"
+#include "t5b_format.h"
 #include "ui.h"
 #include "web_util.h"
 
@@ -31,10 +33,30 @@ void save(const char *name) {
   printf("%s\n", path);
 }
 
+// Book page n of the sample .t5b (counted from the end) into the framebuffer.
+bool loadPage(const char *path, int fromEnd) {
+  FILE *f = fopen(path, "rb");
+  if (!f) {
+    perror(path);
+    return false;
+  }
+  uint8_t raw[t5b::kHeaderSize];
+  t5b::Header h;
+  bool ok = fread(raw, 1, sizeof(raw), f) == sizeof(raw) &&
+            t5b::parseHeader(raw, sizeof(raw), h) == t5b::Error::None && h.pageW == kPageW &&
+            h.pageH == kPageH && h.pageCount > uint32_t(fromEnd);
+  ok = ok && fseek(f, long(h.pageOffset(h.pageCount - 1 - fromEnd)), SEEK_SET) == 0 &&
+       fread(display::framebuffer(), 1, kPageBytes, f) == size_t(kPageBytes);
+  fclose(f);
+  if (!ok) fprintf(stderr, "%s: no %dx%d sample page\n", path, kPageW, kPageH);
+  return ok;
+}
+
 #define DOT "  \xC2\xB7  "
-const ui::Hint kNext = {"NEXT", ui::kArrowDown, ui::kArrowUp};
-const ui::Hint kOpen = {"MENU", "open", "back"};
-const ui::Hint kGo = {"MENU", "go", "back"};
+using ui::Button;
+const ui::Hint kNext = {Button::Next, ui::kArrowDown, ui::kArrowUp};
+const ui::Hint kOpen = {Button::Menu, "open", "back"};
+const ui::Hint kGo = {Button::Menu, "go", "back"};
 
 struct Row {
   const char *label;
@@ -86,45 +108,50 @@ void settingItem(int i, ui::Item &it, void *) {
 }  // namespace
 
 int main(int argc, char **argv) {
-  if (argc > 1) outDir = argv[1];
+  if (argc < 3) {
+    fprintf(stderr, "usage: ui_preview <out_dir> <sample.t5b>\n");
+    return 2;
+  }
+  outDir = argv[1];
+  const char *sample = argv[2];
   display::begin();
   ListModel list;
   const char *title = "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy";
 
-  memcpy(display::framebuffer(), kSamplePages[0], kPageBytes);
+  if (!loadPage(sample, 1)) return 1;
   ui::statusBar("EERSTE HOOFDSTUK", 26, 3596, 72);
   save("01-reading");
 
-  memcpy(display::framebuffer(), kSamplePages[1], kPageBytes);
+  if (!loadPage(sample, 0)) return 1;
   ui::statusBar("Hoofdstuk \xC3\xA9\xC3\xA9n \xE2\x80\x94 De koffiveilingen der Nederlandsche "
                 "Handelsmaatschappy",
                 2400, 3596, 8);
   save("02-reading-long-title");
 
-  list.reset(7, ui::kMenuRows, 0);
+  list.reset(7, ui::menuRows(), 0);
   ui::menu(title, list, rowItem, (void *)kMain, kNext, kOpen, 72);
   save("03-main-menu");
 
-  list.reset(10, ui::kMenuRows, 2);
+  list.reset(10, ui::menuRows(), 2);
   ui::menu("Chapters", list, rowItem, (void *)kChapters, kNext, kGo, 72);
   save("04-chapters");
 
-  ui::valueEditor("Go to position", "37%", "Page 1330 of 3596", 37, {"NEXT", "+1", "+10"}, kGo,
+  ui::valueEditor("Go to position", "37%", "Page 1330 of 3596", 37, {Button::Next, "+1", "+10"}, kGo,
                   72);
   save("05-go-to");
 
-  list.reset(4, ui::kMenuRows, 1);
+  list.reset(4, ui::menuRows(), 1);
   ui::menu("Library", list, rowItem, (void *)kBooks, kNext, kOpen, 72);
   save("06-library");
 
-  list.reset(kSettingCount, ui::kMenuRows, 4);
-  ui::menu("Settings", list, settingItem, nullptr, kNext, {"MENU", "edit", "back"}, 72);
+  list.reset(kSettingCount, ui::menuRows(), 4);
+  ui::menu("Settings", list, settingItem, nullptr, kNext, {Button::Menu, "edit", "back"}, 72);
   save("07-settings");
 
   const char *labels[] = {"Firmware", "Battery", "Book", "Position", "Memory", "Wake to page"};
   const char *values[] = {"0.7.0", "3.92 V" DOT "72%", title, "page 27/3596" DOT "ch. 3/25",
                           "7580 MB card" DOT "214 KB free", "812 ms" DOT "1532 wakes"};
-  ui::details("About", labels, values, 6, {nullptr, nullptr, nullptr}, {"MENU", "back", nullptr},
+  ui::details("About", labels, values, 6, {Button::None, nullptr, nullptr}, {Button::Menu, "back", nullptr},
               72);
   save("08-about");
 
@@ -133,8 +160,8 @@ int main(int argc, char **argv) {
   save("09-no-card");
 
   ui::message(ui::Icon::Book, "No books yet", "Upload them over Wi-Fi, or copy",
-              ".t5b files to /books on the card", {"MENU", "Wi-Fi transfer", nullptr},
-              {"NEXT", "retry", nullptr});
+              ".t5b files to /books on the card", {Button::Menu, "Wi-Fi transfer", nullptr},
+              {Button::Next, "retry", nullptr});
   save("10-no-books");
 
   ui::message(ui::Icon::Warning, "Cannot open book", "old.t5b", "made for another screen size",
@@ -154,12 +181,12 @@ int main(int argc, char **argv) {
   char join[96];
   wifiQrPayload("T5-Reader-1A2B", "k7m4q9xp", join, sizeof(join));
   ui::wifiScreen({join, 1, "Join the Wi-Fi", "Network", "T5-Reader-1A2B", "Password", "k7m4q9xp", ""},
-                 {"NEXT", "show page", nullptr}, {"MENU", "done", nullptr}, 72);
+                 {Button::Next, "show page", nullptr}, {Button::Menu, "done", nullptr}, 72);
   save("15-wifi-join");
 
   ui::wifiScreen({"http://192.168.4.1/?k=4821", 2, "Open the page", "Address", "192.168.4.1",
                   "Code", "4821", "Received Max Havelaar"},
-                 {"NEXT", "show Wi-Fi", nullptr}, {"MENU", "done", nullptr}, 72);
+                 {Button::Next, "show Wi-Fi", nullptr}, {Button::Menu, "done", nullptr}, 72);
   save("16-wifi-page");
   return 0;
 }

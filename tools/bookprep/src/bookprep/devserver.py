@@ -5,8 +5,9 @@ API (firmware/src/transfer.cpp), with a local folder as the SD card. Use it to
 work on the page, or to try the in-browser converter from a phone without the
 reader:
 
-    pixi run web-dev            # http://localhost:8000
-    pixi run web-dev --lan      # reachable from your phone on the same network
+    pixi run web-dev                    # http://localhost:8000
+    pixi run web-dev --lan              # reachable from your phone on the same network
+    pixi run web-dev --screen t5-47     # pretend to be the T5-4.7" S3
 """
 
 from __future__ import annotations
@@ -23,7 +24,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .t5b import T5BFile
+from .layout import DEFAULT_SCREEN, SCREENS, Screen
+from .t5b import T5BFile, stride_for
 from .webassets import build_assets, write_files
 
 KINDS = {
@@ -49,6 +51,7 @@ def is_safe_name(name: str, exts: tuple[str, ...]) -> bool:
 class Handler(SimpleHTTPRequestHandler):
     root: Path
     code: str
+    screen: Screen
 
     def log_message(self, fmt, *args):
         if not self.path.startswith(("/fonts/", "/hyph/")):
@@ -155,8 +158,12 @@ class Handler(SimpleHTTPRequestHandler):
             for p in font_files
             if p.suffix in KINDS["font"][1]
         ]
-        self.send_json(200, {"version": "dev", "battery": -1, "total": usage.total,
-                             "free": usage.free, "books": books, "fonts": fonts})  # fmt: skip
+        sc = self.screen
+        screen = {"id": sc.id, "width": sc.width, "height": sc.height, "statusBar": sc.status_bar,
+                  "size": sc.font_size, "margin": sc.margin}  # fmt: skip
+        self.send_json(200, {"version": "dev", "screen": screen, "battery": -1,
+                             "total": usage.total, "free": usage.free, "books": books,
+                             "fonts": fonts})  # fmt: skip
 
     def read_upload(self) -> tuple[str, bytes] | None:
         length = int(self.headers.get("Content-Length", 0))
@@ -181,6 +188,8 @@ class Handler(SimpleHTTPRequestHandler):
         name, data = got
         name = name.replace("\\", "/").rsplit("/", 1)[-1]
         _, exts, limit = KINDS[kind]
+        if kind == "book":  # as kBookMaxBytes in transfer.cpp: 64 MB or 4096 pages
+            limit = max(limit, 4096 * stride_for(self.screen.width) * self.screen.height)
         if not is_safe_name(name, exts):
             return self.send_json(400, {"error": f"only {'/'.join(exts)} files with a plain name"})
         if len(data) > limit:
@@ -192,7 +201,10 @@ class Handler(SimpleHTTPRequestHandler):
         if kind == "book":
             try:
                 book = T5BFile(tmp)
-                if (book.header.page_w, book.header.page_h) != (250, 122):
+                if (book.header.page_w, book.header.page_h) != (
+                    self.screen.width,
+                    self.screen.height,
+                ):
                     raise ValueError("made for another screen size")
                 title = book.header.title or name
             except ValueError as e:
@@ -230,7 +242,12 @@ def lan_address() -> str:
 
 
 def make_server(
-    root: Path, code: str, host: str = "127.0.0.1", port: int = 8000, fonts: bool = True
+    root: Path,
+    code: str,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    fonts: bool = True,
+    screen: str = DEFAULT_SCREEN,
 ) -> ThreadingHTTPServer:
     root.mkdir(parents=True, exist_ok=True)
     write_files(build_assets(Path("firmware/.pio/fontcache"), fonts=fonts), root / "www")
@@ -240,6 +257,7 @@ def make_server(
 
     Bound.root = root
     Bound.code = code
+    Bound.screen = SCREENS[screen]
 
     def factory(*args, **kwargs):
         return Bound(*args, directory=str(root / "www"), **kwargs)
@@ -253,11 +271,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--lan", action="store_true", help="listen on all interfaces (phone access)")
     p.add_argument("--code", default=None, help="session code (default: random)")
+    p.add_argument("--screen", choices=sorted(SCREENS), default=DEFAULT_SCREEN, help="reader")
     args = p.parse_args(argv)
     code = args.code or f"{random.randrange(10000):04d}"
-    server = make_server(args.root, code, "0.0.0.0" if args.lan else "127.0.0.1", args.port)
+    bind = "0.0.0.0" if args.lan else "127.0.0.1"
+    server = make_server(args.root, code, bind, args.port, screen=args.screen)
     host = lan_address() if args.lan else "localhost"
     print(f"T5 reader dev server: http://{host}:{args.port}/?k={code}   (code {code})")
+    print(f"screen: {SCREENS[args.screen].name}")
     print(f"fake SD card: {args.root / 'sd'}   Ctrl+C to stop")
     with contextlib.suppress(KeyboardInterrupt):
         server.serve_forever()

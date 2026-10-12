@@ -11,13 +11,15 @@ namespace {
 
 ButtonTracker next;
 ButtonTracker menu;
+ClickDecoder single;  // one-button boards
 uint32_t activityMs = 0;
 
-bool down(int pin) { return digitalRead(pin) == LOW; }
+bool down(int pin) { return pin >= 0 && digitalRead(pin) == LOW; }
 
 void configure(uint16_t longMs, bool repeat) {
   next.setConfig({25, longMs, repeat ? 250u : 0u});
   menu.setConfig({25, longMs, 0});
+  single.setConfig({25, longMs, longMs + 1000u, 300});
 }
 
 Key translate(ButtonEvent e, bool isNext) {
@@ -30,14 +32,25 @@ Key translate(ButtonEvent e, bool isNext) {
   return Key::None;
 }
 
+Key translate(Gesture g) {
+  switch (g) {
+    case Gesture::Tap: return Key::NextShort;
+    case Gesture::DoubleTap: return Key::NextLong;
+    case Gesture::Hold: return Key::MenuShort;
+    case Gesture::LongHold: return Key::MenuLong;
+    case Gesture::None: break;
+  }
+  return Key::None;
+}
+
 }  // namespace
 
 void begin(uint16_t longPressMs) {
   for (int pin : {kBtnNext, kBtnMenu}) {
-    if (rtc_gpio_is_valid_gpio(gpio_num_t(pin))) rtc_gpio_deinit(gpio_num_t(pin));
+    if (pin >= 0 && rtc_gpio_is_valid_gpio(gpio_num_t(pin))) rtc_gpio_deinit(gpio_num_t(pin));
   }
-  pinMode(kBtnNext, INPUT);  // GPIO39: input-only, external pull-up
-  pinMode(kBtnMenu, INPUT_PULLUP);
+  pinMode(kBtnNext, kBtnNextPullup ? INPUT_PULLUP : INPUT);
+  if (!kSingleButton) pinMode(kBtnMenu, INPUT_PULLUP);
   configure(longPressMs, false);
   activityMs = millis();
 }
@@ -50,18 +63,39 @@ void setRepeat(bool enable) { configure(uint16_t(next.config().longMs), enable);
 
 Key poll() {
   const uint32_t now = millis();
-  Key k = translate(next.update(down(kBtnNext), now), true);
-  if (k == Key::None) k = translate(menu.update(down(kBtnMenu), now), false);
-  if (k != Key::None || next.isDown() || menu.isDown()) activityMs = now;
+  Key k;
+  bool busy;
+  if (kSingleButton) {
+    k = translate(single.update(down(kBtnNext), now));
+    busy = single.busy();
+  } else {
+    k = translate(next.update(down(kBtnNext), now), true);
+    if (k == Key::None) k = translate(menu.update(down(kBtnMenu), now), false);
+    busy = next.isDown() || menu.isDown();
+  }
+  if (k != Key::None || busy) activityMs = now;
   return k;
 }
 
 Key wakePress(int pin, uint32_t timeoutMs) {
-  ButtonTracker &b = pin == kBtnNext ? next : menu;
-  b.startPressed(0);  // pressed since (about) boot
+  if (pin < 0) return Key::None;
+  // Pressed since (about) boot. Already released when we first look (a slow
+  // boot, e.g. the S3's PSRAM test, outlasted a tap): count it as short.
+  const uint32_t since = down(pin) ? 0 : millis();
+  if (kSingleButton) {
+    single.startPressed(since);
+  } else {
+    (pin == kBtnNext ? next : menu).startPressed(since);
+  }
   const uint32_t start = millis();
   while (millis() - start < timeoutMs) {
-    const Key k = translate(b.update(down(pin), millis()), pin == kBtnNext);
+    Key k;
+    if (kSingleButton) {
+      k = translate(single.update(down(pin), millis()));
+    } else {
+      ButtonTracker &b = pin == kBtnNext ? next : menu;
+      k = translate(b.update(down(pin), millis()), pin == kBtnNext);
+    }
     if (k != Key::None) {
       activityMs = millis();
       return k;

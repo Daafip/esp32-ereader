@@ -1,9 +1,11 @@
 // Screens drawn into the display framebuffer (call display::show() afterwards).
 //
-// Layout on the 250x122 landscape panel, Ubuntu throughout:
+// Designed for the 250x122 T5-2.13, Ubuntu throughout; other boards draw the same
+// design at kUiScale (board header) with their own font set, lists get as many
+// rows as fit, and full-screen layouts are centred vertically.
 //   reading  book page, status bar in the bottom 14 rows: a thin reading-progress
 //            line, chapter left, page/percentage and battery right
-//   lists    title + hairline, 5 rows of 17 px with a rounded selection pill,
+//   lists    title + hairline, rows of 17 px with a rounded selection pill,
 //            right-aligned values, chevrons, slim scrollbar, key-chip footer
 //   messages icon, headline, body: no chrome
 #pragma once
@@ -15,7 +17,8 @@
 
 namespace ui {
 
-constexpr int kMenuRows = 5;
+// List rows that fit on the screen (5 on the T5-2.13).
+int menuRows();
 
 // One list row: label left, optional detail right, optional chevron.
 struct Item {
@@ -26,14 +29,17 @@ struct Item {
 };
 using ItemFn = void (*)(int index, Item &item, void *ctx);
 
-// Footer hint: [KEY] action (hold) holdAction. key == nullptr: no hint.
+// Footer hint: [KEY] action (hold) holdAction, for the NEXT or MENU role.
+// The chips name the board's gestures: NEXT / MENU and "hold" with two buttons,
+// TAP / HOLD and "2x" / "long" with one (see input.h).
 // kArrowDown / kArrowUp as an action draw an arrow instead of text.
 constexpr const char *kArrowDown = "\xE2\x96\xBC";  // U+25BC
 constexpr const char *kArrowUp = "\xE2\x96\xB2";    // U+25B2
+enum class Button : uint8_t { None, Next, Menu };
 struct Hint {
-  const char *key;
+  Button button;
   const char *action;
-  const char *holdAction;  // long press; nullptr if none
+  const char *holdAction;  // long press (one button: double tap / long hold); nullptr if none
 };
 
 enum class Icon : uint8_t { Card, Book, Battery, Warning };

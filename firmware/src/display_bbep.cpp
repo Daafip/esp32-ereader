@@ -1,11 +1,15 @@
-#include "display.h"
+// SPI e-paper (T5-2.13) through bb_epaper: the panel's own controller keeps the
+// image, a copy in RTC memory serves partial refreshes after deep sleep.
+#include "board.h"
+
+#ifdef BOARD_PANEL_BBEPAPER
 
 #include <Arduino.h>
 #include <driver/gpio.h>
 #include <esp_attr.h>
 #include <string.h>
 
-#include "board.h"
+#include "display.h"
 
 namespace display {
 namespace {
@@ -128,8 +132,16 @@ void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
   }
 }
 
+void assumeShown() {
+  memcpy(rtcShown, fb, kPageBytes);
+  rtcShownValid = true;
+  panelRamValid = false;
+}
+
 bool shownValid() { return rtcShownValid; }
 uint16_t partialsSinceFull() { return rtcPartials; }
 Timing lastTiming() { return timing; }
 
 }  // namespace display
+
+#endif  // BOARD_PANEL_BBEPAPER

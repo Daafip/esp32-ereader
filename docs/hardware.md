@@ -1,5 +1,7 @@
 # Hardware notes — LilyGo T5-2.13
 
+(The second board, the LilyGo T5-4.7" S3, has its own page: `docs/hardware-t5-47.md`.)
+
 Status legend: **SCHEMATIC** = from LilyGo's repo (README, `T5_2.13.pdf` schematic
 V2.3, examples) as of 2026-07; **VERIFIED** = measured on David's board;
 **OPEN** = still unknown.
@@ -101,7 +103,7 @@ Free header GPIOs (for external page-turn buttons, Phase 6): 19 (LED), 21, 22, 2
   mode (strapping pins are normally only sampled at power-on/chip reset), and the
   sleep current with the pins held.
 
-- **Flash use** (0.7.0): app 1.46 MB of 1.9 MB, of which ~300 KB is the web page, the
+- **Flash use** (0.8.0): app 1.48 MB of 1.9 MB, of which ~300 KB is the web page, the
   converter, four fonts and nl/en/fr hyphenation patterns (`include/web_assets.h`).
 - **Partitions** (reader env): `min_spiffs.csv`, two 1.9 MB app slots (Wi-Fi and the
   web server need more than the default 1.25 MB; the second slot enables firmware
@@ -137,7 +139,7 @@ With `setRotation(90|270)` bb_epaper keeps its local buffer in the **rotated
 
 So a `.t5b` page can be `memcpy`'d into `epd.getBuffer()` and sent with
 `writePlane()`. Which physical edge is "up" (90 vs 270) is a device setting
-(`kEpdRotation` in `board.h`) and doesn't change the file format. Phase 1's calibration
+(`kEpdRotation` in `boards/t5_213.h`) and doesn't change the file format. Phase 1's calibration
 pattern confirms all of this on the real panel.
 
 ## Checkpoint results

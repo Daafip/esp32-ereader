@@ -1,0 +1,85 @@
+// Parallel e-paper (T5-4.7" S3): bb_epaper draws into a portrait RAM canvas in
+// the .t5b page layout; show() rotates it into FastEPD's landscape buffer
+// (fastepd_panel.cpp). The panel has no memory of its own and a page (64 KB)
+// doesn't fit in RTC memory, so after deep sleep the shown image is unknown
+// until the app redraws it (assumeShown()).
+#include "board.h"
+
+#ifdef BOARD_PANEL_FASTEPD
+
+#include <Arduino.h>
+#include <esp_attr.h>
+#include <esp_heap_caps.h>
+#include <string.h>
+
+#include "bitmap.h"
+#include "display.h"
+#include "fastepd_panel.h"
+
+namespace display {
+namespace {
+
+BBEPAPER canvas;
+uint8_t *fb = nullptr;  // kPageBytes, portrait
+int rotation = kEpdRotation;
+bool shown = false;  // panel::previous() matches the glass
+RTC_DATA_ATTR uint16_t rtcPartials = 0;
+Timing timing;
+
+}  // namespace
+
+void begin() {
+  if (!fb) {
+    fb = static_cast<uint8_t *>(heap_caps_malloc(kPageBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!fb) fb = static_cast<uint8_t *>(malloc(kPageBytes));
+    canvas.createVirtual(kPageW, kPageH, 0);
+    canvas.setBuffer(fb);
+    clear();
+  }
+  if (!panel::begin()) Serial.println("panel: FastEPD init failed (PSRAM?)");
+}
+
+void sleep(bool) { panel::powerOff(); }
+
+BBEPAPER &epd() { return canvas; }
+uint8_t *framebuffer() { return fb; }
+void clear() { memset(fb, 0xFF, kPageBytes); }
+
+Refresh show(Refresh mode) {
+  if (mode == Refresh::Partial && !shown) mode = Refresh::Full;
+  const uint32_t t0 = millis();
+  if (panel::current()) rotate1bpp(fb, kPageW, kPageH, panel::current(), rotation);
+  const uint32_t t1 = millis();
+  panel::update(mode);
+  timing = {t1 - t0, millis() - t1};
+  shown = true;
+  rtcPartials = mode == Refresh::Partial ? rtcPartials + 1 : 0;
+  return mode;
+}
+
+void setRotation(int degrees) { rotation = degrees; }
+
+void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
+  canvas.setFont(FONT_6x8);
+  canvas.setTextColor(color, bg);
+  char one[2] = {0, 0};
+  for (; *ascii && x + 6 <= canvas.width(); ascii++, x += 6) {
+    one[0] = (*ascii >= 32 && *ascii < 127) ? *ascii : '?';
+    canvas.drawString(one, x, y);
+  }
+}
+
+void assumeShown() {
+  if (!panel::previous()) return;
+  rotate1bpp(fb, kPageW, kPageH, panel::previous(), rotation);
+  panel::previousValid();
+  shown = true;
+}
+
+bool shownValid() { return shown; }
+uint16_t partialsSinceFull() { return rtcPartials; }
+Timing lastTiming() { return timing; }
+
+}  // namespace display
+
+#endif  // BOARD_PANEL_FASTEPD

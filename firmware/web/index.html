@@ -63,6 +63,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .sheet-body{overflow:auto;padding:0 18px 12px}
 .device{background:var(--bezel);border-radius:16px;padding:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 .device canvas{display:block;width:100%;aspect-ratio:250/122;image-rendering:pixelated;background:#fff;border-radius:3px}
+.device.portrait canvas{width:min(100%,34dvh);margin:0 auto;image-rendering:auto}
 .pager{display:flex;align-items:center;gap:10px;margin:12px 2px 4px}
 .pager input{flex:1;accent-color:var(--accent)}
 .pager .link{font-size:20px;padding:2px 10px}
@@ -194,6 +195,7 @@ const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x 
 
 const demoData = {
   version: "demo", battery: 72, free: 7.2e9, total: 7.9e9, fonts: [],
+  screen: B.screenFor(params.get("screen") || "t5-213"), // demo of another reader: ?screen=t5-47
   books: [
     { file: "max_havelaar.t5b", title: "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", author: "Multatuli", pages: 3596, size: 14071000, progress: 37, source: null },
     { file: "alice.t5b", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, progress: 0, source: null },
@@ -366,16 +368,32 @@ async function hyphenator(name) {
 // --- typeset sheet ------------------------------------------------------------------
 
 let current = null; // { source, book, settings, layout, page }
-const SETTINGS_KEY = "t5:settings";
-function savedSettings() { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } }
-function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* private mode */ } }
+// The reader's screen (older firmware doesn't report one: the T5-2.13). Sizes and
+// margins are remembered per screen.
+const screen = () => B.screenFor(info.screen);
+const settingsKey = () => "t5:settings" + (screen().id === "t5-213" ? "" : ":" + screen().id);
+function savedSettings() { try { return JSON.parse(localStorage.getItem(settingsKey())) || {}; } catch (e) { return {}; } }
+function saveSettings(s) { try { localStorage.setItem(settingsKey(), JSON.stringify(s)); } catch (e) { /* private mode */ } }
+// Size and margin steppers: 9-22 px and 2-16 px on the T5-2.13, scaled for others.
+function limits(name) {
+  const sc = screen();
+  if (name === "size") return { min: Math.round(sc.size * 0.7), max: Math.round(sc.size * 1.7), step: 1 };
+  return { min: Math.ceil(sc.margin / 2), max: sc.margin * 4, step: Math.max(1, Math.round(sc.margin / 4)) };
+}
 
 async function openSheet(source) {
   let raw;
   try { raw = await B.extract(source.bytes, source.name); }
   catch (err) { queueItem(source.name).done("Could not read this file: " + err.message, "err"); return; }
   const book = B.cleanBook(raw);
-  const settings = { ...B.defaults, ...savedSettings(), ...(source.settings || {}) };
+  const sc = screen();
+  const settings = { ...B.defaults, size: sc.size, margin: sc.margin, ...savedSettings(), ...(source.settings || {}) };
+  settings.screen = sc.id;
+  const canvas = $("#preview");
+  canvas.width = sc.width;
+  canvas.height = sc.height;
+  canvas.style.aspectRatio = sc.width + "/" + sc.height;
+  canvas.parentElement.classList.toggle("portrait", sc.height > sc.width);
   if (!fontChoices().some((f) => f.id === settings.font)) settings.font = B.defaults.font;
   current = { source, book, settings, layout: null, page: 0 };
   $("#s-title").textContent = book.title;
@@ -419,7 +437,7 @@ async function relayout() {
   const lang = s.lang === "auto" ? B.languageFallback(c.book.language || "nl", hyphIndex.aliases) : s.lang;
   const hyph = s.hyphenate ? await hyphenator(lang) : null;
   const fraction = c.layout ? c.page / Math.max(1, c.layout.pages.length - 1) : null;
-  c.layout = B.typeset(c.book, s, family, hyph);
+  c.layout = B.typeset(c.book, { ...s, screen: screen() }, family, hyph);
   const n = c.layout.pages.length;
   const g = c.layout.geometry;
   const lines = Math.floor(g.textHeight / c.layout.lineHeight);
@@ -428,7 +446,8 @@ async function relayout() {
     if (line.index < line.count - 1 && line.runs.length) { chars += line.runs.reduce((a, r) => a + r.text.length + 1, -1); full++; }
   }
   const avgChars = Math.round(chars / Math.max(1, full));
-  $("#stats").textContent = `${lines} lines × ~${avgChars} characters · ${n} pages · ${size(n * 3904)}`;
+  const pageBytes = Math.ceil(g.width / 8) * g.height;
+  $("#stats").textContent = `${lines} lines × ~${avgChars} characters · ${n} pages · ${size(n * pageBytes)}`;
   $("#p-slider").max = n - 1;
   setPage(fraction === null ? c.page : Math.round(fraction * (n - 1)));
 }
@@ -447,28 +466,29 @@ function drawPreview() {
   const canvas = $("#preview");
   const ctx = canvas.getContext("2d");
   ctx.putImageData(new ImageData(B.unpackToRgba(renderer.render(pages[c.page]), g.width, g.height), g.width, g.height), 0, 0);
-  // status bar as the reader draws it (approximation)
+  // status bar as the reader draws it (approximation), at the reader's UI scale
+  const s = Math.max(1, Math.round(g.statusBar / 14));
   const top = g.height - g.statusBar;
-  const base = g.height - 3;
+  const base = g.height - 3 * s;
   ctx.fillStyle = "#000";
-  for (let x = 4; x <= g.width - 5; x += 2) ctx.fillRect(x, top + 1, 1, 1);
-  ctx.fillRect(4, top, Math.round((g.width - 8) * (c.page + 1) / pages.length), 2);
+  for (let x = 4 * s; x <= g.width - 5 * s; x += 2 * s) ctx.fillRect(x, top + s, s, s);
+  ctx.fillRect(4 * s, top, Math.round((g.width - 8 * s) * (c.page + 1) / pages.length), 2 * s);
   ctx.strokeStyle = "#000";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(g.width - 20.5, base - 7.5, 13, 7);
-  ctx.fillRect(g.width - 7, base - 5, 2, 4);
-  ctx.fillRect(g.width - 19, base - 6, 7, 5);
-  ctx.font = `500 10px ${loadedFonts.get("ubuntu") || "sans-serif"}`;
+  ctx.lineWidth = s;
+  ctx.strokeRect(g.width - 21 * s + s / 2, base - 8 * s + s / 2, 13 * s, 7 * s);
+  ctx.fillRect(g.width - 7 * s, base - 5 * s, 2 * s, 4 * s);
+  ctx.fillRect(g.width - 19 * s, base - 6 * s, 7 * s, 5 * s);
+  ctx.font = `500 ${10 * s}px ${loadedFonts.get("ubuntu") || "sans-serif"}`;
   ctx.textBaseline = "alphabetic";
   const right = `${c.page + 1}/${pages.length}  ·  ${Math.floor(100 * c.page / Math.max(1, pages.length - 1))}%`;
   const rw = ctx.measureText(right).width;
-  ctx.fillText(right, g.width - 27 - rw, base);
+  ctx.fillText(right, g.width - 27 * s - rw, base);
   let chapter = "";
   for (const e of toc) if (e.startPage <= c.page) chapter = e.title;
   let text = chapter;
-  const room = g.width - 27 - rw - 16;
+  const room = g.width - 27 * s - rw - 16 * s;
   while (text && ctx.measureText(text).width > room) text = text.slice(0, -2) + "…";
-  ctx.fillText(text, 4, base);
+  ctx.fillText(text, 4 * s, base);
   // the panel is 1-bit: threshold the anti-aliased status text too
   const img = ctx.getImageData(0, top, g.width, g.statusBar);
   for (let i = 0; i < img.data.length; i += 4) {
@@ -485,8 +505,8 @@ $("#p-next").addEventListener("click", () => setPage(current.page + 1));
 for (const b of document.querySelectorAll("[data-step]")) {
   b.addEventListener("click", () => {
     const [name, d] = b.dataset.step.split(":");
-    const limits = { size: [9, 22], margin: [2, 16] }[name];
-    current.settings[name] = Math.max(limits[0], Math.min(limits[1], current.settings[name] + +d));
+    const l = limits(name);
+    current.settings[name] = Math.max(l.min, Math.min(l.max, current.settings[name] + d * l.step));
     syncControls();
     changed();
   });

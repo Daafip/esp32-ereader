@@ -2,7 +2,8 @@
 
 Rendered and packed exactly like book pages, then written as a C header
 (``firmware/include/test_pages.h``, used by the calibration sketch) and as a small
-.t5b (to test the SD path). Run: ``pixi run devpages``.
+.t5b (to test the SD path). Run: ``pixi run devpages``. With ``--screen t5-47`` only
+the sample text, as a .t5b for that screen (UI previews).
 
 Calibration pattern (250x122): 1-px border with ticks every 10 px, four different
 corner markers (filled square TL, hollow square TR, triangle BL, cross BR), an arrow
@@ -21,10 +22,12 @@ from PIL import Image, ImageDraw, ImageFont
 from .cli import default_font
 from .extract import Block, Chapter
 from .layout import (
+    DEFAULT_SCREEN,
+    SCREENS,
     FontMeasurer,
     Hyphenator,
     LayoutOptions,
-    PageGeometry,
+    Screen,
     layout_book,
     line_height_for,
 )
@@ -91,11 +94,15 @@ def calibration_image(font: ImageFont.FreeTypeFont) -> Image.Image:
     return img
 
 
-def sample_pages(font_path: Path, size: int = 13) -> list[Image.Image]:
+def sample_pages(
+    font_path: Path, size: int | None = None, screen: Screen = SCREENS[DEFAULT_SCREEN]
+) -> list[Image.Image]:
+    size = size or screen.font_size
     font = ImageFont.truetype(str(font_path), size, layout_engine=ImageFont.Layout.BASIC)
-    geometry = PageGeometry()
+    geometry = screen.geometry()
     line_height = line_height_for(size)
-    blocks = [Block("text", normalize_text(t)) for t in SAMPLE_TEXT]
+    repeat = max(1, screen.width * screen.height // (4 * 250 * 122))  # two full pages
+    blocks = [Block("text", normalize_text(t)) for t in SAMPLE_TEXT * repeat]
     pages = layout_book(
         [Chapter("Eerste hoofdstuk", blocks)],
         FontMeasurer(font),
@@ -136,28 +143,40 @@ def write_header(path: Path, calibration: bytes, samples: list[bytes]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="devpages", description=__doc__.splitlines()[0])
-    p.add_argument("--header", type=Path, required=True)
+    p.add_argument("--header", type=Path, help="C header for the calibration sketch")
     p.add_argument("--t5b", type=Path, required=True)
+    p.add_argument("--screen", choices=sorted(SCREENS), default=DEFAULT_SCREEN)
     args = p.parse_args(argv)
+    screen = SCREENS[args.screen]
+    if args.header and screen.id != DEFAULT_SCREEN:
+        p.error(f"--header: the calibration pattern is drawn for {DEFAULT_SCREEN} only")
 
     font_path = default_font()
     if font_path is None:
         p.error("Ubuntu-R.ttf not found; run through pixi")
-    label_font = ImageFont.truetype(str(font_path), 11, layout_engine=ImageFont.Layout.BASIC)
-    calibration = pack_page(calibration_image(label_font))
-    samples = [pack_page(img) for img in sample_pages(font_path)]
-    write_header(args.header, calibration, samples)
+    samples = [pack_page(img) for img in sample_pages(font_path, screen=screen)]
+    pages, toc = samples, [TocEntry(0, "Sample text")]
+    if screen.id == DEFAULT_SCREEN:
+        label_font = ImageFont.truetype(str(font_path), 11, layout_engine=ImageFont.Layout.BASIC)
+        calibration = pack_page(calibration_image(label_font))
+        pages, toc = (
+            [calibration, *samples],
+            [TocEntry(0, "Calibration"), TocEntry(1, "Sample text")],
+        )
+        if args.header:
+            write_header(args.header, calibration, samples)
+            print(f"wrote {args.header}")
     args.t5b.parent.mkdir(parents=True, exist_ok=True)
     write_t5b(
         args.t5b,
         title="T5 calibration",
         author="bookprep",
-        page_w=W,
-        page_h=H,
-        toc=[TocEntry(0, "Calibration"), TocEntry(1, "Sample text")],
-        pages=[calibration, *samples],
+        page_w=screen.width,
+        page_h=screen.height,
+        toc=toc,
+        pages=pages,
     )
-    print(f"wrote {args.header} and {args.t5b} ({1 + len(samples)} pages)")
+    print(f"wrote {args.t5b} ({len(pages)} pages, {screen.width}x{screen.height})")
     return 0
 
 

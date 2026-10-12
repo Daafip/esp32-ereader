@@ -15,6 +15,7 @@ from bookprep.cli import slug, toc_entries
 from bookprep.devpages import SAMPLE_TEXT
 from bookprep.extract import Block, Chapter, extract_txt
 from bookprep.layout import (
+    SCREENS,
     Hyphenator,
     LayoutOptions,
     PageGeometry,
@@ -94,13 +95,19 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
         Chapter("Twee", [Block("heading", "Twee"), Block("text", normalize_text(ENGLISH * 3))]),
     ]  # fmt: skip
     layout_cases = []
-    for margin, lh, spacing in [(4, 16, 0), (8, 13, 3)]:
-        geom = PageGeometry(margin_left=margin, margin_right=margin, margin_top=margin)
+    big = SCREENS["t5-47"]
+    for screen, margin, lh, spacing in [(None, 4, 16, 0), (None, 8, 13, 3), (big, 24, 34, 0)]:
+        if screen:  # the JS side derives the page from its own screens table
+            geom = screen.geometry(margin=margin)
+            js_geom = {"screen": screen.id, "margin": margin}
+        else:
+            geom = PageGeometry(margin_left=margin, margin_right=margin, margin_top=margin)
+            js_geom = {"marginLeft": margin, "marginRight": margin, "marginTop": margin}
         opts = LayoutOptions(line_height=lh, indent=13, paragraph_spacing=spacing)
         pages = layout_book(chapters, mono, geom, opts, nl)
         layout_cases.append({
             "chapters": [{"title": c.title, "blocks": [{"kind": b.kind, "text": b.text} for b in c.blocks]} for c in chapters],
-            "geometry": {"marginLeft": margin, "marginRight": margin, "marginTop": margin},
+            "geometry": js_geom,
             "options": {"lineHeight": lh, "indent": 13, "paragraphSpacing": spacing, "justify": True,
                         "chapterPageBreak": True, "widowOrphan": True},
             "lang": "nl_NL",
@@ -179,6 +186,15 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
 
     for case, got in zip(layout_cases, js["layout"], strict=True):
         assert got == case["expected"]
+    assert len(layout_cases[2]["expected"]["pages"]) < len(layout_cases[0]["expected"]["pages"])
+
+    # one table of readers: Python's SCREENS, bookprep.js's screens
+    assert js["screens"] == {
+        sc.id: {"id": sc.id, "name": sc.name, "width": sc.width, "height": sc.height,
+                "statusBar": sc.status_bar, "size": sc.font_size, "margin": sc.margin,
+                "marginBottom": sc.margin_bottom}
+        for sc in SCREENS.values()
+    }  # fmt: skip
 
     for got, path in zip(js["txt"], [txt_path, cp1252], strict=True):
         want = extract_txt(path)

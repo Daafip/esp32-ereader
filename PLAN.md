@@ -50,7 +50,7 @@ t5-reader/
 ├─ firmware/
 │  ├─ platformio.ini         # esp32dev, Arduino, bb_epaper pinned
 │  ├─ partitions.csv         # only if LittleFS fallback is needed
-│  ├─ include/board.h        # all pins + panel constant in ONE place
+│  ├─ include/board.h        # board selector; pins + panel per board in include/boards/
 │  └─ src/{main,display,input,book,storage,power,ui}.cpp/.h
 └─ tools/bookprep/
    ├─ src/bookprep/{cli,extract,layout,render,t5b}.py
@@ -159,6 +159,20 @@ Goal: e-paper keeps the image, so the MCU should deep-sleep after every turn.
 - [ ] On-device `.txt` layout with a bb_epaper compressed font (no host step)
 - [ ] 3D-printed case → separate plan: `CASE_PLAN.md` (SolidPython2, `case/`). If external page-turn buttons are chosen there, add their GPIOs to `board.h` and the input mapping in Phase 3
 
+## Phase 7 — Second board: LilyGo T5-4.7" S3 (example port, 2026-10-12)
+
+David: "as an example, also add the LilyGO T5-4.7 inch S3". Untested on hardware;
+notes in `docs/hardware-t5-47.md`, checks in `docs/checkpoints.md`.
+
+- [x] Board selection: `include/board.h` picks `boards/t5_213.h` (default) or `boards/t5_47_s3.h` (`-DBOARD_T5_47_S3`); env `reader_t547` (ESP32-S3, 16 MB, OPI PSRAM, `default_16MB.csv`)
+- [x] Display backend for parallel panels: FastEPD 2.2.0 custom panel (LilyGo shift-register scheme) in `fastepd_panel.cpp`; bb_epaper keeps drawing into a portrait 540×960 canvas, rotated on `show()` (`rotate1bpp`, lib/core, tested). Duplicate symbols between the two libraries renamed inside FastEPD (`firmware/tools/fastepd_symbols.py`)
+- [x] One-button input: tap / double tap / hold / long hold mapped onto the NEXT/MENU keys (`ClickDecoder`, lib/core, tested); footer chips name the gestures
+- [x] UI scale (`kUiScale`): same design at 2×, second UI font set, lists fill the screen, full-screen layouts centred. T5-2.13 screens checked pixel-identical to before
+- [x] Partial refresh after deep sleep without RTC copy: the shown page is read back from the card (`display::assumeShown()`)
+- [x] Converters: screen presets (`SCREENS` in `layout.py`, `screens` in `bookprep.js`, `--screen` for prep/devpages/web-dev); the reader reports its screen in `/api/info`, the page typesets for it; book upload limit scales with page size; OTA refuses the other chip's image
+- [x] `pixi run ui-preview` renders both boards; `fw-dist` adds `t5-47-reader-*.bin`
+- [ ] 🧑 Hardware check (if David gets the board): rotation/mirroring, refresh quality and timing, gestures, wake latency, sleep current
+
 ---
 
 ## Decisions
@@ -179,5 +193,5 @@ Goal: e-paper keeps the image, so the MCU should deep-sleep after every turn.
 | Wrong panel constant can misdrive the panel | Phase 0 panel tester with controller-ID check before any app code |
 | Partial refresh broken after deep sleep | Phase 4 spike with 3 fallbacks |
 | SD on strapping pins (GPIO2/15) causes boot issues | Test boot with card inserted; LittleFS fallback |
-| Only one user button → clumsy UX | Short/long/BOOT mapping; external buttons on free GPIOs in Phase 6 |
+| Only one user button → clumsy UX | Short/long/BOOT mapping; external buttons on free GPIOs in Phase 6. One-button boards: tap/double tap/hold/long hold (Phase 7) |
 | Tiny screen readability | Preview PNGs before flashing; tune size/margins in Checkpoint 2 |

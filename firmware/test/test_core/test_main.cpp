@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unity.h>
 
+#include "bitmap.h"
 #include "button.h"
 #include "golden_header.h"
 #include "menu.h"
@@ -141,6 +142,131 @@ static void test_start_pressed_after_wake() {
   quick.startPressed(0);
   quick.update(false, 200);
   TEST_ASSERT_EQUAL(int(ButtonEvent::Short), int(quick.update(false, 230)));
+}
+
+// --- one-button gestures ------------------------------------------------------------
+
+// Raw level `pressed` from `from` to `to` (exclusive), 5 ms steps; returns the
+// first gesture seen (and the time in *at).
+static Gesture feed(ClickDecoder &d, bool pressed, uint32_t from, uint32_t to,
+                    uint32_t *at = nullptr) {
+  for (uint32_t t = from; t < to; t += 5) {
+    const Gesture g = d.update(pressed, t);
+    if (g != Gesture::None) {
+      if (at) *at = t;
+      return g;
+    }
+  }
+  return Gesture::None;
+}
+
+static void test_tap_waits_for_the_double_tap_window() {
+  ClickDecoder d;  // debounce 25, hold 600, long hold 1600, double tap 300
+  uint32_t at = 0;
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(d, true, 0, 100)));
+  TEST_ASSERT_EQUAL(int(Gesture::Tap), int(feed(d, false, 100, 1000, &at)));
+  TEST_ASSERT_EQUAL(400, at);  // released at 100 + 300 ms window
+  TEST_ASSERT_FALSE(d.busy());
+}
+
+static void test_double_tap() {
+  ClickDecoder d;
+  uint32_t at = 0;
+  feed(d, true, 0, 100);
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(d, false, 100, 250)));
+  TEST_ASSERT_TRUE(d.busy());
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(d, true, 250, 350)));
+  TEST_ASSERT_EQUAL(int(Gesture::DoubleTap), int(feed(d, false, 350, 1000, &at)));
+  TEST_ASSERT_EQUAL(375, at);
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(d, false, 1000, 2000)));  // no extra tap
+}
+
+static void test_hold_and_long_hold() {
+  ClickDecoder d;
+  uint32_t at = 0;
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(d, true, 0, 800)));  // nothing while held
+  TEST_ASSERT_EQUAL(int(Gesture::Hold), int(feed(d, false, 800, 1000, &at)));
+  TEST_ASSERT_EQUAL(825, at);
+
+  ClickDecoder l;
+  TEST_ASSERT_EQUAL(int(Gesture::LongHold), int(feed(l, true, 0, 3000, &at)));
+  TEST_ASSERT_EQUAL(1600, at);
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(l, true, 1605, 3000)));
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(l, false, 3000, 4000)));  // release: nothing
+}
+
+static void test_tap_then_hold_is_not_a_double_tap() {
+  ClickDecoder d;
+  uint32_t at = 0;
+  feed(d, true, 0, 100);
+  feed(d, false, 100, 200);
+  TEST_ASSERT_EQUAL(int(Gesture::Tap), int(feed(d, true, 200, 1000, &at)));
+  TEST_ASSERT_EQUAL(800, at);  // second press reached the hold time: first tap reported
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(d, true, 805, 1000)));
+  TEST_ASSERT_EQUAL(int(Gesture::Hold), int(feed(d, false, 1000, 1100)));
+}
+
+static void test_bounce_is_one_tap() {
+  ClickDecoder d;
+  // contact bounce on press and release (shorter than the 25 ms debounce)
+  const bool levels[] = {true, false, true, false, true};
+  uint32_t t = 0;
+  for (bool l : levels) TEST_ASSERT_EQUAL(int(Gesture::None), int(d.update(l, t += 4)));
+  feed(d, true, t, 120);
+  d.update(false, 120);
+  d.update(true, 124);
+  TEST_ASSERT_EQUAL(int(Gesture::Tap), int(feed(d, false, 128, 1000)));
+  TEST_ASSERT_EQUAL(int(Gesture::None), int(feed(d, false, 1000, 2000)));
+}
+
+static void test_click_decoder_after_wake() {
+  ClickDecoder d;
+  uint32_t at = 0;
+  d.startPressed(0);
+  TEST_ASSERT_TRUE(d.isDown());
+  TEST_ASSERT_EQUAL(int(Gesture::Tap), int(feed(d, false, 180, 1000, &at)));
+  TEST_ASSERT_EQUAL(480, at);
+
+  ClickDecoder h;
+  h.startPressed(0);
+  TEST_ASSERT_EQUAL(int(Gesture::Hold), int(feed(h, false, 700, 1000)));
+}
+
+// --- bitmap -------------------------------------------------------------------------
+
+static bool pixel(const uint8_t *b, int w, int x, int y) {  // true = black
+  return !(b[y * ((w + 7) / 8) + (x >> 3)] & (0x80 >> (x & 7)));
+}
+
+static void test_rotate_1bpp() {
+  // 10 x 3 canvas (stride 2), white, with black pixels at (0,0), (9,0) and (3,2)
+  uint8_t src[2 * 3];
+  memset(src, 0xFF, sizeof(src));
+  src[0] &= ~0x80;
+  src[1] &= ~0x40;
+  src[2 * 2] &= ~0x10;
+  uint8_t r90[1 * 10];
+  rotate1bpp(src, 10, 3, r90, 90);  // panel 3 x 10: (x, y) -> (y, 9 - x)
+  int black = 0;
+  for (int y = 0; y < 10; y++) {
+    for (int x = 0; x < 3; x++) black += pixel(r90, 3, x, y);
+  }
+  TEST_ASSERT_EQUAL(3, black);
+  TEST_ASSERT_TRUE(pixel(r90, 3, 0, 9));
+  TEST_ASSERT_TRUE(pixel(r90, 3, 0, 0));
+  TEST_ASSERT_TRUE(pixel(r90, 3, 2, 6));
+  TEST_ASSERT_EQUAL_HEX8(0xFF, r90[0] | 0x80);  // padding bits stay white
+
+  uint8_t r270[1 * 10];
+  rotate1bpp(src, 10, 3, r270, 270);  // (x, y) -> (2 - y, x)
+  TEST_ASSERT_TRUE(pixel(r270, 3, 2, 0));
+  TEST_ASSERT_TRUE(pixel(r270, 3, 2, 9));
+  TEST_ASSERT_TRUE(pixel(r270, 3, 0, 3));
+
+  // 90 then 270 (on the 3 x 10 result) restores the original
+  uint8_t back[2 * 3];
+  rotate1bpp(r90, 3, 10, back, 270);
+  TEST_ASSERT_EQUAL_MEMORY(src, back, sizeof(src));
 }
 
 // --- policy -----------------------------------------------------------------
@@ -398,6 +524,13 @@ int main() {
   RUN_TEST(test_long_press_fires_while_held_and_not_on_release);
   RUN_TEST(test_repeat);
   RUN_TEST(test_start_pressed_after_wake);
+  RUN_TEST(test_tap_waits_for_the_double_tap_window);
+  RUN_TEST(test_double_tap);
+  RUN_TEST(test_hold_and_long_hold);
+  RUN_TEST(test_tap_then_hold_is_not_a_double_tap);
+  RUN_TEST(test_bounce_is_one_tap);
+  RUN_TEST(test_click_decoder_after_wake);
+  RUN_TEST(test_rotate_1bpp);
   RUN_TEST(test_refresh_policy);
   RUN_TEST(test_battery_percent);
   RUN_TEST(test_utf8_decode);

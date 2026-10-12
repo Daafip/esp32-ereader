@@ -36,12 +36,20 @@ uint32_t batteryMv() {
 }
 
 void deepSleep(uint32_t timerSeconds) {
-  // NEXT (GPIO39): ext0, wake on low; the board has an external pull-up.
+  // NEXT: ext0, wake on low (T5-2.13: GPIO39 with an external pull-up).
+  if (kBtnNextPullup) {
+    rtc_gpio_pullup_en(gpio_num_t(kBtnNext));
+    rtc_gpio_pulldown_dis(gpio_num_t(kBtnNext));
+  }
   esp_sleep_enable_ext0_wakeup(gpio_num_t(kBtnNext), 0);
-  // MENU (GPIO0): ext1 with a single pin, so "all low" = "this pin low".
-  rtc_gpio_pullup_en(gpio_num_t(kBtnMenu));
-  rtc_gpio_pulldown_dis(gpio_num_t(kBtnMenu));
-  esp_sleep_enable_ext1_wakeup(1ULL << kBtnMenu, ESP_EXT1_WAKEUP_ALL_LOW);
+  // MENU (T5-2.13: GPIO0): ext1 with a single pin, so "all low" (ESP32) and
+  // "any low" (later chips) both mean "this pin low"; both are mode 0.
+  int menuPin = kBtnMenu;  // < 0 on one-button boards
+  if (menuPin >= 0) {
+    rtc_gpio_pullup_en(gpio_num_t(menuPin));
+    rtc_gpio_pulldown_dis(gpio_num_t(menuPin));
+    esp_sleep_enable_ext1_wakeup(1ULL << menuPin, esp_sleep_ext1_wakeup_mode_t(0));
+  }
   if (timerSeconds) esp_sleep_enable_timer_wakeup(uint64_t(timerSeconds) * 1000000ULL);
   Serial.printf("deep sleep (timer %u s)\n", unsigned(timerSeconds));
   Serial.flush();

@@ -85,6 +85,47 @@ class PageGeometry:
 
 
 @dataclass(frozen=True)
+class Screen:
+    """A reader's page size and the converter defaults that suit it.
+
+    Must match the firmware's board header (``firmware/include/boards/``: kPageW,
+    kPageH, kStatusBarH, kDefaultFontPx, kDefaultMarginPx) and ``screens`` in
+    firmware/web/bookprep.js.
+    """
+
+    id: str
+    name: str
+    width: int
+    height: int
+    status_bar: int
+    font_size: int  # default text size in px
+    margin: int  # default left/right/top margin in px
+    margin_bottom: int
+
+    def geometry(self, margin: int | None = None, status_bar: int | None = None) -> PageGeometry:
+        m = self.margin if margin is None else margin
+        return PageGeometry(
+            width=self.width,
+            height=self.height,
+            margin_left=m,
+            margin_right=m,
+            margin_top=m,
+            margin_bottom=self.margin_bottom,
+            status_bar=self.status_bar if status_bar is None else status_bar,
+        )
+
+
+SCREENS = {
+    s.id: s
+    for s in (
+        Screen("t5-213", "LilyGo T5-2.13", 250, 122, 14, 13, 4, 4),
+        Screen("t5-47", 'LilyGo T5-4.7" S3', 540, 960, 28, 28, 24, 8),
+    )
+}
+DEFAULT_SCREEN = "t5-213"
+
+
+@dataclass(frozen=True)
 class LayoutOptions:
     line_height: int
     indent: int = 0

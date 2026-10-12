@@ -25,7 +25,13 @@ out.lines = cases.lines.map((c) =>
   }));
 
 out.layout = cases.layout.map((c) => {
-  const g = B.geometry(c.geometry);
+  let g = B.geometry(c.geometry);
+  if (c.geometry.screen) {  // as typeset() does it for a reader's screen
+    const sc = B.screenFor(c.geometry.screen);
+    const m = c.geometry.margin;
+    g = B.geometry({ width: sc.width, height: sc.height, statusBar: sc.statusBar,
+      marginBottom: sc.marginBottom, marginLeft: m, marginRight: m, marginTop: m });
+  }
   const pages = B.layoutBook(c.chapters, mono, g, c.options, c.lang ? dicts[c.lang] : null);
   return {
     pages: pages.map((p) => p.map(({ y, line }) => [y, line.runs.map((r) => r.text).join(" ")])),
@@ -43,6 +49,7 @@ out.t5b = Buffer.from(B.writeT5b({
 out.encode = cases.encode.map(([text, size]) => Buffer.from(B.encodeStr(text, size)).toString("base64"));
 out.slug = cases.slug.map((s) => B.slug(s));
 out.lineHeights = cases.lineHeights.map(([size, spacing]) => B.lineHeightFor(size, spacing));
+out.screens = B.screens;
 
 (async () => {
   // ZIP reader + inflate on a real EPUB (no DOM needed for this part)

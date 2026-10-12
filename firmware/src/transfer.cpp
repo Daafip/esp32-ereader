@@ -6,6 +6,7 @@
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <esp_app_format.h>
 
 #include <vector>
 
@@ -49,8 +50,11 @@ const char *const kMetaExts[] = {".json"};
 const char *const kFontExts[] = {".ttf", ".otf", ".woff", ".woff2"};
 constexpr const char *kSourceDir = "/books/.src";
 constexpr const char *kFontDir = "/fonts";
+// 64 MB, or 4096 pages where pages are big (T5-4.7": 64 KB each).
+constexpr uint32_t kBookMaxBytes =
+    uint32_t(kPageBytes) * 4096u > (64u << 20) ? uint32_t(kPageBytes) * 4096u : 64u << 20;
 const Kind kKinds[] = {
-    {"book", "/books", kBookExts, 1, 64u << 20},
+    {"book", "/books", kBookExts, 1, kBookMaxBytes},
     {"source", kSourceDir, kSourceExts, 2, 64u << 20},
     {"meta", kSourceDir, kMetaExts, 1, 64u << 10},
     {"font", kFontDir, kFontExts, 4, 8u << 20},
@@ -177,6 +181,16 @@ void handleInfo() {
   out.reserve(160 + books.size() * 200);
   out = "{";
   addString(out, "version", FW_VERSION);
+  // This reader's screen: the page typesets books for it (see bookprep.js, screens).
+  addKey(out, "screen");
+  out += '{';
+  addString(out, "id", kScreenId);
+  addInt(out, "width", kPageW);
+  addInt(out, "height", kPageH);
+  addInt(out, "statusBar", kStatusBarH);
+  addInt(out, "size", kDefaultFontPx);
+  addInt(out, "margin", kDefaultMarginPx);
+  out += '}';
   addInt(out, "battery", battery);
   addNumber(out, "total", SD.totalBytes());
   addNumber(out, "free", SD.totalBytes() - SD.usedBytes());
@@ -379,6 +393,13 @@ void handleFirmwareData() {
       break;
     case UPLOAD_FILE_WRITE:
       if (fwStatus != 200) return;
+      if (Update.progress() == 0 && up.currentSize >= sizeof(esp_image_header_t)) {
+        // The image of the other board (ESP32 vs ESP32-S3) would only fail at the end.
+        const auto *h = reinterpret_cast<const esp_image_header_t *>(up.buf);
+        if (h->magic == ESP_IMAGE_HEADER_MAGIC && h->chip_id != CONFIG_IDF_FIRMWARE_CHIP_ID) {
+          return failFirmware(400, "firmware for the other board (wrong chip)");
+        }
+      }
       if (Update.write(up.buf, up.currentSize) != up.currentSize) {
         // e.g. "Magic byte is wrong": not an app image (the merged .bin from fw-dist)
         return failFirmware(400, Update.errorString());

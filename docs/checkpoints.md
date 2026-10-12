@@ -28,7 +28,7 @@ General:
    RST. **Send:** the `BUS:`, `MOUNT:`, `CARD:`, `4K:`, `RANDOM READ` and `RESULT` lines,
    and whether the board boots normally with the card in.
 
-I then set the panel constant and pins in `board.h`.
+I then set the panel constant and pins in `firmware/include/boards/t5_213.h`.
 
 ## Checkpoint 1: calibration and ghosting
 
@@ -106,3 +106,24 @@ Set "Sleep after page: on" (default). Each page turn is now a wake from deep sle
 3. Long-press feel: is 600 ms right? (Settings → Long press.)
 4. Wake via BOOT while a page is shown must open the menu, not download mode.
 5. Idle: leave it 10 min after a page turn; the sleep screen should appear.
+
+## T5-4.7" S3 (second board, if you get one)
+
+No diagnostic sketches for this board: the reader itself is the test. Results go in
+`docs/hardware-t5-47.md` → "Checkpoint results".
+
+1. `pixi run fw-flash reader_t547` (no port? hold BOOT, press RST, release BOOT),
+   then `pixi run fw-monitor`. Card with `/books/*.t5b` made for this screen:
+   `pixi run prep book.epub --screen t5-47`, or Wi-Fi transfer (the page typesets
+   for the screen the reader reports).
+2. First screen: is it upright with the USB port where you want "down", and not
+   mirrored? If not, change `kEpdRotation` (90/270) in `boards/t5_47_s3.h`, or tell
+   me about the mirroring. **Send:** a photo.
+3. Settings → "Sleep after page: off". Turn pages by tapping: the serial log shows
+   `page ... full/partial refresh, data N ms, refresh N ms`. **Send:** the lines,
+   ghosting after how many partial turns, and how tap / double tap / hold / long hold feel.
+4. "Sleep after page: on": each tap wakes the chip. **Send:** the `page ... at N ms`
+   lines (wake to image) and whether the first turn after waking is partial and clean
+   (the reader rebuilds the old page from the card for that).
+5. Leave it asleep with a page shown and measure the current in series with the
+   battery (LilyGo: ~380 µA). About → Battery should read about the cell voltage.

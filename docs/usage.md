@@ -1,5 +1,9 @@
 # Using the reader
 
+Two boards: the LilyGo **T5-2.13** (the original) and the LilyGo **T5-4.7" S3** (a
+second build target, untested on hardware; see `docs/hardware-t5-47.md`). Everything
+below applies to both unless it says otherwise.
+
 ## Books
 
 **From your phone (no laptop):** start Wi-Fi transfer on the reader (below), open the
@@ -20,16 +24,22 @@ also keeps the original and your settings, so **Restyle** in the book list lets 
 change the font or size later from any phone; your reading position moves along
 proportionally. "Download .t5b" saves the result instead (e.g. for the SD card).
 
-Large books take a moment: Max Havelaar is 3600 pages, ~14 MB to send. Keep the phone's
-screen on while it uploads.
+The page asks the reader for its screen size and typesets for it: 250×122 at 13 px
+on the T5-2.13, 540×960 at 28 px on the T5-4.7". A `.t5b` only opens on the screen
+it was made for.
+
+Large books take a moment: Max Havelaar is 3600 pages, ~14 MB to send to the T5-2.13
+(about 55 MB to the T5-4.7", whose pages are 17× bigger). Keep the phone's screen on
+while it uploads.
 
 **On the PC:** `pixi run prep book.epub --out out/ --preview` (`--font`, `--size`, `--mono`,
-`--lang`, ...: `pixi run prep --help`), then copy `out/<book>.t5b` to `/books/` on the
-card (FAT32). Page breaks differ slightly from the browser: the two use different font
+`--lang`, ...: `pixi run prep --help`; add `--screen t5-47` for the T5-4.7"), then
+copy `out/<book>.t5b` to `/books/` on the card (FAT32). Page breaks differ slightly from the browser: the two use different font
 engines.
 
 **Try the page without the reader:** `pixi run web-dev --lan` runs it on your PC with a
-folder as fake SD card (`out/web-dev/sd`) and prints an address for your phone.
+folder as fake SD card (`out/web-dev/sd`) and prints an address for your phone
+(`--screen t5-47` to pretend to be the T5-4.7").
 
 The reader reopens the last book at the last page. Each book remembers its own page.
 
@@ -45,10 +55,10 @@ Menu → **Wi-Fi transfer** (or MENU on the "No books yet" screen).
 3. Drop `.epub`/`.txt` files (typeset in the browser, see "Books") or ready `.t5b`
    files on the page. It lists the books on the card with how far you've read each,
    and can restyle or delete them.
-4. Press MENU on the reader when done. Wi-Fi turns off; it also turns off after the
-   idle time without uploads or button presses.
+4. Press MENU on the reader when done (T5-4.7": hold the button). Wi-Fi turns off;
+   it also turns off after the idle time without uploads or button presses.
 
-NEXT switches between the two QR codes. Uploads are checked: a file that isn't a
+NEXT (T5-4.7": tap) switches between the two QR codes. Uploads are checked: a file that isn't a
 valid `.t5b` for this screen is refused and not stored.
 
 **Home network instead:** copy `firmware/include/secrets.h.example` to `secrets.h`,
@@ -56,24 +66,31 @@ fill in your Wi-Fi name and password and flash again. The reader then joins your
 network (falls back to its own if that fails) and shows its address and code.
 
 **Firmware updates over Wi-Fi:** the same page has "Update firmware". Upload
-`out/firmware/t5-reader-<version>-ota.bin` from `pixi run fw-dist`; the reader checks
-the image, restarts into it and leaves Wi-Fi mode. If anything goes wrong, flash over
-USB as below.
+`out/firmware/t5-reader-<version>-ota.bin` from `pixi run fw-dist`
+(T5-4.7": `t5-47-reader-<version>-ota.bin`; the other board's file is refused); the
+reader checks the image, restarts into it and leaves Wi-Fi mode. If anything goes
+wrong, flash over USB as below.
 
 ## Flashing
 
 - **From this PC:** `pixi run fw-flash reader` (SD card out while flashing).
+  T5-4.7": `pixi run fw-flash reader_t547` (if no port shows up: hold BOOT, press
+  RST, release BOOT).
 - **From a browser, no tools needed:** `pixi run fw-dist` puts one image per sketch
   in `out/firmware/` (`t5-reader-<version>.bin`, `t5-calibration-...`, etc.). In
   Chrome or Edge open <https://espressif.github.io/esptool-js/>, Connect (pick the
   USB serial port), Flash Address `0x0`, choose the `.bin`, Program. Use the files
   *without* `-ota` here: they contain bootloader, partition table and app.
+  T5-4.7": `t5-47-reader-<version>.bin`, also at `0x0`.
 - **Over Wi-Fi:** see "Firmware updates over Wi-Fi" above (after the first flash).
 
 ## Buttons
 
 The footer of each menu shows the keys: a black chip is the button (NEXT or MENU),
-an outlined "hold" chip is the long press.
+an outlined "hold" chip is the long press. On the one-button T5-4.7" the chips name
+the gestures instead: TAP and "2×", HOLD and "long".
+
+### T5-2.13: two buttons
 
 | | NEXT (GPIO39) | MENU (BOOT, GPIO0) |
 |---|---|---|
@@ -83,13 +100,28 @@ an outlined "hold" chip is the long press.
 | Lists, long | previous item (repeats while held) | back |
 | Go to position, short / long | +1 % / +10 % | go / back |
 
+### T5-4.7": one button (GPIO21)
+
+| | tap | double tap | hold (≥ 600 ms) | long hold (≥ 1.6 s) |
+|---|---|---|---|---|
+| Reading | next page | previous page | menu | sleep screen |
+| Lists | next item | previous item | select / change | back |
+| Go to position | +1 % | +10 % | go | back |
+
+A tap waits 300 ms for a possible second tap, so a page turn starts that much later.
+Hold time follows Settings → Long press (long hold = that + 1 s). A hold fires when
+you let go; a long hold fires while you keep holding. The BOOT button is wired to
+the display, so the reader can't use it.
+
 ## Menu
 
 - **Resume**: back to the page.
 - **Chapters**: jump to a chapter; start page on the right, a dot marks the current one.
 - **Go to position**: jump to a percentage of the book.
 - **Library**: all books in `/books` with how far you've read each ("new" if unopened).
-- **Settings** (select changes the value):
+- **Settings** (select changes the value; on the T5-4.7" "retain" behaves like
+  "rewrite": the panel keeps no image, so the reader reads the shown page back from
+  the card):
   - *Full refresh*: a full (flashing) refresh after this many page turns to clear ghosting.
     Chapter changes always get one.
   - *Long press*: threshold between short and long press.

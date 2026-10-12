@@ -13,7 +13,11 @@ mkdir -p out/firmware
 for env in reader calibration panel_tester button_test sd_test; do
   cp "firmware/.pio/build/$env/firmware.factory.bin" "out/firmware/t5-$env-$version.bin"
 done
+# LilyGo T5-4.7" S3 (ESP32-S3: its own images; the reader refuses the other chip's OTA file)
+cp firmware/.pio/build/reader_t547/firmware.factory.bin "out/firmware/t5-47-reader-$version.bin"
 # app only, for "Update firmware" on the Wi-Fi transfer page
 cp firmware/.pio/build/reader/firmware.bin "out/firmware/t5-reader-$version-ota.bin"
-ls -l out/firmware/*"$version".bin
-echo "USB/browser: flash t5-<env>-$version.bin at 0x0. Over Wi-Fi: upload t5-reader-$version-ota.bin."
+cp firmware/.pio/build/reader_t547/firmware.bin "out/firmware/t5-47-reader-$version-ota.bin"
+ls -l out/firmware/*"$version"*.bin
+echo "USB/browser: flash t5-<env>-$version.bin (T5-4.7\": t5-47-reader-$version.bin) at 0x0."
+echo "Over Wi-Fi: upload t5-reader-$version-ota.bin (T5-4.7\": t5-47-reader-$version-ota.bin)."

@@ -32,6 +32,25 @@
 
   // --- geometry and options (bookprep defaults) -------------------------------------
 
+  // Readers: page size and the converter defaults that suit it. Same as SCREENS in
+  // tools/bookprep/src/bookprep/layout.py and firmware/include/boards/*.h; the reader
+  // reports its own screen in /api/info.
+  const screens = {
+    "t5-213": { id: "t5-213", name: "LilyGo T5-2.13", width: 250, height: 122, statusBar: 14, size: 13, margin: 4, marginBottom: 4 },
+    "t5-47": { id: "t5-47", name: "LilyGo T5-4.7\" S3", width: 540, height: 960, statusBar: 28, size: 28, margin: 24, marginBottom: 8 },
+  };
+
+  // A screen from /api/info (or an id): known fields filled in from the table.
+  function screenFor(sc) {
+    if (typeof sc === "string") sc = { id: sc };
+    sc = sc || {};
+    if (screens[sc.id]) return { ...screens[sc.id], ...sc };
+    // a reader this page doesn't know: scale the bottom margin with the status bar
+    const out = { ...screens["t5-213"], ...sc };
+    if (sc.marginBottom === undefined) out.marginBottom = Math.round(out.statusBar * 4 / 14);
+    return out;
+  }
+
   function geometry(o = {}) {
     const g = {
       width: 250, height: 122, marginLeft: 4, marginRight: 4, marginTop: 4,
@@ -725,10 +744,15 @@
     return rgba;
   }
 
-  // Lays out a cleaned book with the given options and font family.
+  // Lays out a cleaned book with the given options and font family, for
+  // opts.screen (a screen object or id; default t5-213).
   function typeset(book, opts, family, hyphenator) {
     const o = { ...defaults, ...opts };
-    const g = geometry({ marginLeft: o.margin, marginRight: o.margin, marginTop: o.margin });
+    const sc = screenFor(o.screen);
+    const g = geometry({
+      width: sc.width, height: sc.height, statusBar: sc.statusBar, marginBottom: sc.marginBottom,
+      marginLeft: o.margin, marginRight: o.margin, marginTop: o.margin,
+    });
     const lineHeight = lineHeightFor(o.size, o.spacing);
     const renderer = createRenderer(family, o.size, g, lineHeight, o.threshold);
     const layoutOpts = {
@@ -768,7 +792,7 @@
   }
 
   return {
-    defaults, geometry, lineHeightFor, openZip, resolvePath, htmlToBlocks, extractEpub, extractTxt,
+    defaults, screens, screenFor, geometry, lineHeightFor, openZip, resolvePath, htmlToBlocks, extractEpub, extractTxt,
     extract, normalizeText, cleanBook, parsePatterns, languageFallback, Hyphenator, dashBreaks,
     breakLines, bookItems, paginate, layoutBook, tocEntries, encodeStr, writeT5b, packPixels,
     createRenderer, unpackToRgba, typeset, writeBook, slug, NBSP,

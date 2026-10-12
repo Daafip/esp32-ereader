@@ -17,8 +17,12 @@ fonts="$CONDA_PREFIX/fonts"
 out=firmware/include/fonts
 mkdir -p "$out"
 rm -f "$out"/*.h
-# fontconvert sizes are points at 141 dpi: 5 pt ~ 10 px, 6 pt ~ 12 px, 7 pt ~ 14 px, 9 pt ~ 18 px
-"$bin" "$fonts/Ubuntu-M.ttf" "$out/ui_small.h" 5 32 255    # status bar, footer, details
-"$bin" "$fonts/Ubuntu-R.ttf" "$out/ui_body.h" 6 32 255     # list items, body text
-"$bin" "$fonts/Ubuntu-B.ttf" "$out/ui_title.h" 7 32 255    # headers, headlines
-"$bin" "$fonts/Ubuntu-M.ttf" "$out/ui_display.h" 9 32 255  # sleep screen title, big values
+# fontconvert sizes are points at 141 dpi: 5 pt ~ 10 px, 6 pt ~ 12 px, 7 pt ~ 14 px, 9 pt ~ 18 px.
+# One set per UI scale (kUiScale in the board header): 1 = T5-2.13, 2 = T5-4.7".
+for scale in 1 2; do
+  suffix=$([ "$scale" = 1 ] && echo "" || echo "_${scale}x")
+  "$bin" "$fonts/Ubuntu-M.ttf" "$out/ui_small$suffix.h" $((5 * scale)) 32 255    # status bar, footer, details
+  "$bin" "$fonts/Ubuntu-R.ttf" "$out/ui_body$suffix.h" $((6 * scale)) 32 255     # list items, body text
+  "$bin" "$fonts/Ubuntu-B.ttf" "$out/ui_title$suffix.h" $((7 * scale)) 32 255    # headers, headlines
+  "$bin" "$fonts/Ubuntu-M.ttf" "$out/ui_display$suffix.h" $((9 * scale)) 32 255  # sleep screen title, big values
+done

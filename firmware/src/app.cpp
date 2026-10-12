@@ -50,27 +50,30 @@ enum class Screen : uint8_t {
 };
 
 // What the panel shows and where we are, kept through deep sleep (RTC RAM).
-constexpr uint32_t kRtcMagic = 0x54354231;
+constexpr uint32_t kRtcMagic = 0x54354232;
 struct RtcState {
   uint32_t magic;
   char bookPath[128];
   uint32_t page;
   int32_t chapter;
   Screen screen;
+  int8_t pageBattery;  // battery % in the status bar of the page shown
   uint32_t wakes;
   uint32_t imageMs;  // app start -> image refreshed, last time
 };
 RTC_DATA_ATTR RtcState rtc;
 
 constexpr uint32_t kNoBatteryMv = 2500;  // below this the ADC sees no battery (USB only)
-// Footer hints: key chip, short-press action, long-press action.
-const ui::Hint kNoHint = {nullptr, nullptr, nullptr};
-const ui::Hint kListNext = {"NEXT", ui::kArrowDown, ui::kArrowUp};
-const ui::Hint kListOpen = {"MENU", "open", "back"};
-const ui::Hint kListGo = {"MENU", "go", "back"};
-const ui::Hint kListChange = {"MENU", "edit", "back"};
-const ui::Hint kBack = {"MENU", "back", nullptr};
-const char *const kRetryHint = "Press any button to try again";
+// Footer hints: button role, short-press action, long-press action.
+using ui::Button;
+const ui::Hint kNoHint = {Button::None, nullptr, nullptr};
+const ui::Hint kListNext = {Button::Next, ui::kArrowDown, ui::kArrowUp};
+const ui::Hint kListOpen = {Button::Menu, "open", "back"};
+const ui::Hint kListGo = {Button::Menu, "go", "back"};
+const ui::Hint kListChange = {Button::Menu, "edit", "back"};
+const ui::Hint kBack = {Button::Menu, "back", nullptr};
+const char *const kRetryHint =
+    kSingleButton ? "Press the button to try again" : "Press any button to try again";
 
 Settings settings;
 Book book;
@@ -156,15 +159,29 @@ bool openBook(const char *path, bool quiet = false) {
   return true;
 }
 
+// Book page n with its status bar into the framebuffer.
+bool drawPage(uint32_t n, int battery) {
+  if (!book.readPage(n, display::framebuffer())) return false;
+  const int chapter = book.chapterForPage(n);
+  t5b::TocEntry entry;
+  const char *title = chapter >= 0 && book.tocEntry(chapter, entry) ? entry.title : book.header().title;
+  ui::statusBar(title, n, book.pageCount(), battery);
+  return true;
+}
+
 void showReading(Refresh requested) {
-  if (!book.readPage(page, display::framebuffer())) {
+  // Big panels (T5-4.7") can't keep the shown image through deep sleep: draw
+  // the page that is on the glass again, so this turn can still be partial.
+  if (requested == Refresh::Partial && settings.wakeRefresh != WakeRefresh::Full &&
+      !display::shownValid() && rtc.screen == Screen::Reading && rtc.page != page &&
+      rtc.page < book.pageCount() && drawPage(rtc.page, rtc.pageBattery)) {
+    display::assumeShown();
+  }
+  if (!drawPage(page, batteryPct)) {
     showMessage(ui::Icon::Card, "Read error", baseName(book.path()), "Was the card removed?");
     return;
   }
   const int chapter = book.chapterForPage(page);
-  t5b::TocEntry entry;
-  const char *title = chapter >= 0 && book.tocEntry(chapter, entry) ? entry.title : book.header().title;
-  ui::statusBar(title, page, book.pageCount(), batteryPct);
 
   Refresh mode = Refresh::Full;
   if (requested == Refresh::Partial) {
@@ -179,6 +196,7 @@ void showReading(Refresh requested) {
   setScreen(Screen::Reading);
   rtc.page = page;
   rtc.chapter = chapter;
+  rtc.pageBattery = int8_t(batteryPct);
   prefs::setBookmark(book.id(), page);
   rtc.imageMs = millis();
   const display::Timing t = display::lastTiming();
@@ -219,7 +237,7 @@ void renderMainMenu() {
 
 void openMainMenu() {
   input::setRepeat(true);
-  list.reset(kMainCount, ui::kMenuRows, kResume);
+  list.reset(kMainCount, ui::menuRows(), kResume);
   setScreen(Screen::MainMenu);
   renderMainMenu();
 }
@@ -238,7 +256,7 @@ void renderChapters() {
 
 void openChapters() {
   const int current = book.chapterForPage(page);
-  list.reset(book.tocCount(), ui::kMenuRows, current < 0 ? 0 : current);
+  list.reset(book.tocCount(), ui::menuRows(), current < 0 ? 0 : current);
   setScreen(Screen::Chapters);
   renderChapters();
 }
@@ -251,7 +269,7 @@ void renderGoTo() {
   snprintf(value, sizeof(value), "%d%%", goToPct);
   snprintf(caption, sizeof(caption), "Page %u of %u", unsigned(pctToPage(goToPct) + 1),
            unsigned(book.pageCount()));
-  ui::valueEditor("Go to position", value, caption, goToPct, {"NEXT", "+1", "+10"},
+  ui::valueEditor("Go to position", value, caption, goToPct, {Button::Next, "+1", "+10"},
                   kListGo, batteryPct);
   display::show(menuRefresh());
 }
@@ -282,7 +300,7 @@ void renderLibrary() {
 
 void showNoBooks() {
   ui::message(ui::Icon::Book, "No books yet", "Upload them over Wi-Fi, or copy", ".t5b files to /books on the card",
-              {"MENU", "Wi-Fi transfer", nullptr}, {"NEXT", "retry", nullptr});
+              {Button::Menu, "Wi-Fi transfer", nullptr}, {Button::Next, "retry", nullptr});
   display::show(Refresh::Full);
   setScreen(Screen::Message);
   messageOffersWifi = true;
@@ -299,7 +317,7 @@ void openLibrary() {
     if (book.isOpen() && library[i].path == book.path()) selected = int(i);
   }
   input::setRepeat(true);
-  list.reset(int(library.size()), ui::kMenuRows, selected);
+  list.reset(int(library.size()), ui::menuRows(), selected);
   setScreen(Screen::Library);
   renderLibrary();
 }
@@ -315,7 +333,7 @@ void renderSettings() {
 }
 
 void openSettings() {
-  list.reset(kSettingCount, ui::kMenuRows, 0);
+  list.reset(kSettingCount, ui::menuRows(), 0);
   setScreen(Screen::SettingsMenu);
   renderSettings();
 }
@@ -366,8 +384,8 @@ void renderTransfer() {
     strlcpy(qr, t.url, sizeof(qr));
     v = {qr, step, "Open the page", "Address", t.address, "Code", t.code, t.event};
   }
-  const ui::Hint other = {"NEXT", step == 1 ? "show page" : "show Wi-Fi", nullptr};
-  ui::wifiScreen(v, step ? other : kNoHint, {"MENU", "done", nullptr}, batteryPct);
+  const ui::Hint other = {Button::Next, step == 1 ? "show page" : "show Wi-Fi", nullptr};
+  ui::wifiScreen(v, step ? other : kNoHint, {Button::Menu, "done", nullptr}, batteryPct);
   display::show(menuRefresh());
 }
 

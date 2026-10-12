@@ -117,12 +117,16 @@ def test_browser_settings_change_layout(tmp_path, sample_epub, font_path):
     assert big["pages"] >= 3
 
 
-def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub):
-    """The real page: open an EPUB, typeset it, upload book + original + settings
-    to the dev server (same API as the firmware)."""
+@pytest.mark.parametrize(
+    ("screen", "size"), [("t5-213", (250, 122, 13)), ("t5-47", (540, 960, 28))]
+)
+def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, screen, size):
+    """The real page: open an EPUB, typeset it for the reader's screen (from
+    /api/info), upload book + original + settings to the dev server (same API as
+    the firmware)."""
     from bookprep.devserver import make_server
 
-    srv = make_server(tmp_path, "1234", port=0, fonts=False)
+    srv = make_server(tmp_path, "1234", port=0, fonts=False, screen=screen)
     shutil.copy(sample_epub, tmp_path / "www" / "testboek.epub")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
@@ -139,7 +143,8 @@ def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub):
     sd = tmp_path / "sd" / "books"
     book = T5BFile(sd / "testboek.t5b")
     assert book.header.title == "Testboek"
+    assert (book.header.page_w, book.header.page_h) == size[:2]
     assert [e.title for e in book.toc] == ["Hoofdstuk 1", "Hoofdstuk 2"]
     assert (sd / ".src" / "testboek.epub").read_bytes() == sample_epub.read_bytes()
     settings = json.loads((sd / ".src" / "testboek.json").read_text())
-    assert settings["size"] == 13
+    assert (settings["size"], settings["screen"]) == (size[2], screen)
