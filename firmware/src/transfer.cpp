@@ -13,7 +13,7 @@
 #include "prefs.h"
 #include "storage.h"
 #include "t5b_format.h"
-#include "web_index.h"
+#include "web_assets.h"
 #include "web_util.h"
 
 #if __has_include("secrets.h")
@@ -33,7 +33,50 @@ bool changed = false;
 bool routesAdded = false;
 int battery = -1;
 
+// What can be uploaded, where it goes on the card, and how big it may be.
+// book: the typeset .t5b; source/meta: the original EPUB/TXT and the converter
+// settings, kept for "Restyle"; font: reading fonts added from the browser.
+struct Kind {
+  const char *name;
+  const char *dir;
+  const char *const *exts;
+  size_t extCount;
+  uint32_t maxBytes;
+};
+const char *const kBookExts[] = {".t5b"};
+const char *const kSourceExts[] = {".epub", ".txt"};
+const char *const kMetaExts[] = {".json"};
+const char *const kFontExts[] = {".ttf", ".otf", ".woff", ".woff2"};
+constexpr const char *kSourceDir = "/books/.src";
+constexpr const char *kFontDir = "/fonts";
+const Kind kKinds[] = {
+    {"book", "/books", kBookExts, 1, 64u << 20},
+    {"source", kSourceDir, kSourceExts, 2, 64u << 20},
+    {"meta", kSourceDir, kMetaExts, 1, 64u << 10},
+    {"font", kFontDir, kFontExts, 4, 8u << 20},
+};
+
+const Kind *findKind(const String &name) {
+  for (const Kind &k : kKinds) {
+    if (name == k.name) return &k;
+  }
+  return nullptr;
+}
+
+String stemOf(const String &name) {
+  const int dot = name.lastIndexOf('.');
+  return dot > 0 ? name.substring(0, dot) : name;
+}
+
+const char *mimeFor(const String &name) {
+  if (name.endsWith(".json")) return "application/json";
+  if (name.endsWith(".epub")) return "application/epub+zip";
+  if (name.endsWith(".txt")) return "text/plain";
+  return "application/octet-stream";
+}
+
 // Upload in progress (one at a time; WebServer is synchronous).
+const Kind *upKind = nullptr;
 fs::File upFile;
 String upTmp;
 String upFinal;
@@ -42,6 +85,8 @@ size_t upFill = 0;
 int upStatus = 200;
 String upError;
 char upTitle[t5b::kTitleBytes + 1];
+uint32_t upPages = 0;
+uint32_t upId = 0;  // t5b::bookId of the uploaded book (raw header title, like the library)
 
 // Firmware update (OTA into the other app slot), then restart.
 int fwStatus = 200;
@@ -108,13 +153,20 @@ const char *baseName(const char *path) {
 
 // --- handlers ---------------------------------------------------------------------
 
-void handleIndex() {
-  touch();
-  server.sendHeader("Content-Encoding", "gzip");
-  server.sendHeader("Cache-Control", "no-cache");
-  server.send_P(200, "text/html; charset=utf-8", reinterpret_cast<const char *>(kWebIndexGz),
-                kWebIndexGzLen);
+// The page, the converter script, fonts and hyphenation data (web_assets.h).
+bool serveAsset(const String &uri) {
+  for (const WebAsset &a : kWebAssets) {
+    if (uri != a.path) continue;
+    touch();
+    if (a.gzip) server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", uri == "/" ? "no-cache" : "max-age=86400");
+    server.send_P(200, a.mime, reinterpret_cast<const char *>(a.data), a.len);
+    return true;
+  }
+  return false;
 }
+
+void handleIndex() { serveAsset("/"); }
 
 void handleInfo() {
   if (!authorized()) return sendError(403, "wrong code");
@@ -140,7 +192,36 @@ void handleInfo() {
     addNumber(out, "size", b.size);
     const uint32_t mark = prefs::bookmark(b.id);
     addInt(out, "progress", b.pages > 1 ? int(uint64_t(mark) * 100 / (b.pages - 1)) : 0);
+    // the original kept for "Restyle", if any
+    const String stem = stemOf(baseName(b.path.c_str()));
+    String source;
+    for (const char *ext : kSourceExts) {
+      if (SD.exists(String(kSourceDir) + "/" + stem + ext)) {
+        source = stem + ext;
+        break;
+      }
+    }
+    if (source.length()) {
+      addString(out, "source", source.c_str());
+    } else {
+      addKey(out, "source");
+      out += "null";
+    }
     out += '}';
+  }
+  out += ']';
+  addKey(out, "fonts");
+  out += '[';
+  fs::File dir = SD.open(kFontDir);
+  if (dir && dir.isDirectory()) {
+    for (fs::File f = dir.openNextFile(); f; f = dir.openNextFile()) {
+      if (f.isDirectory() || !isSafeFileName(f.name(), kFontExts, 4)) continue;
+      if (out[out.length() - 1] != '[') out += ',';
+      out += '{';
+      addString(out, "name", f.name());
+      addNumber(out, "size", f.size());
+      out += '}';
+    }
   }
   out += "]}";
   sendJson(200, out);
@@ -178,6 +259,8 @@ bool validateUpload() {
     return false;
   }
   strlcpy(upTitle, h.title[0] ? h.title : baseName(upFinal.c_str()), sizeof(upTitle));
+  upPages = h.pageCount;
+  upId = t5b::bookId(h.title, h.pageCount);
   return true;
 }
 
@@ -190,13 +273,19 @@ void handleUploadData() {
       upFill = 0;
       upTmp = "";
       upTitle[0] = '\0';
+      upPages = 0;
       if (!authorized()) return failUpload(403, "wrong code");
+      upKind = findKind(server.hasArg("kind") ? server.arg("kind") : String("book"));
+      if (!upKind) return failUpload(400, "unknown kind");
       String name = up.filename;
       const int slash = max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
       if (slash >= 0) name = name.substring(slash + 1);
-      if (!isSafeBookName(name.c_str())) return failUpload(400, "only .t5b files with a plain name");
+      if (!isSafeFileName(name.c_str(), upKind->exts, upKind->extCount)) {
+        return failUpload(400, "file type not allowed here");
+      }
       SD.mkdir(storage::kBooksDir);
-      upFinal = String(storage::kBooksDir) + "/" + name;
+      SD.mkdir(upKind->dir);
+      upFinal = String(upKind->dir) + "/" + name;
       upTmp = upFinal + ".part";
       SD.remove(upTmp);
       upFile = SD.open(upTmp, FILE_WRITE);
@@ -207,6 +296,7 @@ void handleUploadData() {
     }
     case UPLOAD_FILE_WRITE: {
       if (upStatus != 200) return;
+      if (up.totalSize > upKind->maxBytes) return failUpload(413, "file too large");
       size_t offset = 0;
       while (offset < up.currentSize) {
         const size_t n = min(sizeof(upBuf) - upFill, up.currentSize - offset);
@@ -222,9 +312,31 @@ void handleUploadData() {
       if (upStatus != 200) return;
       if (!flushUpload()) return failUpload(507, "SD card full?");
       upFile.close();
-      if (!validateUpload()) return;
+      const bool isBook = upKind == &kKinds[0];
+      if (isBook && !validateUpload()) return;
+      // Replacing a book (restyled): carry the reading position over in proportion.
+      uint32_t oldMark = 0, oldPages = 0;
+      if (isBook) {
+        fs::File old = SD.open(upFinal, FILE_READ);
+        uint8_t head[t5b::kHeaderSize];
+        t5b::Header oh;
+        if (old && old.read(head, sizeof(head)) == sizeof(head) &&
+            t5b::parseHeader(head, sizeof(head), oh) == t5b::Error::None) {
+          oldPages = oh.pageCount;
+          oldMark = prefs::bookmark(t5b::bookId(oh.title, oh.pageCount));
+        }
+        if (old) old.close();
+      }
       SD.remove(upFinal);
-      if (!SD.rename(upTmp, upFinal)) return failUpload(500, "could not store the book");
+      if (!SD.rename(upTmp, upFinal)) return failUpload(500, "could not store the file");
+      if (isBook && oldMark && oldPages > 1 && upPages > 1) {
+        const uint32_t mark = uint32_t((uint64_t(oldMark) * (upPages - 1) + (oldPages - 1) / 2) / (oldPages - 1));
+        prefs::setBookmark(upId, mark);
+      }
+      if (!isBook) {
+        state.lastActivityMs = millis();
+        break;
+      }
       char event[80];
       snprintf(event, sizeof(event), "Received %s", upTitle);
       Serial.printf("upload done: %s (%u bytes)\n", upFinal.c_str(), unsigned(up.totalSize));
@@ -298,13 +410,40 @@ void handleDelete() {
   const String path = String(storage::kBooksDir) + "/" + name;
   if (!SD.exists(path)) return sendError(404, "no such book");
   if (!SD.remove(path)) return sendError(500, "could not delete");
+  const String stem = String(kSourceDir) + "/" + stemOf(name);
+  for (const char *ext : {".epub", ".txt", ".json"}) SD.remove(stem + ext);
   char event[80];
   snprintf(event, sizeof(event), "Deleted %s", name.c_str());
   touch(event);
   sendJson(200, "{}");
 }
 
+void handleDeleteFont() {
+  if (!authorized()) return sendError(403, "wrong code");
+  const String name = server.arg("name");
+  if (!isSafeFileName(name.c_str(), kFontExts, 4)) return sendError(400, "bad file name");
+  if (!SD.remove(String(kFontDir) + "/" + name)) return sendError(404, "no such font");
+  touch();
+  sendJson(200, "{}");
+}
+
+// GET /file?kind=source|meta|font&name=...: what "Restyle" and user fonts need.
+void handleFile() {
+  if (!authorized()) return sendError(403, "wrong code");
+  const Kind *kind = findKind(server.arg("kind"));
+  const String name = server.arg("name");
+  if (!kind || kind == &kKinds[0] || !isSafeFileName(name.c_str(), kind->exts, kind->extCount)) {
+    return sendError(400, "bad request");
+  }
+  fs::File f = SD.open(String(kind->dir) + "/" + name, FILE_READ);
+  if (!f || f.isDirectory()) return sendError(404, "not found");
+  touch();
+  server.streamFile(f, mimeFor(name));
+  f.close();
+}
+
 void handleNotFound() {
+  if (serveAsset(server.uri())) return;
   if (server.method() == HTTP_GET && !server.uri().startsWith("/api/")) {
     server.sendHeader("Location", "/");
     server.send(302, "text/plain", "");
@@ -319,6 +458,8 @@ void addRoutes() {
   server.on("/api/info", HTTP_GET, handleInfo);
   server.on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);
   server.on("/api/book", HTTP_DELETE, handleDelete);
+  server.on("/api/font", HTTP_DELETE, handleDeleteFont);
+  server.on("/file", HTTP_GET, handleFile);
   server.on("/api/firmware", HTTP_POST, handleFirmwareDone, handleFirmwareData);
   server.onNotFound(handleNotFound);
   routesAdded = true;

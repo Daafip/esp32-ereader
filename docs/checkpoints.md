@@ -81,7 +81,10 @@ the menus (Chapters, Go to %, Library, Settings, About).
 1. Menu → Wi-Fi transfer. Scan the first QR code with a phone: it should join
    `T5-Reader-XXXX`. The screen should switch to the second QR code by itself.
 2. Scan it (or open `http://192.168.4.1` and type the code). Upload a `.t5b`, try a
-   non-`.t5b` file (must be refused), delete a book. Watch the e-ink event line.
+   non-book file (must be refused), delete a book. Watch the e-ink event line.
+3. From the phone: drop an EPUB, try a few fonts and sizes in the preview, "Upload to
+   reader". Open it on the reader. Then "Restyle" it with another size: the reading
+   position should land in about the same place. Add a font of your own.
 3. Optional: "Update firmware" with `t5-reader-<version>-ota.bin` from
    `pixi run fw-dist`; also try the merged `t5-reader-<version>.bin` (must be refused
    with "Magic byte is wrong").

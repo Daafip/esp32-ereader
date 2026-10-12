@@ -101,6 +101,8 @@ Free header GPIOs (for external page-turn buttons, Phase 6): 19 (LED), 21, 22, 2
   mode (strapping pins are normally only sampled at power-on/chip reset), and the
   sleep current with the pins held.
 
+- **Flash use** (0.7.0): app 1.46 MB of 1.9 MB, of which ~300 KB is the web page, the
+  converter, four fonts and nl/en/fr hyphenation patterns (`include/web_assets.h`).
 - **Partitions** (reader env): `min_spiffs.csv`, two 1.9 MB app slots (Wi-Fi and the
   web server need more than the default 1.25 MB; the second slot enables firmware
   updates over Wi-Fi). NVS stays at 0x9000 in every env, so settings survive

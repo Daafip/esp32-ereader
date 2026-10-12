@@ -2,10 +2,34 @@
 
 ## Books
 
-1. Convert on the PC: `pixi run prep book.epub --out out/ --preview`
-   (`--font`, `--size`, `--mono`, `--lang` etc.: `pixi run prep --help`).
-2. Copy `out/<book>.t5b` to `/books/` on a FAT32 SD card.
-3. Insert the card (after flashing; uploading fails with the card in).
+**From your phone (no laptop):** start Wi-Fi transfer on the reader (below), open the
+page and drop an `.epub` or `.txt`. A sheet opens with a pixel-exact preview of the
+reader's screen and the typesetting options:
+
+- **Font:** Ubuntu (default), Literata, Atkinson Hyperlegible, Merriweather, system
+  fonts, or "Add a font…" with any `.ttf`/`.otf`/`.woff2` (stored on the reader's card in
+  `/fonts`, so it's there next time).
+- **Size, margins, line spacing, weight** (lighter/bolder), **justify**, **indent**,
+  **chapters on a new page**.
+- **Hyphenation:** Dutch, English (UK/US), French, or off. "Auto" follows the book's
+  language. German books are typeset without hyphenation (its patterns are too big for
+  the reader's flash).
+
+"Upload to reader" typesets the book in the browser and sends only the `.t5b`. The reader
+also keeps the original and your settings, so **Restyle** in the book list lets you
+change the font or size later from any phone; your reading position moves along
+proportionally. "Download .t5b" saves the result instead (e.g. for the SD card).
+
+Large books take a moment: Max Havelaar is 3600 pages, ~14 MB to send. Keep the phone's
+screen on while it uploads.
+
+**On the PC:** `pixi run prep book.epub --out out/ --preview` (`--font`, `--size`, `--mono`,
+`--lang`, ...: `pixi run prep --help`), then copy `out/<book>.t5b` to `/books/` on the
+card (FAT32). Page breaks differ slightly from the browser: the two use different font
+engines.
+
+**Try the page without the reader:** `pixi run web-dev --lan` runs it on your PC with a
+folder as fake SD card (`out/web-dev/sd`) and prints an address for your phone.
 
 The reader reopens the last book at the last page. Each book remembers its own page.
 
@@ -18,8 +42,9 @@ Menu → **Wi-Fi transfer** (or MENU on the "No books yet" screen).
 2. **Open the page**: as soon as a device joins, the screen shows a second QR code
    with the page address and a 4-digit code. Typing `http://192.168.4.1` works too;
    the page then asks for the code.
-3. Drop `.t5b` files on the page (or tap to choose). It lists the books on the card
-   with how far you've read each, and can delete them.
+3. Drop `.epub`/`.txt` files (typeset in the browser, see "Books") or ready `.t5b`
+   files on the page. It lists the books on the card with how far you've read each,
+   and can restyle or delete them.
 4. Press MENU on the reader when done. Wi-Fi turns off; it also turns off after the
    idle time without uploads or button presses.
 

@@ -26,6 +26,8 @@ any change to `ui.cpp`; the web page opens in demo mode straight from disk.
 | Font comparison | `pixi run font-sheet book.epub --font a.ttf --sizes 11 12 13` |
 | Regenerate generated headers | `pixi run devpages` (test_pages.h), `pixi run ui-fonts` (fonts/), `pixi run web` (web_index.h from `firmware/web/index.html`) |
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
+| Browser converter tests | `pixi run web-test` (Node parity + headless Chromium) |
+| Web page without the reader | `pixi run web-dev` (`--lan` for a phone) |
 
 ## Conventions
 
@@ -44,6 +46,9 @@ any change to `ui.cpp`; the web page opens in demo mode straight from disk.
 - In Python sources, write non-ASCII characters as escapes (`\N{EM DASH}` or a
   backslash-u escape), never as literal invisible characters (`normalize.py` handles
   soft hyphens, zero-width and odd spaces).
+- `firmware/web/bookprep.js` is a port of the Python `bookprep`: change both together
+  and run `pixi run web-test`. `bookprep/devserver.py` mirrors the firmware's web API in
+  `firmware/src/transfer.cpp`: change both together. Re-embed with `pixi run web`.
 - Golden image (`tests/golden/`): regenerate with `BOOKPREP_UPDATE_GOLDEN=1 pixi run test`
   only after an intended rendering change, and look at it before committing.
 - No secrets in the repo (`firmware/include/secrets.h` is gitignored).

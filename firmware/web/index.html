@@ -6,15 +6,15 @@
 <meta name="color-scheme" content="light dark">
 <title>T5 Reader</title>
 <style>
-:root{--bg:#f5f4f0;--card:#fff;--ink:#1c1c1e;--muted:#6e6e73;--line:#e3e1dc;--accent:#1c1c1e;--on-accent:#fff;--danger:#b3261e;--ok:#1b7a35;--r:14px}
-@media (prefers-color-scheme:dark){:root{--bg:#111112;--card:#1c1c1e;--ink:#ececee;--muted:#9a9aa0;--line:#2e2e31;--accent:#ececee;--on-accent:#111112;--danger:#f2b8b5;--ok:#8fd19e}}
+:root{--bg:#f5f4f0;--card:#fff;--ink:#1c1c1e;--muted:#6e6e73;--line:#e3e1dc;--accent:#1c1c1e;--on-accent:#fff;--danger:#b3261e;--ok:#1b7a35;--bezel:#2b2b2e;--r:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#111112;--card:#1c1c1e;--ink:#ececee;--muted:#9a9aa0;--line:#2e2e31;--accent:#ececee;--on-accent:#111112;--danger:#f2b8b5;--ok:#8fd19e;--bezel:#000}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Ubuntu,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 main{max-width:620px;margin:0 auto;padding:28px 16px 56px}
-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:22px}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:22px}
 h1{font-size:24px;margin:0;letter-spacing:-.02em}
 .meta{color:var(--muted);font-size:14px;text-align:right}
-.drop{display:block;background:var(--card);border:1.5px dashed var(--line);border-radius:var(--r);padding:30px 16px;text-align:center;cursor:pointer;transition:border-color .15s,transform .15s}
+.drop{display:block;background:var(--card);border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 16px;text-align:center;cursor:pointer;transition:border-color .15s,transform .15s}
 .drop:hover,.drop.over{border-color:var(--accent)}
 .drop.over{transform:scale(1.01)}
 .drop b{display:block;font-size:17px;margin-bottom:2px}
@@ -23,37 +23,81 @@ h1{font-size:24px;margin:0;letter-spacing:-.02em}
 h2{display:flex;justify-content:space-between;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:30px 4px 10px}
 ul{list-style:none;margin:0;padding:0}
 .queue{margin-top:12px}
-.card{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.card{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
 .grow{flex:1;min-width:0}
 .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub.err{color:var(--danger);white-space:normal}
 .sub.ok{color:var(--ok)}
-.bar{height:4px;background:var(--line);border-radius:2px;margin-top:9px;overflow:hidden}
-.prog{display:flex;align-items:center;gap:10px}
-.prog .bar{flex:1;margin-top:0}
-.prog small{color:var(--muted);font-size:12px;min-width:3ch;text-align:right}
-.card .prog{margin-top:9px}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .2s}
-.del{flex:none;border:0;background:none;color:var(--muted);font:inherit;font-size:14px;padding:7px 10px;border-radius:9px;cursor:pointer}
-.del:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
-.fw{cursor:pointer}
+.prog{display:flex;align-items:center;gap:10px;margin-top:9px}
+.prog .bar{flex:1}
+.prog small{color:var(--muted);font-size:12px;min-width:3ch;text-align:right}
+.queue .bar{margin-top:9px}
+.acts{display:flex;flex:none;gap:2px}
+.link{border:0;background:none;color:var(--muted);font:inherit;font-size:14px;padding:7px 9px;border-radius:9px;cursor:pointer}
+.link:hover{color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent)}
+.link.del:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
 .empty{justify-content:center;color:var(--muted);font-size:14px;padding:22px}
+.fw{cursor:pointer}
+.fw .bar{margin-top:9px}
 .note{color:var(--muted);font-size:13px;margin:26px 4px 0}
-code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--card);border:1px solid var(--line);padding:1px 6px;border-radius:6px}
 .keybox{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:26px 20px;text-align:center}
 .keybox p{color:var(--muted);margin:4px 0 18px}
 .keybox input{font:600 28px/1 ui-monospace,Menlo,monospace;letter-spacing:.35em;text-align:center;width:9ch;padding:10px 0 10px .35em;border:1.5px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
 .keybox input:focus{outline:none;border-color:var(--accent)}
-.btn{display:block;margin:16px auto 0;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:600 15px/1 inherit;padding:12px 26px;cursor:pointer}
-.demo{background:var(--accent);color:var(--on-accent);border-radius:999px;font-size:12px;padding:3px 10px;margin-left:8px;vertical-align:3px}
+.btn{border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:600 15px/1 inherit;padding:13px 22px;cursor:pointer}
+.btn.quiet{background:none;color:var(--ink);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+.keybox .btn{display:block;margin:16px auto 0}
+.badge{background:var(--accent);color:var(--on-accent);border-radius:999px;font-size:12px;padding:3px 10px;margin-left:8px;vertical-align:3px}
+/* typeset sheet */
+dialog{border:0;padding:0;background:var(--bg);color:var(--ink);width:min(620px,100vw);max-width:100vw;max-height:100dvh;margin:auto auto 0;border-radius:20px 20px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.25)}
+@media (min-width:640px){dialog{margin:auto;border-radius:20px;max-height:92dvh}}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.sheet{display:flex;flex-direction:column;max-height:inherit}
+.sheet-head{display:flex;align-items:flex-start;gap:12px;padding:18px 18px 10px}
+.sheet-head .grow .title{font-size:17px}
+.close{border:0;background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink);width:32px;height:32px;border-radius:50%;font-size:18px;line-height:1;cursor:pointer;flex:none}
+.sheet-body{overflow:auto;padding:0 18px 12px}
+.device{background:var(--bezel);border-radius:16px;padding:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.device canvas{display:block;width:100%;aspect-ratio:250/122;image-rendering:pixelated;background:#fff;border-radius:3px}
+.pager{display:flex;align-items:center;gap:10px;margin:12px 2px 4px}
+.pager input{flex:1;accent-color:var(--accent)}
+.pager .link{font-size:20px;padding:2px 10px}
+.pager small{color:var(--muted);font-size:13px;min-width:11ch;text-align:right}
+.stats{color:var(--muted);font-size:13px;margin:4px 2px 14px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.field.wide{grid-column:1/-1}
+.field>span{font-size:12px;color:var(--muted);font-weight:500}
+.field select{font:inherit;font-size:15px;border:0;background:none;color:var(--ink);padding:0 18px 0 0;width:100%;appearance:none;cursor:pointer}
+.field.select{position:relative}
+.field.select::after{content:"";position:absolute;right:13px;bottom:15px;width:10px;height:6px;background:var(--muted);-webkit-mask:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='black' stroke-width='1.8'/></svg>") no-repeat center/contain;mask:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='black' stroke-width='1.8'/></svg>") no-repeat center/contain;pointer-events:none}
+.ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.field input[type=range]{width:100%;accent-color:var(--accent);margin:4px 0 0}
+.stepper{display:flex;align-items:center;justify-content:space-between}
+.stepper b{font-size:15px;font-weight:600}
+.stepper button{border:0;background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink);width:30px;height:30px;border-radius:50%;font-size:17px;cursor:pointer}
+.toggle{flex-direction:row;align-items:center;justify-content:space-between;cursor:pointer}
+.toggle>span{font-size:15px;color:var(--ink);font-weight:400}
+.switch{appearance:none;width:42px;height:26px;border-radius:13px;background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s;margin:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.switch:checked{background:var(--accent)}
+.switch:checked::after{left:19px}
+.sheet-foot{display:flex;gap:10px;padding:12px 18px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.sheet-foot .btn{flex:1}
+.busy{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 88%,transparent);border-radius:inherit}
+.busy div{width:min(320px,80%);text-align:center}
+.busy .bar{margin-top:12px}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
 <main>
-  <header>
-    <h1>T5 Reader<span class="demo" id="demo" hidden>demo</span></h1>
+  <header class="top">
+    <h1>T5 Reader<span class="badge" id="demo" hidden>demo</span></h1>
     <div class="meta" id="meta">Connecting…</div>
   </header>
 
@@ -66,10 +110,10 @@ code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--ca
 
   <div id="app" hidden>
     <label class="drop" id="drop">
-      <input type="file" id="file" accept=".t5b" multiple hidden>
+      <input type="file" id="file" accept=".epub,.txt,.t5b" multiple hidden>
       <span class="plus">+</span>
       <b>Add books</b>
-      <span class="hint">Drop .t5b files here, or tap to choose</span>
+      <span class="hint">Drop EPUB or TXT files: you choose the font and size here</span>
     </label>
     <ul class="queue" id="queue"></ul>
     <h2><span>On the reader</span><span id="count"></span></h2>
@@ -82,167 +126,468 @@ code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--ca
         <div class="sub" id="fwsub">The -ota.bin from pixi run fw-dist</div>
         <div class="bar"><i id="fwbar"></i></div>
       </div>
-      <span class="del">Choose</span>
+      <span class="link">Choose</span>
     </label>
-    <p class="note">Convert EPUB or TXT on your computer first with
-      <code>pixi run prep book.epub</code>, then upload the <code>.t5b</code> file.</p>
+    <p class="note">Books are typeset in this browser, then only the result goes to the reader.
+      The reader keeps the original, so “Restyle” works from any phone later.
+      <a href="licenses.txt" style="color:inherit">Font and hyphenation licences</a>.</p>
   </div>
 </main>
+
+<dialog id="sheet">
+  <div class="sheet" style="position:relative">
+    <div class="sheet-head">
+      <div class="grow"><div class="title" id="s-title">Book</div><div class="sub" id="s-author"></div></div>
+      <button class="close" id="s-close" aria-label="Close">×</button>
+    </div>
+    <div class="sheet-body">
+      <div class="device"><canvas id="preview" width="250" height="122"></canvas></div>
+      <div class="pager">
+        <button class="link" id="p-prev" aria-label="Previous page">‹</button>
+        <input type="range" id="p-slider" min="0" max="0" value="0" aria-label="Page">
+        <button class="link" id="p-next" aria-label="Next page">›</button>
+        <small id="p-label"></small>
+      </div>
+      <p class="stats" id="stats">Typesetting…</p>
+      <div class="controls">
+        <label class="field select wide"><span>Font</span><select id="c-font"></select></label>
+        <div class="field"><span>Size</span><div class="stepper"><button data-step="size:-1">−</button><b id="v-size"></b><button data-step="size:1">+</button></div></div>
+        <div class="field"><span>Margins</span><div class="stepper"><button data-step="margin:-1">−</button><b id="v-margin"></b><button data-step="margin:1">+</button></div></div>
+        <label class="field select"><span>Line spacing</span><select id="c-spacing">
+          <option value="1">Tight</option><option value="1.1">Snug</option><option value="1.2">Normal</option>
+          <option value="1.3">Relaxed</option><option value="1.45">Loose</option></select></label>
+        <label class="field select"><span>Hyphenation</span><select id="c-hyph"></select></label>
+        <label class="field wide"><span>Weight</span><input type="range" id="c-threshold" min="70" max="210" step="10"><span class="ends"><span>Lighter</span><span>Bolder</span></span></label>
+        <label class="field toggle"><span>Justify</span><input type="checkbox" class="switch" id="c-justify"></label>
+        <label class="field toggle"><span>Indent</span><input type="checkbox" class="switch" id="c-indent"></label>
+        <label class="field toggle wide"><span>Chapters on a new page</span><input type="checkbox" class="switch" id="c-chapter"></label>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn quiet" id="s-download">Download .t5b</button>
+      <button class="btn" id="s-upload">Upload to reader</button>
+    </div>
+    <div class="busy" id="busy" hidden><div><b id="busy-text">Typesetting…</b><div class="bar"><i id="busy-bar"></i></div></div></div>
+  </div>
+</dialog>
+<input type="file" id="fontfile" accept=".ttf,.otf,.woff,.woff2" hidden>
+
+<script src="bookprep.js"></script>
 <script>
+"use strict";
 const $ = (s) => document.querySelector(s);
+const B = window.BookPrep;
 const demo = location.protocol === "file:";
 const params = new URLSearchParams(location.search);
 let key = params.get("k") || sessionStorage.getItem("k") || "";
-if (params.has("k")) { sessionStorage.setItem("k", key); history.replaceState(null, "", location.pathname); }
+if (params.has("k")) { sessionStorage.setItem("k", key); history.replaceState(null, "", location.pathname + location.hash); }
+let info = { version: "", battery: -1, free: 0, books: [], fonts: [] };
+
+const size = (b) => b >= 1e9 ? (b / 1073741824).toFixed(1) + " GB" : b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const stem = (name) => name.replace(/[.][^.]*$/, "");
+const ext = (name) => (name.match(/[.][^.]*$/) || [""])[0].toLowerCase();
+const withKey = (url) => url + (url.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(key);
+const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x !== id; };
+
+// --- reader API -------------------------------------------------------------------
 
 const demoData = {
-  version: "0.6.0", battery: 72, free: 7.2e9, total: 7.9e9,
+  version: "demo", battery: 72, free: 7.2e9, total: 7.9e9, fonts: [],
   books: [
-    { file: "max_havelaar.t5b", title: "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", author: "Multatuli", pages: 3596, size: 14071000, progress: 37 },
-    { file: "de_kleine_johannes.t5b", title: "De Kleine Johannes", author: "Frederik van Eeden", pages: 512, size: 2010000, progress: 64 },
-    { file: "alice.t5b", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, progress: 0 },
+    { file: "max_havelaar.t5b", title: "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", author: "Multatuli", pages: 3596, size: 14071000, progress: 37, source: null },
+    { file: "alice.t5b", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, progress: 0, source: null },
   ],
 };
 
 async function api(path, opts = {}) {
-  if (demo) return demoApi(path, opts);
-  const sep = path.includes("?") ? "&" : "?";
-  const r = await fetch(path + sep + "k=" + encodeURIComponent(key), opts);
+  if (demo) {
+    if (opts.method === "DELETE") demoData.books = demoData.books.filter((b) => b.file !== new URLSearchParams(path.split("?")[1]).get("file"));
+    return demoData;
+  }
+  const r = await fetch(withKey(path), opts);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(j.error || r.statusText), { status: r.status });
   return j;
 }
 
-function demoApi(path, opts) {
-  if (opts.method === "DELETE") {
-    const f = new URLSearchParams(path.split("?")[1]).get("file");
-    demoData.books = demoData.books.filter((b) => b.file !== f);
-  }
-  return Promise.resolve(demoData);
-}
-
-const size = (b) =>
-  b >= 1e9 ? (b / 1073741824).toFixed(1) + " GB"
-  : b >= 1048576 ? (b / 1048576).toFixed(1) + " MB"
-  : Math.max(1, Math.round(b / 1024)) + " KB";
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x !== id; };
-
-async function refresh() {
-  try {
-    render(await api("/api/info"));
-    show("app");
-  } catch (e) {
-    if (e.status === 403) {
-      sessionStorage.removeItem("k");
-      $("#meta").textContent = "";
-      show("keybox");
-      $("#key").focus();
-    } else {
-      $("#meta").textContent = "Reader not reachable";
-    }
-  }
-}
-
-function render(info) {
-  const battery = info.battery >= 0 ? info.battery + "% battery · " : "";
-  $("#meta").textContent = battery + size(info.free) + " free";
-  $("#fwver").textContent = "v" + info.version;
-  $("#count").textContent = info.books.length || "";
-  $("#books").innerHTML = info.books.length
-    ? info.books.map((b) => `
-      <li class="card">
-        <div class="grow">
-          <div class="title">${esc(b.title)}</div>
-          <div class="sub">${esc(b.author || "Unknown author")} · ${b.pages} pages · ${size(b.size)}</div>
-          <div class="prog"><div class="bar"><i style="width:${b.progress}%"></i></div><small>${b.progress ? b.progress + "%" : "new"}</small></div>
-        </div>
-        <button class="del" data-file="${esc(b.file)}" aria-label="Delete ${esc(b.title)}">Delete</button>
-      </li>`).join("")
-    : `<li class="card empty">No books yet. Add one above.</li>`;
-}
-
-$("#books").addEventListener("click", async (e) => {
-  const file = e.target.dataset?.file;
-  if (!file || !confirm("Delete this book from the reader?")) return;
-  try {
-    await api("/api/book?file=" + encodeURIComponent(file), { method: "DELETE" });
-    refresh();
-  } catch (err) {
-    alert(err.message);
-  }
-});
-
-function upload(file) {
-  return new Promise((resolve) => {
-    const li = document.createElement("li");
-    li.className = "card";
-    li.innerHTML = `<div class="grow"><div class="title">${esc(file.name)}</div>
-      <div class="sub">Waiting…</div><div class="bar"><i></i></div></div>`;
-    $("#queue").append(li);
-    const sub = li.querySelector(".sub");
-    const bar = li.querySelector("i");
-    const done = (text, cls) => { sub.textContent = text; sub.className = "sub " + cls; resolve(); };
-    if (!/[.]t5b$/i.test(file.name)) return done("Not a .t5b file: convert it with bookprep first.", "err");
-    if (demo) { bar.style.width = "100%"; return done("Demo mode: nothing was sent.", "ok"); }
+// POST a blob as multipart; onProgress(fraction). Resolves with the JSON reply.
+function send(url, blob, name, onProgress) {
+  return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/upload?k=" + encodeURIComponent(key));
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return;
-      const p = (e.loaded / e.total) * 100;
-      bar.style.width = p + "%";
-      sub.textContent = `Uploading · ${Math.round(p)}% of ${size(e.total)}`;
-    };
+    xhr.open("POST", withKey(url));
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
     xhr.onload = () => {
       let j = {};
-      try { j = JSON.parse(xhr.responseText); } catch {}
-      if (xhr.status === 200) { bar.style.width = "100%"; done("Added · " + (j.title || file.name), "ok"); }
-      else done(j.error || "Upload failed (" + xhr.status + ")", "err");
+      try { j = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
+      if (xhr.status === 200) resolve(j);
+      else reject(new Error(j.error || "failed (" + xhr.status + ")"));
     };
-    xhr.onerror = () => done("Connection lost. Is the reader still in Wi-Fi mode?", "err");
+    xhr.onerror = () => reject(new Error("connection lost: is the reader still in Wi-Fi mode?"));
     const form = new FormData();
-    form.append("file", file, file.name);
+    form.append("file", blob, name);
     xhr.send(form);
   });
 }
+const upload = (kind, blob, name, onProgress) => send("/api/upload?kind=" + kind, blob, name, onProgress);
 
-async function uploadAll(files) {
-  for (const f of files) await upload(f);
-  refresh();
+async function refresh() {
+  try {
+    info = await api("/api/info");
+    render();
+    show("app");
+  } catch (e) {
+    if (e.status === 403) { sessionStorage.removeItem("k"); $("#meta").textContent = ""; show("keybox"); $("#key").focus(); }
+    else $("#meta").textContent = "Reader not reachable";
+  }
+}
+
+function render() {
+  const battery = info.battery >= 0 ? info.battery + "% battery · " : "";
+  $("#meta").textContent = battery + size(info.free) + " free";
+  $("#fwver").textContent = info.version ? "v" + info.version : "";
+  $("#count").textContent = info.books.length || "";
+  $("#books").innerHTML = info.books.length ? info.books.map((b) => `
+    <li class="card">
+      <div class="grow">
+        <div class="title">${esc(b.title)}</div>
+        <div class="sub">${esc(b.author || "Unknown author")} · ${b.pages} pages · ${size(b.size)}</div>
+        <div class="prog"><div class="bar"><i style="width:${b.progress}%"></i></div><small>${b.progress ? b.progress + "%" : "new"}</small></div>
+      </div>
+      <div class="acts">
+        ${b.source ? `<button class="link" data-restyle="${esc(b.file)}">Restyle</button>` : ""}
+        <button class="link del" data-del="${esc(b.file)}">Delete</button>
+      </div>
+    </li>`).join("") : `<li class="card empty">No books yet. Add one above.</li>`;
+}
+
+$("#books").addEventListener("click", async (e) => {
+  const del = e.target.dataset && e.target.dataset.del;
+  const restyle = e.target.dataset && e.target.dataset.restyle;
+  try {
+    if (del && confirm("Delete this book from the reader?")) {
+      await api("/api/book?file=" + encodeURIComponent(del), { method: "DELETE" });
+      refresh();
+    }
+    if (restyle) {
+      const book = info.books.find((b) => b.file === restyle);
+      const src = await fetch(withKey("/file?kind=source&name=" + encodeURIComponent(book.source)));
+      if (!src.ok) throw new Error("could not load the original from the reader");
+      let settings = null;
+      const meta = await fetch(withKey("/file?kind=meta&name=" + encodeURIComponent(stem(book.source) + ".json")));
+      if (meta.ok) settings = await meta.json().catch(() => null);
+      openSheet({ name: book.source, bytes: await src.arrayBuffer(), onReader: true, settings, file: book.file });
+    }
+  } catch (err) { alert(err.message); }
+});
+
+// --- adding files ---------------------------------------------------------------------
+
+function queueItem(name) {
+  const li = document.createElement("li");
+  li.className = "card";
+  li.innerHTML = `<div class="grow"><div class="title">${esc(name)}</div><div class="sub">Waiting…</div><div class="bar"><i></i></div></div>`;
+  $("#queue").append(li);
+  const sub = li.querySelector(".sub");
+  const bar = li.querySelector("i");
+  return {
+    progress: (f, text) => { bar.style.width = f * 100 + "%"; sub.textContent = text; sub.className = "sub"; },
+    done: (text, cls) => { sub.textContent = text; sub.className = "sub " + cls; if (cls === "ok") bar.style.width = "100%"; },
+  };
+}
+
+async function addFiles(files) {
+  const books = [];
+  for (const f of files) {
+    if ([".epub", ".txt"].includes(ext(f.name))) books.push(f);
+    else if (ext(f.name) === ".t5b") {
+      const q = queueItem(f.name);
+      if (demo) { q.done("Demo mode: nothing was sent.", "ok"); continue; }
+      try {
+        const r = await upload("book", f, f.name, (p) => q.progress(p, `Uploading · ${Math.round(p * 100)}% of ${size(f.size)}`));
+        q.done("Added · " + (r.title || f.name), "ok");
+      } catch (err) { q.done(err.message, "err"); }
+    } else queueItem(f.name).done("Use .epub, .txt or .t5b files.", "err");
+  }
+  await refresh();
+  for (const f of books) await openSheet({ name: f.name, bytes: await f.arrayBuffer(), onReader: false });
 }
 
 const drop = $("#drop");
-$("#file").addEventListener("change", (e) => { uploadAll([...e.target.files]); e.target.value = ""; });
+$("#file").addEventListener("change", (e) => { addFiles([...e.target.files]); e.target.value = ""; });
 for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
 for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, () => drop.classList.remove("over"));
-drop.addEventListener("drop", (e) => { e.preventDefault(); uploadAll([...e.dataTransfer.files]); });
+drop.addEventListener("drop", (e) => { e.preventDefault(); addFiles([...e.dataTransfer.files]); });
 
-$("#fw").addEventListener("change", (e) => {
+// --- fonts and hyphenation -------------------------------------------------------------
+
+let builtinFonts = [];
+let hyphIndex = { dictionaries: [], aliases: {} };
+const loadedFonts = new Map();
+const sessionFonts = new Map(); // fonts added in demo mode (not stored anywhere)
+const hyphenators = new Map();
+const LANG_NAMES = { nl_NL: "Dutch", en_GB: "English (UK)", en_US: "English (US)", fr: "French" };
+
+async function loadAssets() {
+  try { builtinFonts = await (await fetch("fonts/index.json")).json(); } catch (e) { builtinFonts = []; }
+  try { hyphIndex = await (await fetch("hyph/index.json")).json(); } catch (e) { /* no hyphenation */ }
+}
+
+function fontChoices() {
+  const user = (info.fonts || []).map((f) => ({ id: "user:" + f.name, name: stem(f.name), url: withKey("/file?kind=font&name=" + encodeURIComponent(f.name)) }));
+  const session = [...sessionFonts.keys()].map((n) => ({ id: "session:" + n, name: stem(n) }));
+  return [...builtinFonts, ...user, ...session, { id: "system:serif", name: "System serif" }, { id: "system:sans-serif", name: "System sans-serif" }];
+}
+
+// Loads a font choice and returns the CSS family name to draw with.
+async function fontFamily(id) {
+  if (id.startsWith("system:")) return id.slice(7);
+  if (loadedFonts.has(id)) return loadedFonts.get(id);
+  const choice = fontChoices().find((f) => f.id === id);
+  if (!choice) return "sans-serif";
+  const family = "t5-" + id.replace(/[^a-z0-9]/gi, "-");
+  const source = id.startsWith("session:") ? sessionFonts.get(id.slice(8)) : await (await fetch(choice.url)).arrayBuffer();
+  const face = new FontFace(family, source);
+  await face.load();
+  document.fonts.add(face);
+  loadedFonts.set(id, family);
+  return family;
+}
+
+async function hyphenator(name) {
+  if (!name) return null;
+  if (!hyphenators.has(name)) {
+    const text = await (await fetch("hyph/" + name + ".txt")).text();
+    hyphenators.set(name, new B.Hyphenator(B.parsePatterns(text)));
+  }
+  return hyphenators.get(name);
+}
+
+// --- typeset sheet ------------------------------------------------------------------
+
+let current = null; // { source, book, settings, layout, page }
+const SETTINGS_KEY = "t5:settings";
+function savedSettings() { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } }
+function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* private mode */ } }
+
+async function openSheet(source) {
+  let raw;
+  try { raw = await B.extract(source.bytes, source.name); }
+  catch (err) { queueItem(source.name).done("Could not read this file: " + err.message, "err"); return; }
+  const book = B.cleanBook(raw);
+  const settings = { ...B.defaults, ...savedSettings(), ...(source.settings || {}) };
+  if (!fontChoices().some((f) => f.id === settings.font)) settings.font = B.defaults.font;
+  current = { source, book, settings, layout: null, page: 0 };
+  $("#s-title").textContent = book.title;
+  $("#s-author").textContent = book.author || "Unknown author";
+  $("#s-upload").disabled = demo;
+  syncControls();
+  $("#sheet").showModal();
+  await relayout();
+  // start on running text: the second page of the first chapter with real paragraphs
+  const body = book.chapters.findIndex((ch) => ch.blocks.filter((b) => b.kind === "text" && b.text.length > 300).length >= 3);
+  const first = current.layout.pages.findIndex((p) => p.some(({ line }) => line.chapter === Math.max(0, body)));
+  setPage(first < 0 ? 0 : first + 1);
+}
+
+function syncControls() {
+  const s = current.settings;
+  $("#c-font").innerHTML = fontChoices().map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("") + `<option value="+add">Add a font…</option>`;
+  $("#c-font").value = s.font;
+  const auto = B.languageFallback(current.book.language || "nl", hyphIndex.aliases);
+  $("#c-hyph").innerHTML = [`<option value="auto">Auto${auto ? " (" + (LANG_NAMES[auto] || auto) + ")" : ""}</option>`]
+    .concat(hyphIndex.dictionaries.map((d) => `<option value="${d}">${LANG_NAMES[d] || d}</option>`), [`<option value="off">Off</option>`]).join("");
+  $("#c-hyph").value = s.hyphenate ? s.lang : "off";
+  $("#c-spacing").value = String(s.spacing);
+  $("#c-threshold").value = s.threshold;
+  $("#c-justify").checked = s.justify;
+  $("#c-indent").checked = s.indent;
+  $("#c-chapter").checked = s.chapterPageBreak;
+  $("#v-size").textContent = s.size + " px";
+  $("#v-margin").textContent = s.margin + " px";
+}
+
+let relayoutTimer = 0;
+function changed() { clearTimeout(relayoutTimer); relayoutTimer = setTimeout(relayout, 120); }
+
+async function relayout() {
+  const c = current;
+  if (!c) return;
+  const s = c.settings;
+  saveSettings(s);
+  const family = await fontFamily(s.font);
+  const lang = s.lang === "auto" ? B.languageFallback(c.book.language || "nl", hyphIndex.aliases) : s.lang;
+  const hyph = s.hyphenate ? await hyphenator(lang) : null;
+  const fraction = c.layout ? c.page / Math.max(1, c.layout.pages.length - 1) : null;
+  c.layout = B.typeset(c.book, s, family, hyph);
+  const n = c.layout.pages.length;
+  const g = c.layout.geometry;
+  const lines = Math.floor(g.textHeight / c.layout.lineHeight);
+  let chars = 0, full = 0;
+  for (const page of c.layout.pages) for (const { line } of page) {
+    if (line.index < line.count - 1 && line.runs.length) { chars += line.runs.reduce((a, r) => a + r.text.length + 1, -1); full++; }
+  }
+  const avgChars = Math.round(chars / Math.max(1, full));
+  $("#stats").textContent = `${lines} lines × ~${avgChars} characters · ${n} pages · ${size(n * 3904)}`;
+  $("#p-slider").max = n - 1;
+  setPage(fraction === null ? c.page : Math.round(fraction * (n - 1)));
+}
+
+function setPage(n) {
+  const c = current;
+  c.page = Math.max(0, Math.min(c.layout.pages.length - 1, n));
+  $("#p-slider").value = c.page;
+  $("#p-label").textContent = `${c.page + 1} / ${c.layout.pages.length}`;
+  drawPreview();
+}
+
+function drawPreview() {
+  const c = current;
+  const { pages, toc, renderer, geometry: g } = c.layout;
+  const canvas = $("#preview");
+  const ctx = canvas.getContext("2d");
+  ctx.putImageData(new ImageData(B.unpackToRgba(renderer.render(pages[c.page]), g.width, g.height), g.width, g.height), 0, 0);
+  // status bar as the reader draws it (approximation)
+  const top = g.height - g.statusBar;
+  const base = g.height - 3;
+  ctx.fillStyle = "#000";
+  for (let x = 4; x <= g.width - 5; x += 2) ctx.fillRect(x, top + 1, 1, 1);
+  ctx.fillRect(4, top, Math.round((g.width - 8) * (c.page + 1) / pages.length), 2);
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(g.width - 20.5, base - 7.5, 13, 7);
+  ctx.fillRect(g.width - 7, base - 5, 2, 4);
+  ctx.fillRect(g.width - 19, base - 6, 7, 5);
+  ctx.font = `500 10px ${loadedFonts.get("ubuntu") || "sans-serif"}`;
+  ctx.textBaseline = "alphabetic";
+  const right = `${c.page + 1}/${pages.length}  ·  ${Math.floor(100 * c.page / Math.max(1, pages.length - 1))}%`;
+  const rw = ctx.measureText(right).width;
+  ctx.fillText(right, g.width - 27 - rw, base);
+  let chapter = "";
+  for (const e of toc) if (e.startPage <= c.page) chapter = e.title;
+  let text = chapter;
+  const room = g.width - 27 - rw - 16;
+  while (text && ctx.measureText(text).width > room) text = text.slice(0, -2) + "…";
+  ctx.fillText(text, 4, base);
+  // the panel is 1-bit: threshold the anti-aliased status text too
+  const img = ctx.getImageData(0, top, g.width, g.statusBar);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = img.data[i] < 128 ? 0 : 255;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, top);
+}
+
+// controls
+$("#p-slider").addEventListener("input", (e) => setPage(+e.target.value));
+$("#p-prev").addEventListener("click", () => setPage(current.page - 1));
+$("#p-next").addEventListener("click", () => setPage(current.page + 1));
+for (const b of document.querySelectorAll("[data-step]")) {
+  b.addEventListener("click", () => {
+    const [name, d] = b.dataset.step.split(":");
+    const limits = { size: [9, 22], margin: [2, 16] }[name];
+    current.settings[name] = Math.max(limits[0], Math.min(limits[1], current.settings[name] + +d));
+    syncControls();
+    changed();
+  });
+}
+$("#c-spacing").addEventListener("change", (e) => { current.settings.spacing = +e.target.value; changed(); });
+$("#c-threshold").addEventListener("input", (e) => { current.settings.threshold = +e.target.value; changed(); });
+$("#c-justify").addEventListener("change", (e) => { current.settings.justify = e.target.checked; changed(); });
+$("#c-indent").addEventListener("change", (e) => { current.settings.indent = e.target.checked; changed(); });
+$("#c-chapter").addEventListener("change", (e) => { current.settings.chapterPageBreak = e.target.checked; changed(); });
+$("#c-hyph").addEventListener("change", (e) => {
+  const v = e.target.value;
+  current.settings.hyphenate = v !== "off";
+  if (v !== "off") current.settings.lang = v;
+  changed();
+});
+$("#c-font").addEventListener("change", (e) => {
+  if (e.target.value === "+add") { e.target.value = current.settings.font; $("#fontfile").click(); return; }
+  current.settings.font = e.target.value;
+  changed();
+});
+$("#fontfile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  try {
+    if (demo) { sessionFonts.set(f.name, await f.arrayBuffer()); current.settings.font = "session:" + f.name; }
+    else {
+      await upload("font", f, f.name);
+      info = await api("/api/info");
+      current.settings.font = "user:" + f.name;
+    }
+    syncControls();
+    changed();
+  } catch (err) { alert("Could not add the font: " + err.message); }
+});
+$("#s-close").addEventListener("click", () => { $("#sheet").close(); current = null; });
+
+function busy(text, fraction) {
+  $("#busy").hidden = text === null;
+  if (text !== null) { $("#busy-text").textContent = text; $("#busy-bar").style.width = (fraction || 0) * 100 + "%"; }
+}
+
+async function buildT5b() {
+  await relayout();
+  return B.writeBook(current.book, current.layout, (n, total) => busy(`Typesetting · ${n} of ${total} pages`, n / total));
+}
+
+const fileNameFor = (source) => B.slug(stem(source.name)) + ".t5b";
+
+$("#s-download").addEventListener("click", async () => {
+  try {
+    busy("Typesetting…", 0);
+    const bytes = await buildT5b();
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([bytes])), download: fileNameFor(current.source) });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (err) { alert(err.message); }
+  busy(null);
+});
+
+$("#s-upload").addEventListener("click", async () => {
+  const c = current;
+  const name = c.source.file || fileNameFor(c.source);
+  const base = stem(name);
+  try {
+    busy("Typesetting…", 0);
+    const bytes = await buildT5b();
+    await upload("book", new Blob([bytes]), name, (p) => busy(`Sending to the reader · ${Math.round(p * 100)}% of ${size(bytes.length)}`, p));
+    if (!c.source.onReader) {
+      busy("Saving the original for restyling…", 1);
+      await upload("source", new Blob([c.source.bytes]), base + ext(c.source.name));
+    }
+    await upload("meta", new Blob([JSON.stringify(c.settings)], { type: "application/json" }), base + ".json");
+    $("#sheet").close();
+    current = null;
+    queueItem(name).done("Added · " + c.book.title, "ok");
+    document.body.dataset.upload = "ok";
+    refresh();
+  } catch (err) {
+    document.body.dataset.upload = "error: " + err.message;
+    alert("Upload failed: " + err.message);
+  }
+  busy(null);
+});
+
+// --- firmware ---------------------------------------------------------------------------
+
+$("#fw").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  const sub = $("#fwsub"), bar = $("#fwbar");
+  const sub = $("#fwsub");
+  const bar = $("#fwbar");
   const say = (text, cls = "") => { sub.textContent = text; sub.className = "sub " + cls; };
   if (!/-ota[.]bin$/i.test(file.name) && !confirm("This doesn't look like a t5-reader-…-ota.bin file. Send it anyway?")) return;
   if (demo) return say("Demo mode: nothing was sent.", "ok");
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "/api/firmware?k=" + encodeURIComponent(key));
-  xhr.upload.onprogress = (ev) => {
-    if (!ev.lengthComputable) return;
-    const p = (ev.loaded / ev.total) * 100;
-    bar.style.width = p + "%";
-    say(`Sending · ${Math.round(p)}%`);
-  };
-  xhr.onload = () => {
-    let j = {};
-    try { j = JSON.parse(xhr.responseText); } catch {}
-    if (xhr.status === 200) { bar.style.width = "100%"; say("Updated. The reader restarts and leaves Wi-Fi mode.", "ok"); }
-    else say(j.error || "Update failed (" + xhr.status + ")", "err");
-  };
-  xhr.onerror = () => say("Connection lost.", "err");
-  const form = new FormData();
-  form.append("firmware", file, file.name);
-  xhr.send(form);
+  try {
+    await send("/api/firmware", file, file.name, (p) => { bar.style.width = p * 100 + "%"; say(`Sending · ${Math.round(p * 100)}%`); });
+    bar.style.width = "100%";
+    say("Updated. The reader restarts and leaves Wi-Fi mode.", "ok");
+  } catch (err) { say(err.message, "err"); }
 });
 
 $("#keybox").addEventListener("submit", (e) => {
@@ -253,7 +598,18 @@ $("#keybox").addEventListener("submit", (e) => {
 });
 
 $("#demo").hidden = !demo;
-refresh();
+(async () => {
+  await loadAssets();
+  await refresh();
+  // development hook: #typeset=<url> opens the sheet for a file on this server;
+  // with &upload it also presses "Upload to reader" (used by the tests)
+  const hook = location.hash.match(/^#typeset=([^&]+)(&upload)?$/);
+  if (hook) {
+    const url = decodeURIComponent(hook[1]);
+    await openSheet({ name: url.split("/").pop(), bytes: await (await fetch(url)).arrayBuffer(), onReader: false });
+    if (hook[2]) $("#s-upload").click();
+  }
+})();
 </script>
 </body>
 </html>

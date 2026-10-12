@@ -24,7 +24,7 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["RUF001"]  # typographic quotes are the point of those tests
+"tests/*" = ["RUF001", "E501"]  # typographic quotes and long test data are the point
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

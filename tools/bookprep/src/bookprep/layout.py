@@ -8,6 +8,7 @@ of a paragraph at a page edge).
 
 from __future__ import annotations
 
+import math
 import re
 from collections import deque
 from dataclasses import dataclass, field
@@ -19,6 +20,12 @@ from .extract import Chapter
 from .normalize import NBSP
 
 SCENE_BREAK = "* * *"
+
+
+def line_height_for(size: int, spacing: float = 1.2) -> int:
+    """Pixels per line; the epsilon keeps e.g. 10 * 1.2 = 12.000000000000002 at 12.
+    Same as lineHeightFor() in firmware/web/bookprep.js."""
+    return math.ceil(size * spacing - 1e-6)
 
 
 class Measurer(Protocol):

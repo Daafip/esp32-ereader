@@ -8,8 +8,12 @@
 // control characters. Returns false if `out` was too small (output truncated).
 bool jsonEscape(const char *in, char *out, size_t outSize);
 
-// A plain file name we accept for upload/delete: 1-64 bytes, ends in ".t5b"
-// (any case), no path separators, no leading dot, printable characters only.
+// A plain file name we accept for upload/delete/download: 1-64 bytes, ends in one
+// of `exts` (any case, e.g. ".epub") with something before it, no path
+// separators, no leading dot, no control or shell-special characters.
+bool isSafeFileName(const char *name, const char *const *exts, size_t extCount);
+
+// isSafeFileName for ".t5b".
 bool isSafeBookName(const char *name);
 
 // Wi-Fi join QR payload: WIFI:T:WPA;S:<ssid>;P:<password>;; with \ ; , : " escaped.

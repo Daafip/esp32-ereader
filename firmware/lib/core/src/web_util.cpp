@@ -38,10 +38,15 @@ bool jsonEscape(const char *in, char *out, size_t outSize) {
   return true;
 }
 
-bool isSafeBookName(const char *name) {
+bool isSafeFileName(const char *name, const char *const *exts, size_t extCount) {
   const size_t n = strlen(name);
-  if (n < 5 || n > 64 || name[0] == '.') return false;
-  if (strcasecmp(name + n - 4, ".t5b") != 0) return false;
+  if (n == 0 || n > 64 || name[0] == '.') return false;
+  bool extOk = false;
+  for (size_t i = 0; i < extCount && !extOk; i++) {
+    const size_t e = strlen(exts[i]);
+    extOk = n > e && strcasecmp(name + n - e, exts[i]) == 0;
+  }
+  if (!extOk) return false;
   for (size_t i = 0; i < n; i++) {
     const unsigned char c = static_cast<unsigned char>(name[i]);
     if (c < 0x20 || c == 0x7F || c == '/' || c == '\\' || c == ':' || c == '"' || c == '*' ||
@@ -50,6 +55,11 @@ bool isSafeBookName(const char *name) {
     }
   }
   return true;
+}
+
+bool isSafeBookName(const char *name) {
+  static const char *const kT5b[] = {".t5b"};
+  return isSafeFileName(name, kT5b, 1);
 }
 
 namespace {

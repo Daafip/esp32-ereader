@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bookprep.js end-to-end</title>
+<pre id="result">running</pre>
+<script src="bookprep.js"></script>
+<script>
+// Served by tools/bookprep/tests/test_web_e2e.py with: book file, font.ttf,
+// hyph.txt and options.json next to this page. Writes JSON into #result.
+(async () => {
+  const out = {};
+  try {
+    const opts = await (await fetch("options.json")).json();
+    const face = new FontFace("TestFont", await (await fetch("font.ttf")).arrayBuffer());
+    await face.load();
+    document.fonts.add(face);
+    const buf = await (await fetch(opts.file)).arrayBuffer();
+    const raw = await BookPrep.extract(buf, opts.file);
+    if (opts.withRaw) out.raw = raw;
+    const book = BookPrep.cleanBook(raw);
+    const hyph = new BookPrep.Hyphenator(BookPrep.parsePatterns(await (await fetch("hyph.txt")).text()));
+    const t0 = performance.now();
+    const layout = BookPrep.typeset(book, opts.settings || {}, "TestFont", hyph);
+    const t1 = performance.now();
+    const bytes = await BookPrep.writeBook(book, layout);
+    out.layoutMs = Math.round(t1 - t0);
+    out.renderMs = Math.round(performance.now() - t1);
+    out.pages = layout.pages.length;
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    out.t5b = btoa(bin);
+  } catch (e) {
+    out.error = String((e && e.stack) || e);
+  }
+  document.getElementById("result").textContent = JSON.stringify(out);
+})();
+</script>

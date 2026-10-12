@@ -16,7 +16,14 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .cli import clean_book, default_font
 from .extract import Book, extract
-from .layout import FontMeasurer, Hyphenator, LayoutOptions, PageGeometry, layout_book
+from .layout import (
+    FontMeasurer,
+    Hyphenator,
+    LayoutOptions,
+    PageGeometry,
+    layout_book,
+    line_height_for,
+)
 from .normalize import GlyphFallback, font_charset
 from .render import RenderOptions, enlarge, render_page, with_status_bar
 
@@ -32,7 +39,7 @@ def tile(raw: Book, chapter, font_path: Path, size: int, mono: bool, threshold: 
     book = clean_book(one, GlyphFallback.for_charset(font_charset(font_path)))
     font = ImageFont.truetype(str(font_path), size, layout_engine=ImageFont.Layout.BASIC)
     geometry = PageGeometry()
-    line_height = math.ceil(size * 1.2)
+    line_height = line_height_for(size)
     pages = layout_book(
         book.chapters,
         FontMeasurer(font, mode="1" if mono else ""),

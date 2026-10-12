@@ -347,6 +347,18 @@ static void test_safe_book_name() {
   TEST_ASSERT_FALSE(isSafeBookName(longName));
 }
 
+static void test_safe_file_name_extensions() {
+  const char *const fonts[] = {".ttf", ".otf", ".woff", ".woff2"};
+  TEST_ASSERT_TRUE(isSafeFileName("Literata.woff2", fonts, 4));
+  TEST_ASSERT_TRUE(isSafeFileName("My Font.TTF", fonts, 4));
+  TEST_ASSERT_FALSE(isSafeFileName("font.woff3", fonts, 4));
+  TEST_ASSERT_FALSE(isSafeFileName(".woff2", fonts, 4));
+  const char *const sources[] = {".epub", ".txt"};
+  TEST_ASSERT_TRUE(isSafeFileName("boek.epub", sources, 2));
+  TEST_ASSERT_FALSE(isSafeFileName("boek.t5b", sources, 2));
+  TEST_ASSERT_FALSE(isSafeFileName("../boek.epub", sources, 2));
+}
+
 static void test_wifi_qr_payload() {
   char out[96];
   TEST_ASSERT_TRUE(wifiQrPayload("T5-Reader-1A2B", "k7m4q9xp", out, sizeof(out)));
@@ -397,6 +409,7 @@ int main() {
   RUN_TEST(test_wrap_text);
   RUN_TEST(test_json_escape);
   RUN_TEST(test_safe_book_name);
+  RUN_TEST(test_safe_file_name_extensions);
   RUN_TEST(test_wifi_qr_payload);
   RUN_TEST(test_credentials);
   return UNITY_END();

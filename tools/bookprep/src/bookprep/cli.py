@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 import re
 import sys
 from pathlib import Path
@@ -12,7 +11,15 @@ from PIL import ImageFont
 
 from . import __version__
 from .extract import Block, Book, Chapter, extract
-from .layout import FontMeasurer, Hyphenator, LayoutOptions, Page, PageGeometry, layout_book
+from .layout import (
+    FontMeasurer,
+    Hyphenator,
+    LayoutOptions,
+    Page,
+    PageGeometry,
+    layout_book,
+    line_height_for,
+)
 from .normalize import GlyphFallback, font_charset, normalize_text
 from .render import RenderOptions, contact_sheet, enlarge, render_page, with_status_bar
 from .t5b import TocEntry, pack_page, write_t5b
@@ -118,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
         hyphenator = None
 
     font = ImageFont.truetype(str(font_path), args.size, layout_engine=ImageFont.Layout.BASIC)
-    line_height = args.line_height or math.ceil(args.size * 1.2)
+    line_height = args.line_height or line_height_for(args.size)
     geometry = PageGeometry(
         margin_left=args.margin,
         margin_right=args.margin,

@@ -101,6 +101,8 @@ def pack_header(header: Header) -> bytes:
 
 
 def unpack_header(data: bytes) -> Header:
+    if len(data) < HEADER.size:
+        raise ValueError("file too short")
     magic, version, w, h, stride, count, toc_count, title, author = HEADER.unpack_from(data)
     if magic != MAGIC:
         raise ValueError(f"not a .t5b file (magic {magic!r})")

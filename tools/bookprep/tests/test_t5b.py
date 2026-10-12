@@ -112,3 +112,10 @@ def test_bad_magic_rejected():
     data[:4] = b"NOPE"
     with pytest.raises(ValueError):
         unpack_header(bytes(data))
+
+
+def test_short_file_rejected(tmp_path):
+    path = tmp_path / "short.t5b"
+    path.write_bytes(b"T5B1 short")
+    with pytest.raises(ValueError, match="too short"):
+        T5BFile(path)

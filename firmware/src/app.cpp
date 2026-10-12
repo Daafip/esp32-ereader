@@ -383,8 +383,10 @@ void startTransfer() {
 
 void stopTransfer() {
   transfer::stop();
-  restoreBook();  // quietly; the library shows what is on the card now
-  openLibrary();
+  // Reopen from NVS, not the RTC page: the book may have been restyled to a new
+  // page count, and the upload moved its bookmark accordingly.
+  if (!(rtc.bookPath[0] && openBook(rtc.bookPath, true))) restoreBook();
+  openLibrary();  // shows what is on the card now
 }
 
 void transferKey(Key k) {

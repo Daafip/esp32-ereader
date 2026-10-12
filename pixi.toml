@@ -64,8 +64,16 @@ cmd = "bash tools/ui_preview.sh"
 description = "Render every firmware screen on the PC (real ui.cpp) to out/ui-preview/"
 
 [tasks.web]
-cmd = "python tools/embed_web.py firmware/web/index.html firmware/include/web_index.h"
-description = "Embed the Wi-Fi transfer page (gzip) into the firmware"
+cmd = "python -m bookprep.webassets --header firmware/include/web_assets.h"
+description = "Embed the web page, converter, fonts and hyphenation data into the firmware"
+
+[tasks.web-dev]
+cmd = "python -m bookprep.webassets --out out/web-dev/www && python -m bookprep.devserver"
+description = "Run the reader's web page locally with a fake SD card (add --lan for phone access)"
+
+[tasks.web-test]
+cmd = "pytest tools/bookprep/tests/test_webport.py tools/bookprep/tests/test_web_e2e.py tools/bookprep/tests/test_devserver.py"
+description = "Browser-converter parity (Node) and end-to-end (headless Chromium) tests"
 
 [tasks.test]
 cmd = "pytest tools/bookprep/tests"

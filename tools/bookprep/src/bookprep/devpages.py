@@ -14,14 +14,20 @@ and a reversed bit order shows ``////``.
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 from .cli import default_font
 from .extract import Block, Chapter
-from .layout import FontMeasurer, Hyphenator, LayoutOptions, PageGeometry, layout_book
+from .layout import (
+    FontMeasurer,
+    Hyphenator,
+    LayoutOptions,
+    PageGeometry,
+    layout_book,
+    line_height_for,
+)
 from .normalize import normalize_text
 from .render import RenderOptions, render_page
 from .t5b import TocEntry, pack_page, stride_for, write_t5b
@@ -88,7 +94,7 @@ def calibration_image(font: ImageFont.FreeTypeFont) -> Image.Image:
 def sample_pages(font_path: Path, size: int = 13) -> list[Image.Image]:
     font = ImageFont.truetype(str(font_path), size, layout_engine=ImageFont.Layout.BASIC)
     geometry = PageGeometry()
-    line_height = math.ceil(size * 1.2)
+    line_height = line_height_for(size)
     blocks = [Block("text", normalize_text(t)) for t in SAMPLE_TEXT]
     pages = layout_book(
         [Chapter("Eerste hoofdstuk", blocks)],
