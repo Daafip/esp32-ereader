@@ -1,0 +1,7 @@
+{
+  "name": "core",
+  "version": "0.1.0",
+  "description": "Hardware-independent reader logic (unit-tested on the host)",
+  "frameworks": "*",
+  "platforms": "*"
+}

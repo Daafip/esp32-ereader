@@ -38,3 +38,17 @@ constexpr int kBtnBoot = 0;           // BOOT, RTC GPIO11. VERIFY
 // --- Battery ----------------------------------------------------------------
 constexpr int kBatAdc = 35;           // ADC1_CH7, input-only. SCHEMATIC
 constexpr int kBatDividerNum = 2;     // R42/R43 = 100k/100k -> Vbat = 2 x Vpin. SCHEMATIC
+
+// --- Reader geometry: must match bookprep's PageGeometry / the .t5b header --
+constexpr int kPageW = 250;
+constexpr int kPageH = 122;
+constexpr int kPageStride = (kPageW + 7) / 8;     // 32
+constexpr int kPageBytes = kPageStride * kPageH;  // 3904
+constexpr int kStatusBarH = 10;                   // bottom rows, drawn on the device
+
+// --- Button roles --------------------------------------------------------------
+// NEXT: short = next page / next item, long = previous page / previous item.
+// MENU: short = menu / select, long = sleep / back.
+// Both must be RTC GPIOs (deep-sleep wake). Remap here for the 4-button variant.
+constexpr int kBtnNext = kBtnUser;
+constexpr int kBtnMenu = kBtnBoot;

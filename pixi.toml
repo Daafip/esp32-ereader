@@ -17,6 +17,7 @@ pytest = ">=8"
 ruff = ">=0.6"
 fonttools = ">=4.50"
 font-ttf-ubuntu = ">=0.83"
+freetype = ">=2.13"
 
 [pypi-dependencies]
 bookprep = { path = "tools/bookprep", editable = true }
@@ -25,10 +26,14 @@ bookprep = { path = "tools/bookprep", editable = true }
 cmd = "pio run -d firmware"
 description = "Build every firmware env (reader + diagnostic sketches); no hardware needed"
 
+[tasks.fw-test]
+cmd = "pio test -d firmware -e native"
+description = "Unit tests for firmware/lib/core on the PC"
+
 [tasks.fw-flash]
 cmd = "pio run -d firmware -e {{ env }} -t upload"
 args = [{ arg = "env", default = "reader" }]
-description = "Flash one env: pixi run fw-flash [reader|panel_tester|button_test|sd_test]"
+description = "Flash one env: pixi run fw-flash [reader|calibration|panel_tester|button_test|sd_test]"
 
 [tasks.fw-monitor]
 cmd = "pio device monitor -d firmware"
@@ -37,6 +42,14 @@ description = "Serial monitor at 115200 baud"
 [tasks.prep]
 cmd = "bookprep"
 description = "Convert EPUB/TXT to .t5b: pixi run prep book.epub --font ... --out out/"
+
+[tasks.devpages]
+cmd = "python -m bookprep.devpages --header firmware/include/test_pages.h --t5b out/devpages.t5b"
+description = "Regenerate the calibration/sample pages for the firmware"
+
+[tasks.ui-fonts]
+cmd = "bash tools/make_ui_fonts.sh"
+description = "Regenerate the menu fonts (bb_epaper fontconvert, Ubuntu, codepage 1252)"
 
 [tasks.test]
 cmd = "pytest tools/bookprep/tests"
