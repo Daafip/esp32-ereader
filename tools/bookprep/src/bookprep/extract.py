@@ -39,6 +39,7 @@ class Book:
     author: str
     language: str | None
     chapters: list[Chapter]
+    cover: bytes | None = None  # the EPUB's cover image file, if it has one
 
 
 HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
@@ -120,7 +121,29 @@ def extract_epub(path: Path) -> Book:
         author=", ".join(meta("creator")),
         language=(meta("language") or [None])[0],
         chapters=chapters,
+        cover=_cover_image(book),
     )
+
+
+def _cover_image(book) -> bytes | None:
+    """The cover image: EPUB 3 "cover-image" item, EPUB 2 <meta name="cover">, or
+    an image called cover."""
+    import ebooklib
+
+    for item in book.get_items_of_type(ebooklib.ITEM_COVER):
+        return item.get_content()
+    try:
+        cover_meta = book.get_metadata("OPF", "cover")
+    except KeyError:  # ebooklib raises when the OPF has no such meta
+        cover_meta = []
+    for _value, attrs in cover_meta:
+        item = book.get_item_with_id((attrs or {}).get("content", ""))
+        if item is not None and item.get_type() in (ebooklib.ITEM_IMAGE, ebooklib.ITEM_COVER):
+            return item.get_content()
+    for item in book.get_items_of_type(ebooklib.ITEM_IMAGE):
+        if "cover" in item.get_name().lower() or "cover" in (item.get_id() or "").lower():
+            return item.get_content()
+    return None
 
 
 _FOOTNOTE_REF = re.compile(r"\s*\[\d+\]$")

@@ -24,6 +24,14 @@ class Book {
   // Reads page n (kPageBytes) into dst.
   bool readPage(uint32_t n, uint8_t *dst);
 
+  // Optional cover image (bookprep / the web converter add it for EPUBs).
+  const t5b::Cover &cover() const { return cover_; }
+  // Reads the cover bitmap (cover().stride * cover().h bytes) into dst.
+  bool readCover(uint8_t *dst);
+
+  // "/books/Folder/x.t5b" -> "x": the key of bookmarks and originals.
+  const char *stem() const { return stem_; }
+
   int tocCount() const { return int(starts_.size()); }
   uint32_t chapterStart(int i) const { return starts_[i]; }
   int chapterForPage(uint32_t page) const;
@@ -33,8 +41,10 @@ class Book {
   static constexpr int kMaxToc = 2048;  // 8 KB of start pages at most
   fs::File file_;
   t5b::Header header_;
+  t5b::Cover cover_;
   std::vector<uint32_t> starts_;
   char path_[128] = {};
+  char stem_[72] = {};
   const char *error_ = "";
   uint32_t id_ = 0;
   bool open_ = false;

@@ -114,6 +114,23 @@ def sample_pages(
     return [render_page(p, font, geometry, options) for p in pages[:2]]
 
 
+def sample_cover(font_path: Path, screen: Screen = SCREENS[DEFAULT_SCREEN]) -> Image.Image:
+    """A made-up cover in the screen's cover box (UI previews of the sleep screen)."""
+    w, h = screen.cover_w, screen.cover_h
+    img = Image.new("L", (w, h), 255)
+    d = ImageDraw.Draw(img)
+    for y in range(h):  # a sky fading to dark
+        d.line((0, y, w, y), fill=int(235 - 200 * y / h))
+    d.ellipse((w * 0.55, h * 0.12, w * 0.85, h * 0.12 + w * 0.3), fill=250)  # the sun
+    d.polygon([(0, h), (w * 0.35, h * 0.55), (w * 0.6, h * 0.8), (w * 0.8, h * 0.6), (w, h)],
+              fill=20)  # fmt: skip
+    title = ImageFont.truetype(str(font_path), max(9, w // 7), layout_engine=ImageFont.Layout.BASIC)
+    d.text((w / 2, h * 0.08), "MAX", font=title, fill=0, anchor="mt")
+    d.text((w / 2, h * 0.08 + w / 6), "HAVELAAR", font=title, fill=0, anchor="mt")
+    d.rectangle((0, 0, w - 1, h - 1), outline=0)
+    return img.convert("1")
+
+
 def c_array(name: str, pages: list[bytes]) -> str:
     def rows(data: bytes) -> str:
         lines = [", ".join(f"0x{b:02x}" for b in data[i : i + 16]) for i in range(0, len(data), 16)]
@@ -175,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         page_h=screen.height,
         toc=toc,
         pages=pages,
+        cover=sample_cover(font_path, screen),
     )
     print(f"wrote {args.t5b} ({len(pages)} pages, {screen.width}x{screen.height})")
     return 0

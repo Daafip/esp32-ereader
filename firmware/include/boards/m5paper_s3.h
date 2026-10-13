@@ -44,6 +44,10 @@ constexpr int kTouchRawW = 540;          // M5GFX: x 0..539, y 0..959
 constexpr int kTouchRawH = 960;
 constexpr bool kTouchFlip = false;       // rotate touch 180 degrees (if kEpdRotation is flipped). VERIFY
 
+// --- RTC: BM8563 on the touch I2C bus, keeps the clock while switched off ---------
+#define BOARD_HAS_RTC 1
+constexpr uint8_t kRtcAddress = 0x51;    // M5
+
 // --- Buttons: none ---------------------------------------------------------------
 constexpr int kBtnNext = -1;
 constexpr int kBtnMenu = -1;
@@ -57,7 +61,6 @@ constexpr bool kBtnNextPullup = false;
 constexpr bool kLightSleep = true;
 constexpr int kPowerHoldPin = -1;
 constexpr int kPowerOffPulsePin = 44;    // M5 (kept low while running)
-constexpr const char *kSleepHint = "Off  \xC2\xB7  press the power button to read on";
 constexpr int kBatAdc = 3;               // ADC1_CH2. M5
 constexpr int kBatDividerNum = 2;        // M5Unified: ratio 2.0. M5
 

@@ -14,10 +14,14 @@ board yet.
 | M5Stack M5PaperS3 | \`m5papers3-reader-$v.bin\` | \`m5papers3-reader-$v-ota.bin\` |
 | M5Stack M5Paper | \`m5paper-reader-$v.bin\` | \`m5paper-reader-$v-ota.bin\` |
 
-**Flash from a browser:** Chrome or Edge, <https://espressif.github.io/esptool-js/>,
-Connect, Flash Address \`0x0\`, choose the \`.bin\` *without* \`-ota\`, Program.
+**Install from a browser:** Chrome or Edge, <https://daafip.github.io/esp32-ereader/>,
+pick your board, Install. Leave "Erase device" unticked to keep settings, bookmarks
+and reading positions (books on the SD card are never touched).
 T5-2.13: remove the SD card first. T5-4.7" / M5PaperS3: if no port shows up, hold BOOT,
 press RST, release BOOT (M5PaperS3: see M5Stack's download-mode instructions).
+
+Or with <https://espressif.github.io/esptool-js/>: Flash Address \`0x0\`, the \`.bin\`
+*without* \`-ota\`. This image erases the reader's settings (not the books).
 
 **Update over Wi-Fi** (reader already running this firmware): Menu → Wi-Fi transfer,
 open the page, "Update firmware", choose the \`-ota.bin\` for your board. A file for

@@ -21,6 +21,21 @@ class RenderOptions:
     line_height: int
     threshold: int = 128  # grey < threshold becomes black; higher = bolder
     mono: bool = False  # FreeType monochrome rendering instead of thresholded anti-aliasing
+    bionic: bool = False  # word starts drawn bolder (a second time, 1 px to the right)
+
+
+def bionic_prefix(word: str) -> int:
+    """Characters of `word` to embolden: leading punctuation plus the first letters
+    (1 for short words, else 40 % rounded up). Same as bionicPrefix() in bookprep.js."""
+    letters = sum(1 for c in word if c.isalpha())
+    want = 1 if letters <= 3 else -(-letters * 2 // 5)
+    seen = 0
+    for i, c in enumerate(word):
+        if c.isalpha():
+            seen += 1
+            if seen == want:
+                return i + 1
+    return 0
 
 
 def baseline_offset(font: ImageFont.FreeTypeFont, line_height: int) -> int:
@@ -39,19 +54,50 @@ def render_page(
     base = baseline_offset(font, options.line_height)
     for y, line in page.lines:
         for run in line.runs:
-            draw.text(
-                (geometry.text_left + run.x, geometry.text_top + y + base),
-                run.text.replace(NBSP, " "),
-                font=font,
-                fill=BLACK,
-                anchor="ls",
-            )
+            text = run.text.replace(NBSP, " ")
+            x, baseline = geometry.text_left + run.x, geometry.text_top + y + base
+            draw.text((x, baseline), text, font=font, fill=BLACK, anchor="ls")
+            if not options.bionic:
+                continue
+            start = 0
+            for word in text.split(" "):  # the same glyphs again, shifted: bolder, same layout
+                n = bionic_prefix(word)
+                if n:
+                    wx = x + font.getlength(text[:start])
+                    draw.text((wx + 1, baseline), word[:n], font=font, fill=BLACK, anchor="ls")
+                start += len(word) + 1
     # Blank the status-bar band so stray descenders never reach it.
     status_top = geometry.height - geometry.status_bar
     draw.rectangle((0, status_top, geometry.width - 1, geometry.height - 1), fill=WHITE)
     return img.point(lambda v: WHITE if v >= options.threshold else BLACK).convert(
         "1", dither=Image.Dither.NONE
     )
+
+
+# --- cover ---------------------------------------------------------------------
+
+
+def cover_bitmap(data: bytes, box: tuple[int, int]) -> Image.Image | None:
+    """A cover image (any format Pillow reads) scaled to fit `box`, contrast
+    stretched and Floyd-Steinberg dithered to 1 bit. None if it can't be read."""
+    import io
+
+    from PIL import ImageOps, UnidentifiedImageError
+
+    try:
+        img = Image.open(io.BytesIO(data))
+        img.load()
+    except (UnidentifiedImageError, OSError, ValueError):
+        return None
+    img = ImageOps.exif_transpose(img)
+    if img.mode in ("RGBA", "LA", "P"):
+        img = img.convert("RGBA")
+        bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        img = Image.alpha_composite(bg, img)
+    img = img.convert("L")
+    img.thumbnail(box, Image.Resampling.LANCZOS)
+    img = ImageOps.autocontrast(img, cutoff=1)
+    return img.convert("1")  # Floyd-Steinberg
 
 
 # --- previews ----------------------------------------------------------------

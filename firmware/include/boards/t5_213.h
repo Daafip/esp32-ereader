@@ -68,5 +68,4 @@ constexpr bool kBtnNextPullup = false;  // GPIO39 has none; the board has an ext
 constexpr bool kLightSleep = false;    // between pages: deep sleep, buttons wake (ext0/ext1)
 constexpr int kPowerHoldPin = -1;      // no software power switch
 constexpr int kPowerOffPulsePin = -1;
-constexpr const char *kSleepHint = "Sleeping  \xC2\xB7  press any button";
 constexpr bool kSdSharedSpi = false;   // SD has its own SPI bus

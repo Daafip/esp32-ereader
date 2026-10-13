@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>T5 Reader installer</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+:root{--bg:#f5f4f0;--card:#fff;--ink:#1c1c1e;--muted:#6e6e73;--line:#e3e1dc;--accent:#1c1c1e;--on-accent:#fff;--r:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#111112;--card:#1c1c1e;--ink:#ececee;--muted:#9a9aa0;--line:#2e2e31;--accent:#ececee;--on-accent:#111112}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Ubuntu,Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:32px 16px 56px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+.lead{color:var(--muted);margin:0 0 24px}
+.card{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px}
+.grow{flex:1;min-width:0}
+.title{font-weight:600}
+.sub{color:var(--muted);font-size:14px}
+button.install{border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:600 15px/1 inherit;padding:12px 18px;cursor:pointer}
+.note{color:var(--muted);font-size:14px;margin:22px 4px 0}
+.note li{margin-bottom:6px}
+a{color:inherit}
+</style>
+</head>
+<body>
+<main>
+  <h1>T5 Reader <small style="font-weight:400;color:var(--muted)">v{{VERSION}}</small></h1>
+  <p class="lead">Install the e-reader firmware from this page: plug the reader into this
+    computer with a USB cable and press Install. Needs Chrome, Edge or Opera on a computer.</p>
+
+  <div class="card"><div class="grow"><div class="title">LilyGo T5-2.13</div><div class="sub">2.13" 250×122, two buttons. Take the SD card out while installing.</div></div>
+    <esp-web-install-button manifest="manifest-t5-213.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+  <div class="card"><div class="grow"><div class="title">LilyGo T5-4.7" S3</div><div class="sub">4.7" 960×540, one button</div></div>
+    <esp-web-install-button manifest="manifest-t5-47.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+  <div class="card"><div class="grow"><div class="title">M5Stack M5PaperS3</div><div class="sub">4.7" 960×540, touch</div></div>
+    <esp-web-install-button manifest="manifest-m5papers3.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+  <div class="card"><div class="grow"><div class="title">M5Stack M5Paper</div><div class="sub">4.7" 960×540, touch and a 3-way switch</div></div>
+    <esp-web-install-button manifest="manifest-m5paper.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+
+  <ul class="note">
+    <li><b>Your settings and reading positions stay.</b> When the installer asks whether to
+      erase the device, leave it unticked. Books are on the SD card and are never touched.</li>
+    <li>No port in the list? Hold BOOT, press RST, release BOOT, then try again.</li>
+    <li>Pick the right board: firmware for another board won't show anything.
+      Updates over Wi-Fi refuse the wrong board's file.</li>
+    <li>Not tested on every board yet: see the
+      <a href="https://github.com/Daafip/esp32-ereader">project page</a> and its docs.</li>
+  </ul>
+</main>
+</body>
+</html>

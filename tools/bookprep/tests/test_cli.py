@@ -18,6 +18,20 @@ def test_end_to_end_epub(sample_epub, tmp_path, font_path):
     assert "all characters present in the font" in report
     assert len(list((out / "testboek.preview").glob("page-*.png"))) == 2
     assert (out / "testboek.contact.png").exists()
+    assert book.cover is not None and book.cover.size[1] <= 104  # the EPUB's cover, in the box
+    assert "cover:    " in report
+
+
+def test_no_cover_and_bionic(sample_epub, tmp_path, font_path):
+    plain, bionic = tmp_path / "plain", tmp_path / "bionic"
+    assert main([str(sample_epub), "--out", str(plain), "--no-cover"]) == 0
+    assert main([str(sample_epub), "--out", str(bionic), "--no-cover", "--bionic"]) == 0
+    a, b = T5BFile(plain / "testboek.t5b"), T5BFile(bionic / "testboek.t5b")
+    assert a.cover is None
+    assert a.header.page_count == b.header.page_count  # same layout
+    darker = [b.page_image(i).histogram()[0] > a.page_image(i).histogram()[0]
+              for i in range(a.header.page_count)]  # fmt: skip
+    assert any(darker)  # word starts drawn bolder
 
 
 def test_end_to_end_txt_and_overrides(tmp_path, font_path):

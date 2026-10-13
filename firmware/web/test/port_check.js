@@ -44,7 +44,9 @@ out.txt = cases.txt.map(([name, b64]) => B.extractTxt(Buffer.from(b64, "base64")
 out.t5b = Buffer.from(B.writeT5b({
   ...cases.t5b,
   pages: cases.t5b.pages.map((b64) => new Uint8Array(Buffer.from(b64, "base64"))),
+  cover: { ...cases.t5b.cover, bits: new Uint8Array(Buffer.from(cases.t5b.cover.bits, "base64")) },
 })).toString("base64");
+out.bionic = cases.bionic.map((w) => B.bionicPrefix(w));
 
 out.encode = cases.encode.map(([text, size]) => Buffer.from(B.encodeStr(text, size)).toString("base64"));
 out.slug = cases.slug.map((s) => B.slug(s));

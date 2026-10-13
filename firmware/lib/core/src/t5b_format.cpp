@@ -52,7 +52,28 @@ Error parseHeader(const uint8_t *d, size_t len, Header &out) {
 Error validate(const Header &h, uint16_t pageW, uint16_t pageH, uint32_t fileSize) {
   if (h.pageW != pageW || h.pageH != pageH) return Error::WrongGeometry;
   if (h.pageCount == 0) return Error::NoPages;
-  if (h.fileSize() != fileSize) return Error::SizeMismatch;
+  if (fileSize < h.fileSize()) return Error::SizeMismatch;
+  return Error::None;
+}
+
+Error parseCover(const Header &h, uint32_t fileSize, const uint8_t *head, size_t len, Cover &out) {
+  out = Cover();
+  const uint32_t end = h.fileSize();
+  if (fileSize == end) return Error::None;  // no cover
+  if (fileSize < end + kCoverHeaderSize || !head || len < kCoverHeaderSize ||
+      memcmp(head, "T5CV", 4) != 0) {
+    return Error::SizeMismatch;
+  }
+  out.w = rd16(head + 4);
+  out.h = rd16(head + 6);
+  out.stride = rd16(head + 8);
+  if (out.w == 0 || out.h == 0 || out.stride != (out.w + 7) / 8 ||
+      uint64_t(end) + kCoverHeaderSize + uint64_t(out.stride) * out.h != fileSize) {
+    out = Cover();
+    return Error::SizeMismatch;
+  }
+  out.offset = end + kCoverHeaderSize;
+  out.present = true;
   return Error::None;
 }
 

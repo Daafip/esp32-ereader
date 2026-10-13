@@ -13,7 +13,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "i18n.h"
 #include "menu.h"
+#include "settings.h"
 
 namespace ui {
 
@@ -57,8 +59,22 @@ struct Hit {
 };
 Hit hit(int x, int y);
 
-// Status bar over the bottom rows of a book page. batteryPct < 0 = unknown.
-void statusBar(const char *chapter, uint32_t page, uint32_t pageCount, int batteryPct);
+// Status bar over the bottom rows of a book page. Full: progress line, chapter,
+// page/percentage, battery. Minimal: progress line and percentage. Hidden: blank.
+// A ribbon marks a bookmarked page; a padlock and the unlock hint a locked reader.
+struct StatusView {
+  const char *chapter = "";
+  uint32_t page = 0;
+  uint32_t pageCount = 0;
+  int batteryPct = -1;  // < 0: unknown
+  StatusBarMode mode = StatusBarMode::Full;
+  bool bookmarked = false;
+  bool locked = false;
+};
+void statusBar(const StatusView &v);
+
+// "hold MENU to unlock" in the board's words.
+const char *unlockHint();
 
 void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hint left,
           Hint right, int batteryPct);
@@ -78,7 +94,25 @@ void message(Icon icon, const char *headline, const char *line1, const char *lin
 void message(Icon icon, const char *headline, const char *line1, const char *line2, Hint left,
              Hint right);
 
-void sleepScreen(const char *title, const char *author, int percentRead, int batteryPct);
+// 1-bpp image (MSB first, 1 = white), e.g. a book cover.
+struct Bitmap {
+  const uint8_t *bits = nullptr;
+  int w = 0, h = 0, stride = 0;
+};
+
+// Sleep screen "book": title, author, progress, with the cover if there is one
+// (left of the text on landscape screens, above it on portrait ones).
+struct SleepView {
+  const char *title = nullptr;
+  const char *author = nullptr;
+  int percentRead = -1;  // < 0: no book
+  int batteryPct = -1;
+  Bitmap cover;          // bits == nullptr: none
+  bool locked = false;   // padlock top left
+};
+void sleepScreen(const SleepView &v);
+// Padlock in the top left corner (over a sleep picture).
+void lockBadge();
 
 // "Press any button to try again", in the board's words.
 const char *retryHint();

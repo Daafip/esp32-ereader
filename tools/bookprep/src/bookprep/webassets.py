@@ -5,7 +5,9 @@ Builds everything the browser converter needs and embeds it in the firmware:
 - hyphenation patterns exported from pyphen's own parser, so the browser port
   (firmware/web/bookprep.js) hyphenates exactly like this package
 - reading fonts as Latin subsets in WOFF2: Ubuntu (from the pixi env) and three
-  SIL OFL fonts downloaded from a pinned google/fonts commit (checked by SHA-256)
+  SIL OFL fonts downloaded from a pinned google/fonts commit (checked by SHA-256);
+  OpenDyslexic as its author's own WOFF2, unmodified (its licence reserves the
+  name, so no subsetting)
 - the page itself (firmware/web/index.html, bookprep.js)
 
 Run: ``pixi run web``. Writes the files to --out (for tests and local serving) and
@@ -37,6 +39,10 @@ OFL_MERRIWEATHER = "715bd349bfa6116f99e351e1548321dcfa25b91df65502d22ca8d6245576
 GOOGLE_FONTS = (
     "https://raw.githubusercontent.com/google/fonts/bd8f81ddb5c74d5c8897b36ad88b440266245103"
 )
+OPENDYSLEXIC = (
+    "https://raw.githubusercontent.com/antijingoist/opendyslexic/"
+    "1824da5c0e41dc3e13ffc7f3a636dcaf695d61b7"
+)
 
 # Codepoints kept in the font subsets: Latin-1, Windows-1252 extras, typography.
 SUBSET = [
@@ -52,10 +58,11 @@ class FontSpec:
     id: str
     name: str
     licence: str
-    source: str  # "env:<file in $PREFIX/fonts>" or a google/fonts path
+    source: str  # "env:<file in $PREFIX/fonts>", a google/fonts path or an https URL
     sha256: str = ""
     axes: tuple[tuple[str, float], ...] = ()
-    licence_file: tuple[str, str] = ("", "")  # google/fonts path, sha256
+    licence_file: tuple[str, str] = ("", "")  # google/fonts path or URL, sha256
+    as_is: bool = False  # serve the downloaded WOFF2 unchanged (no subset)
 
 
 FONTS = [
@@ -79,6 +86,15 @@ FONTS = [
         "d0ed0e359e396af7ad05e73dffd11a3a4c326ea0d0283c56bd9361cb2cc86a96",
         (("opsz", 18), ("wdth", 100), ("wght", 400)),
         ("ofl/merriweather/OFL.txt", OFL_MERRIWEATHER),
+    ),
+    FontSpec(
+        "opendyslexic", "OpenDyslexic", "SIL OFL 1.1, Reserved Font Name (unmodified)",
+        f"{OPENDYSLEXIC}/compiled/OpenDyslexic-Regular.woff2",
+        "0441bc21071e42db57c217f93fbc48d3b55a2987c02814c94dc93621c42e8695",
+        (),
+        (f"{OPENDYSLEXIC}/OFL.txt",
+         "caafcccfb70fc72458fcbda812ec8f0a06cb300cbabb87eabbb30b946124394b"),
+        as_is=True,
     ),
 ]  # fmt: skip
 
@@ -112,11 +128,14 @@ def hyphenation_index() -> dict:
 
 
 def pinned_download(source: str, sha256: str, cache: Path) -> Path:
-    """A google/fonts file at the pinned commit, cached and checked by SHA-256."""
-    path = cache / source.replace("/", "_").replace("%5B", "[").replace("%5D", "]")
+    """A file at a pinned commit (google/fonts path or full URL), cached and checked
+    by SHA-256."""
+    url = source if source.startswith("https://") else f"{GOOGLE_FONTS}/{source}"
+    name = source.split("/", 4)[-1] if source.startswith("https://") else source
+    path = cache / name.replace("/", "_").replace("%5B", "[").replace("%5D", "]")
     if not path.exists():
         cache.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(f"{GOOGLE_FONTS}/{source}", timeout=60) as r:
+        with urllib.request.urlopen(url, timeout=60) as r:
             path.write_bytes(r.read())
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if digest != sha256:
@@ -168,6 +187,8 @@ def build_font(spec: FontSpec, cache: Path) -> bytes:
     from fontTools.ttLib import TTFont
     from fontTools.varLib.instancer import instantiateVariableFont
 
+    if spec.as_is:
+        return font_source(spec, cache).read_bytes()
     font = TTFont(str(font_source(spec, cache)))
     if spec.axes:
         font = instantiateVariableFont(font, dict(spec.axes))

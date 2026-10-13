@@ -7,6 +7,9 @@ Inspired by [Paul Lagier](https://www.youtube.com/watch?v=IL05zoHBGwA), but his 
 
 ## Supported models
 
+**Install from the browser:** <https://daafip.github.io/esp32-ereader/> (Chrome or Edge,
+reader on USB; leave "Erase device" unticked to keep your settings).
+
 Firmware available at the [releases](https://github.com/Daafip/esp32-ereader/releases) or build yourself `pixi run fw-build`.
 Flash with platform io, esptools or `pixi run fw-flash`
 
@@ -29,6 +32,12 @@ phone does the typesetting (font, size, margins, hyphenation), or convert on a P
 [docs/hardware.md](docs/hardware.md), [docs/hardware-t5-47.md](docs/hardware-t5-47.md)
 and [docs/hardware-m5paper.md](docs/hardware-m5paper.md).
 
+Also on board: chapters, bookmarks, search (on the phone, jumping the reader to a hit),
+library folders, reading statistics, a lock, sleep screens (book, cover, your own
+pictures, or the page itself), a status bar that can shrink or hide, OpenDyslexic and
+bionic reading, English and Dutch menus, and settings, home Wi-Fi and factory reset
+from the phone.
+
 ## References
 
 Hardware and display drivers:
@@ -41,6 +50,7 @@ Hardware and display drivers:
 Firmware build and flashing:
 
 - [pioarduino](https://github.com/pioarduino/platform-espressif32): PlatformIO platform for Arduino-ESP32 3.x
+- [ESP Web Tools](https://esphome.github.io/esp-web-tools/) (Apache-2.0) by ESPHome: the browser installer
 - [esptool-js](https://espressif.github.io/esptool-js/): flashing from the browser
 - [QR Code generator](https://github.com/nayuki/QR-Code-generator) (MIT) by Project Nayuki: the Wi-Fi QR codes
 
@@ -48,7 +58,7 @@ Book conversion:
 
 - [Pillow](https://python-pillow.org), [EbookLib](https://github.com/aerkalov/ebooklib), [fontTools](https://github.com/fonttools/fonttools)
 - [Pyphen](https://github.com/Kozea/Pyphen): hyphenation patterns (also exported for the in-browser converter)
-- Fonts: [Ubuntu](https://design.ubuntu.com/font) (default), and Literata, Atkinson Hyperlegible and Merriweather from [Google Fonts](https://github.com/google/fonts) (SIL OFL)
+- Fonts: [Ubuntu](https://design.ubuntu.com/font) (default), and Literata, Atkinson Hyperlegible and Merriweather from [Google Fonts](https://github.com/google/fonts) (SIL OFL), [OpenDyslexic](https://github.com/antijingoist/opendyslexic) by Abbie Gonzalez (SIL OFL)
 
 Tooling: [pixi](https://pixi.sh) runs everything (`pixi run --list`).
 
@@ -65,7 +75,8 @@ Third-party parts keep their own licences:
   `firmware/lib/qrcodegen`: MIT
 - Fonts: Ubuntu Font Licence 1.0 (Ubuntu; also the bitmap UI fonts in
   `firmware/include/fonts`) and SIL OFL 1.1 (Literata, Atkinson Hyperlegible,
-  Merriweather)
+  Merriweather, OpenDyslexic; OpenDyslexic is shipped unmodified, as its Reserved
+  Font Name requires)
 - Hyphenation patterns from Pyphen: their own licences
 
 The reader serves the full font licences and the pattern notices at `/licenses.txt`

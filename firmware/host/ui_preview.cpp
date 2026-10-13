@@ -6,8 +6,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <vector>
+
 #include "board.h"
 #include "display.h"
+#include "i18n.h"
 #include "menu.h"
 #include "settings.h"
 #include "t5b_format.h"
@@ -50,6 +53,57 @@ bool loadPage(const char *path, int fromEnd) {
   fclose(f);
   if (!ok) fprintf(stderr, "%s: no %dx%d sample page\n", path, kPageW, kPageH);
   return ok;
+}
+
+// The cover block of the sample .t5b (bookprep's made-up cover), if any.
+std::vector<uint8_t> coverBits;
+ui::Bitmap loadCover(const char *path) {
+  FILE *f = fopen(path, "rb");
+  ui::Bitmap b;
+  if (!f) return b;
+  uint8_t raw[t5b::kHeaderSize];
+  t5b::Header h;
+  t5b::Cover c;
+  uint8_t head[t5b::kCoverHeaderSize];
+  fseek(f, 0, SEEK_END);
+  const uint32_t size = uint32_t(ftell(f));
+  fseek(f, 0, SEEK_SET);
+  if (fread(raw, 1, sizeof(raw), f) == sizeof(raw) &&
+      t5b::parseHeader(raw, sizeof(raw), h) == t5b::Error::None &&
+      fseek(f, long(h.fileSize()), SEEK_SET) == 0 && fread(head, 1, sizeof(head), f) == sizeof(head) &&
+      t5b::parseCover(h, size, head, sizeof(head), c) == t5b::Error::None && c.present) {
+    coverBits.resize(size_t(c.stride) * c.h);
+    if (fread(coverBits.data(), 1, coverBits.size(), f) == coverBits.size()) {
+      b = {coverBits.data(), c.w, c.h, c.stride};
+    }
+  }
+  fclose(f);
+  return b;
+}
+
+void status(const char *chapter, uint32_t page, uint32_t count, int battery,
+            StatusBarMode mode = StatusBarMode::Full, bool bookmarked = false, bool locked = false) {
+  ui::StatusView v;
+  v.chapter = chapter;
+  v.page = page;
+  v.pageCount = count;
+  v.batteryPct = battery;
+  v.mode = mode;
+  v.bookmarked = bookmarked;
+  v.locked = locked;
+  ui::statusBar(v);
+}
+
+void sleep(const char *title, const char *author, int pct, int battery, ui::Bitmap cover = {},
+           bool locked = false) {
+  ui::SleepView v;
+  v.title = title;
+  v.author = author;
+  v.percentRead = pct;
+  v.batteryPct = battery;
+  v.cover = cover;
+  v.locked = locked;
+  ui::sleepScreen(v);
 }
 
 #define DOT "  \xC2\xB7  "
@@ -119,11 +173,11 @@ int main(int argc, char **argv) {
   const char *title = "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy";
 
   if (!loadPage(sample, 1)) return 1;
-  ui::statusBar("EERSTE HOOFDSTUK", 26, 3596, 72);
+  status("EERSTE HOOFDSTUK", 26, 3596, 72);
   save("01-reading");
 
   if (!loadPage(sample, 0)) return 1;
-  ui::statusBar("Hoofdstuk \xC3\xA9\xC3\xA9n \xE2\x80\x94 De koffiveilingen der Nederlandsche "
+  status("Hoofdstuk \xC3\xA9\xC3\xA9n \xE2\x80\x94 De koffiveilingen der Nederlandsche "
                 "Handelsmaatschappy",
                 2400, 3596, 8);
   save("02-reading-long-title");
@@ -168,10 +222,10 @@ int main(int argc, char **argv) {
               ui::retryHint());
   save("11-error");
 
-  ui::sleepScreen(title, "Multatuli", 37, 72);
+  sleep(title, "Multatuli", 37, 72);
   save("12-sleep");
 
-  ui::sleepScreen("De Kleine Johannes", "Frederik van Eeden", 64, 15);
+  sleep("De Kleine Johannes", "Frederik van Eeden", 64, 15);
   save("13-sleep-short-title");
 
   ui::message(ui::Icon::Battery, "Battery low", "Charge the reader,", "then press a button",
@@ -188,5 +242,54 @@ int main(int argc, char **argv) {
                   "Code", "4821", "Received Max Havelaar"},
                  {Button::Next, "show Wi-Fi", nullptr}, {Button::Menu, "done", nullptr}, 72);
   save("16-wifi-page");
+
+  // --- later screens ---
+  const Row kMarks[] = {
+      {"Remove bookmark here", "", false, false},
+      {"EERSTE HOOFDSTUK", "27", false, true},
+      {"TWEEDE HOOFDSTUK", "88", false, false},
+      {"ZESDE HOOFDSTUK", "570", false, false},
+  };
+  list.reset(4, ui::menuRows(), 1);
+  ui::menu("Bookmarks", list, rowItem, (void *)kMarks, kNext, kGo, 72);
+  save("17-bookmarks");
+
+  const char *statLabels[] = {"Today", "Streak", "Days read", "Total"};
+  const char *statValues[] = {"23 pages" DOT "31 min", "6 days" DOT "best 14", "41",
+                              "3412 pages" DOT "61 h 12 min"};
+  ui::details("Statistics", statLabels, statValues, 4, {Button::None, nullptr, nullptr},
+              {Button::Menu, "back", nullptr}, 72);
+  save("18-statistics");
+
+  if (!loadPage(sample, 1)) return 1;
+  status("EERSTE HOOFDSTUK", 26, 3596, 72, StatusBarMode::Full, true, true);
+  save("19-reading-locked-bookmarked");
+
+  if (!loadPage(sample, 1)) return 1;
+  status("EERSTE HOOFDSTUK", 26, 3596, 72, StatusBarMode::Minimal, true);
+  save("20-reading-minimal");
+
+  sleep(title, "Multatuli", 37, 72, loadCover(sample), true);
+  save("21-sleep-cover-locked");
+
+  const Row kShelf[] = {
+      {"Engels", "4 books", true, false},
+      {"Klassiekers", "12 books", true, true},
+      {"De Kleine Johannes", "64%", false, false},
+      {"Een Nederlandsch \xE2\x80\x9C" "ABC\xE2\x80\x9D", "new", false, false},
+  };
+  list.reset(4, ui::menuRows(), 1);
+  ui::menu("Davids reader", list, rowItem, (void *)kShelf, kNext, kOpen, 72);
+  save("22-library-folders");
+
+  setLanguage(Lang::Nl);
+  list.reset(kSettingCount, ui::menuRows(), 0);
+  ui::menu(tr(S::Settings), list, settingItem, nullptr, kNext,
+           {Button::Menu, tr(S::Edit), tr(S::Back)}, 72);
+  save("23-settings-nl");
+  ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksLine1), tr(S::NoBooksLine2),
+              {Button::Menu, tr(S::WifiTransfer), nullptr}, {Button::Next, tr(S::Retry), nullptr});
+  save("24-no-books-nl");
+  setLanguage(Lang::En);
   return 0;
 }

@@ -1,6 +1,6 @@
 # Hardware checkpoints: what to run when the board arrives
 
-Everything up to Phase 5 is written and builds; nothing has run on a board yet.
+Everything is written and builds; nothing has run on a board yet.
 Work top to bottom. Each step says what to send back; results go into
 `docs/hardware.md` → "Checkpoint results".
 
@@ -147,4 +147,30 @@ The reader itself is the test here too. Results go in `docs/hardware-m5paper.md`
 6. Menu → Sleep on battery: the device should switch off; the power button
    (M5Paper: the switch) brings it back at the same page. PaperS3: also check the SD
    card works (its CS pin is shared with the display driver at start-up).
+7. Open the Wi-Fi page once (sets the clock), read a few pages, switch off, switch on:
+   Menu → Statistics should still show "Today" (the clock chip kept the time; the log
+   shows `clock: ... from the RTC`). **Send:** what it shows.
 
+## Phase 9 features (any board, after Checkpoint 3)
+
+Untested features from the Pala One ideas (`PLAN.md` Phase 9). Each is quick to try;
+**send** whatever doesn't behave as `docs/usage.md` describes.
+
+1. **Installer:** install from <https://daafip.github.io/esp32-ereader/> (or
+   `pixi run installer`, then serve `out/installer/` over https or `localhost`) with
+   "Erase device" unticked: settings, positions and bookmarks must survive.
+   T5-2.13: is the bootloader at `0x1000` accepted, does it boot?
+2. **Bookmarks:** Menu → Bookmarks → "Bookmark this page", the ribbon in the status
+   bar, jump back from the list. Set the hold gesture to "bookmark" and try it.
+3. **Lock:** Menu → Lock. Every press except the unlock gesture is ignored; on the
+   T5-2.13 a NEXT press while locked must not change the screen (it goes back to
+   sleep straight away). Settings → Lock when asleep: on, then Menu → Sleep.
+4. **Sleep screens:** each of book / cover (a book added from the page with "Cover")
+   / pictures (add two on the page; they alternate) / keep page.
+5. **Status bar:** full / minimal / hidden; legibility of the padlock and ribbon.
+6. **Language:** Nederlands. Any text cut off or missing accents?
+7. **Statistics:** open the Wi-Fi page (sets the clock), read, check Menu →
+   Statistics and the page's line. T5: does the clock survive deep sleep overnight?
+8. **Page features:** home Wi-Fi from ⚙ Settings (the reader joins it next time),
+   name, folders (upload into one, move a book), Open + search + "Read from here",
+   restyle keeps bookmarks, factory reset (wipes the card's books and the settings).

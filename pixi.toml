@@ -41,6 +41,10 @@ description = "Flash one env: pixi run fw-flash [reader|calibration|panel_tester
 cmd = "bash tools/fw_dist.sh"
 description = "Build all envs and collect merged .bin images in out/firmware/ (browser flashing at 0x0)"
 
+[tasks.installer]
+cmd = "python tools/make_installer.py"
+description = "Browser installer (ESP Web Tools) from the built envs -> out/installer/ (keeps settings)"
+
 [tasks.fw-monitor]
 cmd = "pio device monitor -d firmware"
 description = "Serial monitor at 115200 baud"

@@ -1,6 +1,5 @@
 #include "storage.h"
 
-#include <FS.h>
 #include <SD.h>
 #include <SPI.h>
 #include <strings.h>
@@ -8,7 +7,6 @@
 #include <algorithm>
 
 #include "board.h"
-#include "t5b_format.h"
 
 namespace storage {
 namespace {
@@ -18,9 +16,56 @@ SPIClass ownSpi(HSPI);
 SPIClass &sdSpi = kSdSharedSpi ? SPI : ownSpi;
 bool isMounted = false;
 
-bool endsWithT5b(const char *name) {
-  const size_t n = strlen(name);
-  return n > 4 && strcasecmp(name + n - 4, ".t5b") == 0;
+bool endsWith(const char *name, const char *ext) {
+  const size_t n = strlen(name), e = strlen(ext);
+  return n > e && strcasecmp(name + n - e, ext) == 0;
+}
+
+bool readEntry(fs::File &f, const String &dir, const String &folder, BookEntry &e) {
+  t5b::Header h;
+  t5b::Cover cover;
+  if (checkBook(f, h, &cover) != t5b::Error::None) return false;
+  e.path = dir + "/" + f.name();
+  e.folder = folder;
+  e.title = h.title[0] ? h.title : f.name();
+  e.author = h.author;
+  e.pages = h.pageCount;
+  e.id = t5b::bookId(h.title, h.pageCount);
+  e.size = uint32_t(f.size());
+  e.hasCover = cover.present;
+  return true;
+}
+
+uint32_t countBooks(const String &dir) {
+  fs::File d = SD.open(dir);
+  uint32_t n = 0;
+  if (!d || !d.isDirectory()) return 0;
+  for (fs::File f = d.openNextFile(); f; f = d.openNextFile()) {
+    if (!f.isDirectory() && endsWith(f.name(), ".t5b")) n++;
+  }
+  return n;
+}
+
+bool byTitle(const BookEntry &a, const BookEntry &b) {
+  if (a.isFolder != b.isFolder) return a.isFolder;
+  return strcasecmp(a.title.c_str(), b.title.c_str()) < 0;
+}
+
+void removeTree(const String &path) {
+  fs::File d = SD.open(path);
+  if (!d) return;
+  if (!d.isDirectory()) {
+    d.close();
+    SD.remove(path);
+    return;
+  }
+  std::vector<String> children;
+  for (fs::File f = d.openNextFile(); f; f = d.openNextFile()) {
+    children.push_back(path + "/" + f.name());
+  }
+  d.close();
+  for (const String &c : children) removeTree(c);
+  SD.rmdir(path);
 }
 
 }  // namespace
@@ -43,32 +88,131 @@ bool mounted() { return isMounted; }
 
 uint32_t cardSizeMb() { return isMounted ? uint32_t(SD.cardSize() >> 20) : 0; }
 
-Status listBooks(std::vector<BookEntry> &out, size_t max) {
+t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover) {
+  uint8_t buf[t5b::kHeaderSize];
+  if (!f.seek(0) || f.read(buf, sizeof(buf)) != sizeof(buf)) return t5b::Error::TooShort;
+  t5b::Error err = t5b::parseHeader(buf, sizeof(buf), h);
+  const uint32_t size = uint32_t(f.size());
+  if (err == t5b::Error::None) err = t5b::validate(h, kPageW, kPageH, size);
+  if (err != t5b::Error::None) return err;
+  t5b::Cover c;
+  uint8_t head[t5b::kCoverHeaderSize];
+  const bool more = size > h.fileSize();
+  if (more && !(f.seek(h.fileSize()) && f.read(head, sizeof(head)) == sizeof(head))) {
+    return t5b::Error::SizeMismatch;
+  }
+  err = t5b::parseCover(h, size, more ? head : nullptr, sizeof(head), c);
+  if (cover) *cover = c;
+  return err;
+}
+
+Status listLibrary(const char *folder, std::vector<BookEntry> &out, size_t max) {
   out.clear();
   if (!isMounted) return Status::NoCard;
-  File dir = SD.open(kBooksDir);
-  if (!dir || !dir.isDirectory()) return Status::NoBooksDir;
-  uint8_t buf[t5b::kHeaderSize];
-  for (File f = dir.openNextFile(); f && out.size() < max; f = dir.openNextFile()) {
-    if (f.isDirectory() || !endsWithT5b(f.name())) continue;
-    t5b::Header h;
-    const bool ok = f.read(buf, sizeof(buf)) == sizeof(buf) &&
-                    t5b::parseHeader(buf, sizeof(buf), h) == t5b::Error::None &&
-                    t5b::validate(h, kPageW, kPageH, uint32_t(f.size())) == t5b::Error::None;
-    if (!ok) continue;
+  const String dir = *folder ? String(kBooksDir) + "/" + folder : String(kBooksDir);
+  fs::File d = SD.open(dir);
+  if (!d || !d.isDirectory()) return Status::NoBooksDir;
+  for (fs::File f = d.openNextFile(); f && out.size() < max; f = d.openNextFile()) {
+    if (f.isDirectory()) {
+      if (*folder || f.name()[0] == '.') continue;  // one level; .src, .marks
+      BookEntry e;
+      e.isFolder = true;
+      e.title = f.name();
+      e.path = dir + "/" + f.name();
+      e.pages = countBooks(e.path);
+      if (e.pages) out.push_back(e);
+      continue;
+    }
     BookEntry e;
-    e.path = String(kBooksDir) + "/" + f.name();
-    e.title = h.title[0] ? h.title : f.name();
-    e.author = h.author;
-    e.pages = h.pageCount;
-    e.id = t5b::bookId(h.title, h.pageCount);
-    e.size = uint32_t(f.size());
-    out.push_back(e);
+    if (endsWith(f.name(), ".t5b") && readEntry(f, dir, folder, e)) out.push_back(e);
   }
-  std::sort(out.begin(), out.end(), [](const BookEntry &a, const BookEntry &b) {
-    return strcasecmp(a.title.c_str(), b.title.c_str()) < 0;
-  });
+  std::sort(out.begin(), out.end(), byTitle);
   return out.empty() ? Status::NoBooks : Status::Ok;
+}
+
+Status listAllBooks(std::vector<BookEntry> &out, size_t max) {
+  std::vector<BookEntry> level;
+  const Status s = listLibrary("", level, max);
+  out.clear();
+  for (const BookEntry &e : level) {
+    if (!e.isFolder) {
+      out.push_back(e);
+      continue;
+    }
+    std::vector<BookEntry> inner;
+    listLibrary(e.title.c_str(), inner, max);
+    for (const BookEntry &b : inner) {
+      if (out.size() < max) out.push_back(b);
+    }
+  }
+  if (!out.empty()) return Status::Ok;
+  return s == Status::NoCard || s == Status::NoBooksDir ? s : Status::NoBooks;
+}
+
+String stemOf(const String &pathOrName) {
+  String name = pathOrName.substring(pathOrName.lastIndexOf('/') + 1);
+  const int dot = name.lastIndexOf('.');
+  return dot > 0 ? name.substring(0, dot) : name;
+}
+
+void readMarks(const String &stem, uint32_t pageCount, PageList &out) {
+  out.clear();
+  fs::File f = SD.open(String(kMarksDir) + "/" + stem + ".txt", FILE_READ);
+  if (!f) return;
+  char buf[1200];
+  const size_t n = f.read(reinterpret_cast<uint8_t *>(buf), sizeof(buf));
+  f.close();
+  out.parse(buf, n, pageCount);
+}
+
+bool writeMarks(const String &stem, const PageList &marks) {
+  const String path = String(kMarksDir) + "/" + stem + ".txt";
+  if (marks.count() == 0) {
+    SD.remove(path);
+    return true;
+  }
+  SD.mkdir(kBooksDir);
+  SD.mkdir(kMarksDir);
+  char buf[1200];
+  const size_t n = marks.format(buf, sizeof(buf));
+  fs::File f = SD.open(path, FILE_WRITE);
+  if (!f) return false;
+  const bool ok = f.write(reinterpret_cast<const uint8_t *>(buf), n) == n;
+  f.close();
+  return ok;
+}
+
+namespace {
+void pictureNames(std::vector<String> &names) {
+  names.clear();
+  fs::File d = SD.open(kPicturesDir);
+  if (!d || !d.isDirectory()) return;
+  for (fs::File f = d.openNextFile(); f && names.size() < 100; f = d.openNextFile()) {
+    if (!f.isDirectory() && endsWith(f.name(), ".bin") && f.size() == size_t(kPageBytes)) {
+      names.push_back(f.name());
+    }
+  }
+  std::sort(names.begin(), names.end(), [](const String &a, const String &b) { return a < b; });
+}
+}  // namespace
+
+int pictureCount() {
+  std::vector<String> names;
+  pictureNames(names);
+  return int(names.size());
+}
+
+String picturePath(int index) {
+  std::vector<String> names;
+  pictureNames(names);
+  if (index < 0 || index >= int(names.size())) return "";
+  return String(kPicturesDir) + "/" + names[index];
+}
+
+void eraseAll() {
+  removeTree(kBooksDir);
+  removeTree(kPicturesDir);
+  removeTree("/fonts");
 }
 
 }  // namespace storage

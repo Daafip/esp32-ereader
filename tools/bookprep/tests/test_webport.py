@@ -10,6 +10,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from bookprep.cli import slug, toc_entries
 from bookprep.devpages import SAMPLE_TEXT
@@ -24,7 +25,8 @@ from bookprep.layout import (
     line_height_for,
 )
 from bookprep.normalize import normalize_text
-from bookprep.t5b import TocEntry, encode_str, write_t5b
+from bookprep.render import bionic_prefix
+from bookprep.t5b import T5BFile, TocEntry, encode_str, pack_page, write_t5b
 from bookprep.webassets import export_hyphenation, hyphenation_index
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -56,6 +58,13 @@ def run_node(cases, tmp_path):
         ["node", str(CHECK), str(path)], capture_output=True, text=True, check=True, timeout=120
     )
     return json.loads(result.stdout)
+
+
+BIONIC_WORDS = [
+    "a", "de", "het", "Hello,", "\N{LEFT DOUBLE QUOTATION MARK}quote\N{RIGHT DOUBLE QUOTATION MARK}",
+    "koffiveilingen", "...", "", "\N{LATIN SMALL LETTER E WITH ACUTE}\N{LATIN SMALL LETTER E WITH ACUTE}n",
+    "zwart-wit", "1860",
+]  # fmt: skip
 
 
 def as_runs(lines):
@@ -127,10 +136,14 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
     cp1252.write_bytes("Caf\N{LATIN SMALL LETTER E WITH ACUTE}".encode("cp1252"))
 
     pages = [bytes([i]) * 3904 for i in range(3)]
+    cover_img = Image.new("1", (13, 4), 1)
+    cover_img.putpixel((0, 0), 0)
+    cover_img.putpixel((12, 3), 0)
     toc = [TocEntry(0, "Begin"), TocEntry(2, "H\N{LATIN SMALL LETTER E WITH DIAERESIS}t einde")]
     t5b_path = tmp_path / "x.t5b"
     write_t5b(t5b_path, title="Max \N{EM DASH} " + "\N{LATIN SMALL LETTER E WITH ACUTE}" * 40,
-              author="M", page_w=250, page_h=122, toc=toc, pages=pages)  # fmt: skip
+              author="M", page_w=250, page_h=122, toc=toc, pages=pages,
+              cover=cover_img)  # fmt: skip
 
     encode_cases = [
         ["\N{LATIN SMALL LETTER E WITH ACUTE}" * 40, 64],
@@ -160,7 +173,9 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
             "pageH": 122,
             "toc": [{"startPage": e.start_page, "title": e.title} for e in toc],
             "pages": [base64.b64encode(p).decode() for p in pages],
+            "cover": {"w": 13, "h": 4, "bits": base64.b64encode(pack_page(cover_img)).decode()},
         },
+        "bionic": BIONIC_WORDS,
         "encode": encode_cases,
         "slug": slugs,
         "lineHeights": [[size, f] for size in range(9, 23) for f in (1.0, 1.1, 1.2, 1.3, 1.45)],
@@ -192,7 +207,7 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
     assert js["screens"] == {
         sc.id: {"id": sc.id, "name": sc.name, "width": sc.width, "height": sc.height,
                 "statusBar": sc.status_bar, "size": sc.font_size, "margin": sc.margin,
-                "marginBottom": sc.margin_bottom}
+                "marginBottom": sc.margin_bottom, "coverW": sc.cover_w, "coverH": sc.cover_h}
         for sc in SCREENS.values()
     }  # fmt: skip
 
@@ -209,6 +224,8 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
         encode_str(t, n) for t, n in encode_cases
     ]
     assert js["slug"] == [slug(s) for s in slugs]
+    assert js["bionic"] == [bionic_prefix(w) for w in BIONIC_WORDS]
+    assert T5BFile(t5b_path).cover is not None
     assert js["lineHeights"] == [line_height_for(s, f) for s, f in cases["lineHeights"]]
     assert line_height_for(10) == 12 and line_height_for(13) == 16
     with zipfile.ZipFile(sample_epub) as z:

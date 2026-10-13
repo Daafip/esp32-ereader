@@ -58,7 +58,6 @@ constexpr bool kBtnNextPullup = true;  // external pull-up unknown: use the inte
 constexpr bool kLightSleep = false;  // between pages: deep sleep, the button wakes (ext0)
 constexpr int kPowerHoldPin = -1;    // no software power switch
 constexpr int kPowerOffPulsePin = -1;
-constexpr const char *kSleepHint = "Sleeping  \xC2\xB7  press the button";
 constexpr bool kSdSharedSpi = false;
 
 // --- Battery --------------------------------------------------------------------

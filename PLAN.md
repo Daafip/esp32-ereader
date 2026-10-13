@@ -186,6 +186,27 @@ Untested on hardware; notes in `docs/hardware-m5paper.md`, checks in `docs/check
 - [x] Screen id `t5-47` → `4.7in` (shared by three boards); board tag in every image, Wi-Fi updates for another board refused; `fw-dist`/release notes list all four boards
 - [ ] 🧑 Hardware check (if David gets one): rotation + touch alignment, IT8951 bring-up, refresh quality, SD on the PaperS3, light-sleep current, power-off
 
+## Phase 9 — Ideas from the Pala One firmware (2026-10-13)
+
+David compared with [pala-one-firmware](https://github.com/PaulLagier/pala-one-firmware)
+(the project that inspired this one): "only copy the ideas, not any code". Skipped:
+firmware updates from GitHub, apps, to-do list, Heltec hardware. Untested on hardware;
+checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.md`.
+
+- [x] Browser installer (ESP Web Tools 10.4.0): `pixi run installer` → `out/installer/`, one manifest per board with bootloader/partitions/boot_app0/app at their own offsets and `new_install_prompt_erase`, so NVS (settings, positions, statistics) survives; deployed to GitHub Pages by the release workflow
+- [x] Home Wi-Fi from the page (NVS; password write-only), comes before `secrets.h`
+- [x] Bookmarks: up to 100 per book in `/books/.marks/<stem>.txt` (`PageList`, lib/core, tested), Bookmarks screen, ribbon in the status bar, remapped with the position on restyle
+- [x] Search on the page: re-typesets the stored original with its stored options, page snippets, page view from `/api/page`, "Read from here" sets the position
+- [x] Sleep screen setting: book / cover (optional `T5CV` block after the pages, `docs/t5b-format.md`; from the EPUB in both converters) / pictures (`/sleep/*.bin`, full-screen 1-bpp, made in the page's picture editor: fit/fill, zoom, rotate, dither or threshold) / keep page
+- [x] Reading statistics (`ReadingStats`, lib/core, tested): pages, time (≤ 3 min per page), days read, streak; RTC RAM + NVS; clock set from the phone (`/api/time`), kept through power-off by the M5 boards' BM8563 (`rtc_clock.cpp`, `rtc_time` in lib/core, tested)
+- [x] Lock: menu item, hold action, lock when asleep; locked presses go back to sleep without a refresh; unlock = the board's hold gesture
+- [x] Status bar: full / minimal / hidden
+- [x] Reading aids: OpenDyslexic bundled (unmodified WOFF2, OFL with Reserved Font Name), bionic reading (`--bionic`, page checkbox)
+- [x] Library folders (one level, `/books/<folder>/`), move/upload into a folder from the page; factory reset from the page (typed confirmation)
+- [x] UI language English / Dutch (`i18n.h` table; the page follows the reader)
+- [x] Hold gesture remappable (sleep / bookmark / lock / menu); device name shown above the library
+- [ ] 🧑 Hardware check: see `docs/checkpoints.md` → "Phase 9 features"
+
 ---
 
 ## Decisions

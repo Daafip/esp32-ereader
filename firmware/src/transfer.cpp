@@ -7,12 +7,19 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <esp_app_format.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include <vector>
 
 #include "board.h"
 #include "board_tag.h"
+#include "bookmarks.h"
+#include "i18n.h"
 #include "prefs.h"
+#include "rtc_clock.h"
+#include "reading_stats.h"
+#include "settings.h"
 #include "storage.h"
 #include "t5b_format.h"
 #include "web_assets.h"
@@ -49,6 +56,7 @@ const char *const kBookExts[] = {".t5b"};
 const char *const kSourceExts[] = {".epub", ".txt"};
 const char *const kMetaExts[] = {".json"};
 const char *const kFontExts[] = {".ttf", ".otf", ".woff", ".woff2"};
+const char *const kPictureExts[] = {".bin"};
 constexpr const char *kSourceDir = "/books/.src";
 constexpr const char *kFontDir = "/fonts";
 // 64 MB, or 4096 pages where pages are big (T5-4.7": 64 KB each).
@@ -59,7 +67,10 @@ const Kind kKinds[] = {
     {"source", kSourceDir, kSourceExts, 2, 64u << 20},
     {"meta", kSourceDir, kMetaExts, 1, 64u << 10},
     {"font", kFontDir, kFontExts, 4, 8u << 20},
+    {"sleep", storage::kPicturesDir, kPictureExts, 1, uint32_t(kPageBytes)},  // one page
 };
+const Kind &kBookKind = kKinds[0];
+const Kind &kPictureKind = kKinds[4];
 
 // The board tag in this firmware; a Wi-Fi update must carry the same one. Images
 // from before 0.9.0 have none and are accepted (the chip is still checked).
@@ -75,10 +86,10 @@ const Kind *findKind(const String &name) {
   return nullptr;
 }
 
-String stemOf(const String &name) {
-  const int dot = name.lastIndexOf('.');
-  return dot > 0 ? name.substring(0, dot) : name;
-}
+String stemOf(const String &name) { return storage::stemOf(name); }
+
+// "/books/Folder/x.t5b" -> "Folder/x.t5b": how the page names a book.
+String relPath(const String &path) { return path.substring(strlen(storage::kBooksDir) + 1); }
 
 const char *mimeFor(const String &name) {
   if (name.endsWith(".json")) return "application/json";
@@ -163,6 +174,44 @@ const char *baseName(const char *path) {
   return slash ? slash + 1 : path;
 }
 
+// A book named by the page ("x.t5b" or "Folder/x.t5b") -> full path, or "" if unsafe.
+String bookPathArg(const char *arg = "file") {
+  const String rel = server.arg(arg);
+  return isSafeBookPath(rel.c_str()) ? String(storage::kBooksDir) + "/" + rel : String();
+}
+
+// Opens a book named by the page and reads its header; false sends the error.
+bool openBookArg(fs::File &f, t5b::Header &h, String &path) {
+  path = bookPathArg();
+  if (!path.length()) {
+    sendError(400, "bad file name");
+    return false;
+  }
+  f = SD.open(path, FILE_READ);
+  if (!f || storage::checkBook(f, h) != t5b::Error::None) {
+    if (f) f.close();
+    sendError(404, "no such book");
+    return false;
+  }
+  return true;
+}
+
+// Where an uploaded book goes: the `folder` the page names, else where a book of
+// that name already is (a restyle or a second upload replaces it), else /books.
+String bookDirFor(const String &name) {
+  if (server.hasArg("folder")) {
+    const String folder = server.arg("folder");
+    if (!folder.length()) return storage::kBooksDir;
+    return isSafeFolderName(folder.c_str()) ? String(storage::kBooksDir) + "/" + folder : String();
+  }
+  std::vector<storage::BookEntry> books;
+  storage::listAllBooks(books);
+  for (const storage::BookEntry &b : books) {
+    if (name == baseName(b.path.c_str())) return b.path.substring(0, b.path.lastIndexOf('/'));
+  }
+  return storage::kBooksDir;
+}
+
 // --- handlers ---------------------------------------------------------------------
 
 // The page, the converter script, fonts and hyphenation data (web_assets.h).
@@ -180,16 +229,42 @@ bool serveAsset(const String &uri) {
 
 void handleIndex() { serveAsset("/"); }
 
+void addBool(String &out, const char *key, bool value) {
+  addKey(out, key);
+  out += value ? "true" : "false";
+}
+
+void addStats(String &out) {
+  const ReadingStats st = prefs::loadStats();
+  const uint32_t now = uint32_t(time(nullptr));
+  const int32_t tz = prefs::timeZoneOffset();
+  addKey(out, "stats");
+  out += '{';
+  addNumber(out, "pages", st.pages);
+  addNumber(out, "seconds", st.seconds);
+  addNumber(out, "daysRead", st.daysRead);
+  addNumber(out, "streak", currentStreak(st, now, tz));
+  addNumber(out, "bestStreak", st.bestStreak);
+  addNumber(out, "todayPages", todayPages(st, now, tz));
+  addNumber(out, "todaySeconds", todaySeconds(st, now, tz));
+  addBool(out, "clock", now >= kClockValid);
+  out += '}';
+}
+
 void handleInfo() {
   if (!authorized()) return sendError(403, "wrong code");
   touch();
   std::vector<storage::BookEntry> books;
-  storage::listBooks(books, 200);
+  storage::listAllBooks(books);
   String out;
-  out.reserve(160 + books.size() * 200);
+  out.reserve(600 + books.size() * 240);
   out = "{";
   addString(out, "version", FW_VERSION);
   addString(out, "board", BOARD_NAME);
+  addString(out, "lang", language() == Lang::Nl ? "nl" : "en");
+  addString(out, "name", prefs::deviceName().c_str());
+  addString(out, "homeWifi", prefs::homeSsid().c_str());  // never the password
+  addBool(out, "locked", prefs::locked());
   // This reader's screen: the page typesets books for it (see bookprep.js, screens).
   addKey(out, "screen");
   out += '{';
@@ -203,20 +278,27 @@ void handleInfo() {
   addInt(out, "battery", battery);
   addNumber(out, "total", SD.totalBytes());
   addNumber(out, "free", SD.totalBytes() - SD.usedBytes());
+  addStats(out);
   addKey(out, "books");
   out += '[';
   for (const storage::BookEntry &b : books) {
     if (out[out.length() - 1] != '[') out += ',';
     out += '{';
-    addString(out, "file", baseName(b.path.c_str()));
+    addString(out, "file", relPath(b.path).c_str());
+    addString(out, "folder", b.folder.c_str());
     addString(out, "title", b.title.c_str());
     addString(out, "author", b.author.c_str());
     addNumber(out, "pages", b.pages);
     addNumber(out, "size", b.size);
     const uint32_t mark = prefs::bookmark(b.id);
+    addNumber(out, "position", mark);
     addInt(out, "progress", b.pages > 1 ? int(uint64_t(mark) * 100 / (b.pages - 1)) : 0);
+    addBool(out, "cover", b.hasCover);
+    PageList marks;
+    const String stem = stemOf(b.path);
+    storage::readMarks(stem, b.pages, marks);
+    addInt(out, "marks", marks.count());
     // the original kept for "Restyle", if any
-    const String stem = stemOf(baseName(b.path.c_str()));
     String source;
     for (const char *ext : kSourceExts) {
       if (SD.exists(String(kSourceDir) + "/" + stem + ext)) {
@@ -245,6 +327,15 @@ void handleInfo() {
       addNumber(out, "size", f.size());
       out += '}';
     }
+  }
+  out += ']';
+  addKey(out, "pictures");
+  out += '[';
+  for (int i = 0, n = storage::pictureCount(); i < n; i++) {
+    if (out[out.length() - 1] != '[') out += ',';
+    out += kQuote;
+    out += baseName(storage::picturePath(i).c_str());
+    out += kQuote;
   }
   out += "]}";
   sendJson(200, out);
@@ -306,9 +397,15 @@ void handleUploadData() {
       if (!isSafeFileName(name.c_str(), upKind->exts, upKind->extCount)) {
         return failUpload(400, "file type not allowed here");
       }
+      String dir = upKind->dir;
+      if (upKind == &kBookKind) {
+        dir = bookDirFor(name);
+        if (!dir.length()) return failUpload(400, "bad folder name");
+      }
       SD.mkdir(storage::kBooksDir);
       SD.mkdir(upKind->dir);
-      upFinal = String(upKind->dir) + "/" + name;
+      SD.mkdir(dir);
+      upFinal = dir + "/" + name;
       upTmp = upFinal + ".part";
       SD.remove(upTmp);
       upFile = SD.open(upTmp, FILE_WRITE);
@@ -335,8 +432,14 @@ void handleUploadData() {
       if (upStatus != 200) return;
       if (!flushUpload()) return failUpload(507, "SD card full?");
       upFile.close();
-      const bool isBook = upKind == &kKinds[0];
+      const bool isBook = upKind == &kBookKind;
       if (isBook && !validateUpload()) return;
+      if (upKind == &kPictureKind && up.totalSize != size_t(kPageBytes)) {
+        char why[64];
+        snprintf(why, sizeof(why), "a sleep picture is %ux%u, %u bytes", unsigned(kPageW),
+                 unsigned(kPageH), unsigned(kPageBytes));
+        return failUpload(400, why);
+      }
       // Replacing a book (restyled): carry the reading position over in proportion.
       uint32_t oldMark = 0, oldPages = 0;
       if (isBook) {
@@ -352,16 +455,19 @@ void handleUploadData() {
       }
       SD.remove(upFinal);
       if (!SD.rename(upTmp, upFinal)) return failUpload(500, "could not store the file");
-      if (isBook && oldMark && oldPages > 1 && upPages > 1) {
-        const uint32_t mark = uint32_t((uint64_t(oldMark) * (upPages - 1) + (oldPages - 1) / 2) / (oldPages - 1));
-        prefs::setBookmark(upId, mark);
+      if (isBook && oldPages && oldPages != upPages) {  // restyled: positions move along
+        if (oldMark) prefs::setBookmark(upId, remapPage(oldMark, oldPages, upPages));
+        PageList marks;
+        storage::readMarks(stemOf(upFinal), oldPages, marks);
+        marks.remap(oldPages, upPages);
+        storage::writeMarks(stemOf(upFinal), marks);
       }
       if (!isBook) {
         state.lastActivityMs = millis();
         break;
       }
       char event[80];
-      snprintf(event, sizeof(event), "Received %s", upTitle);
+      snprintf(event, sizeof(event), tr(S::Received), upTitle);
       Serial.printf("upload done: %s (%u bytes)\n", upFinal.c_str(), unsigned(up.totalSize));
       touch(event);
       break;
@@ -399,7 +505,7 @@ void handleFirmwareData() {
       if (!authorized()) return failFirmware(403, "wrong code");
       fwTag.reset();
       if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) return failFirmware(500, Update.errorString());
-      touch("Updating firmware...");
+      touch(tr(S::UpdatingFirmware));
       break;
     case UPLOAD_FILE_WRITE:
       if (fwStatus != 200) return;
@@ -427,7 +533,7 @@ void handleFirmwareData() {
       }
       if (!Update.end(true)) return failFirmware(400, Update.errorString());
       Serial.printf("firmware update ok (%u bytes), restarting\n", unsigned(up.totalSize));
-      touch("Firmware updated, restarting");
+      touch(tr(S::FirmwareUpdated));
       break;
     case UPLOAD_FILE_ABORTED:
       failFirmware(400, "upload aborted");
@@ -443,17 +549,227 @@ void handleFirmwareDone() {
 
 void handleDelete() {
   if (!authorized()) return sendError(403, "wrong code");
-  const String name = server.arg("file");
-  if (!isSafeBookName(name.c_str())) return sendError(400, "bad file name");
-  const String path = String(storage::kBooksDir) + "/" + name;
+  const String path = bookPathArg();
+  if (!path.length()) return sendError(400, "bad file name");
   if (!SD.exists(path)) return sendError(404, "no such book");
   if (!SD.remove(path)) return sendError(500, "could not delete");
-  const String stem = String(kSourceDir) + "/" + stemOf(name);
-  for (const char *ext : {".epub", ".txt", ".json"}) SD.remove(stem + ext);
+  const String stem = stemOf(path);
+  for (const char *ext : {".epub", ".txt", ".json"}) SD.remove(String(kSourceDir) + "/" + stem + ext);
+  storage::writeMarks(stem, PageList());
+  const String dir = path.substring(0, path.lastIndexOf('/'));
+  if (dir != storage::kBooksDir) SD.rmdir(dir);  // only succeeds when empty
   char event[80];
-  snprintf(event, sizeof(event), "Deleted %s", name.c_str());
+  snprintf(event, sizeof(event), tr(S::Deleted), baseName(path.c_str()));
   touch(event);
   sendJson(200, "{}");
+}
+
+// POST /api/move?file=Folder/x.t5b&folder=Other ("" = /books). Folders are
+// made on demand and removed when they run empty.
+void handleMove() {
+  if (!authorized()) return sendError(403, "wrong code");
+  const String from = bookPathArg();
+  const String folder = server.arg("folder");
+  if (!from.length() || (folder.length() && !isSafeFolderName(folder.c_str()))) {
+    return sendError(400, "bad name");
+  }
+  const String dir = folder.length() ? String(storage::kBooksDir) + "/" + folder : storage::kBooksDir;
+  const String to = dir + "/" + baseName(from.c_str());
+  if (to == from) return sendJson(200, "{}");
+  if (!SD.exists(from)) return sendError(404, "no such book");
+  if (SD.exists(to)) return sendError(409, "a book with that name is already there");
+  SD.mkdir(dir);
+  if (!SD.rename(from, to)) return sendError(500, "could not move");
+  if (prefs::lastBook() == from) prefs::setLastBook(to.c_str());
+  const String oldDir = from.substring(0, from.lastIndexOf('/'));
+  if (oldDir != storage::kBooksDir) SD.rmdir(oldDir);
+  char event[80];
+  snprintf(event, sizeof(event), tr(S::Moved), baseName(from.c_str()));
+  touch(event);
+  sendJson(200, "{}");
+}
+
+// Bookmarks of one book. GET: {"pages":[...]}; POST page=&op=add|remove.
+void handleMarks() {
+  if (!authorized()) return sendError(403, "wrong code");
+  fs::File f;
+  t5b::Header h;
+  String path;
+  if (!openBookArg(f, h, path)) return;
+  f.close();
+  PageList marks;
+  storage::readMarks(stemOf(path), h.pageCount, marks);
+  if (server.method() == HTTP_POST) {
+    const long page = server.arg("page").toInt();
+    if (page < 0 || uint32_t(page) >= h.pageCount) return sendError(400, "bad page");
+    if (server.arg("op") == "remove") {
+      marks.remove(uint32_t(page));
+    } else {
+      marks.add(uint32_t(page));
+    }
+    if (!storage::writeMarks(stemOf(path), marks)) return sendError(500, "could not save");
+  }
+  touch();
+  String out = "{";
+  addKey(out, "pages");
+  out += '[';
+  for (int i = 0; i < marks.count(); i++) {
+    if (i) out += ',';
+    out += String(marks.at(i));
+  }
+  out += "]}";
+  sendJson(200, out);
+}
+
+// POST /api/position?file=&page=: the reader opens this book at that page next.
+void handlePosition() {
+  if (!authorized()) return sendError(403, "wrong code");
+  fs::File f;
+  t5b::Header h;
+  String path;
+  if (!openBookArg(f, h, path)) return;
+  f.close();
+  const long page = server.arg("page").toInt();
+  if (page < 0 || uint32_t(page) >= h.pageCount) return sendError(400, "bad page");
+  prefs::setBookmark(t5b::bookId(h.title, h.pageCount), uint32_t(page));
+  prefs::setLastBook(path.c_str());
+  touch();
+  sendJson(200, "{}");
+}
+
+// GET /api/page?file=&n=: one page bitmap (the .t5b page layout) for the preview.
+void handlePage() {
+  if (!authorized()) return sendError(403, "wrong code");
+  fs::File f;
+  t5b::Header h;
+  String path;
+  if (!openBookArg(f, h, path)) return;
+  const long n = server.arg("n").toInt();
+  if (n < 0 || uint32_t(n) >= h.pageCount || !f.seek(h.pageOffset(uint32_t(n)))) {
+    f.close();
+    return sendError(400, "bad page");
+  }
+  touch();
+  static uint8_t buf[2048];
+  server.setContentLength(h.pageBytes());
+  server.send(200, "application/octet-stream", "");
+  for (uint32_t left = h.pageBytes(); left;) {
+    const size_t chunk = left < sizeof(buf) ? left : sizeof(buf);
+    if (f.read(buf, chunk) != chunk) break;
+    server.sendContent(reinterpret_cast<const char *>(buf), chunk);
+    left -= chunk;
+  }
+  f.close();
+}
+
+// Device settings for the page: GET lists them (labels and options in the
+// reader's language), POST key=&value=<option index> changes one.
+void handleSettings() {
+  if (!authorized()) return sendError(403, "wrong code");
+  Settings st = prefs::loadSettings(Settings());
+  if (server.method() == HTTP_POST) {
+    SettingId id;
+    const int value = server.arg("value").toInt();
+    if (!settingFromKey(server.arg("key").c_str(), id) || value < 0 ||
+        value >= settingOptionCount(id)) {
+      return sendError(400, "bad setting");
+    }
+    setSettingIndex(st, id, value);
+    prefs::saveSettings(st);
+    if (id == SettingId::Language) setLanguage(st.language);
+    touch(tr(S::SettingsChanged));
+  }
+  const S holdLabel = kHasTouch ? S::SetLongPress : kSingleButton ? S::SetLongHold : S::SetHoldMenu;
+  String out = "{";
+  addKey(out, "settings");
+  out += '[';
+  for (int i = 0; i < kSettingCount; i++) {
+    const SettingId id = SettingId(i);
+    if (i) out += ',';
+    out += '{';
+    addString(out, "key", settingKey(id));
+    addString(out, "label", settingLabel(id, holdLabel));
+    addInt(out, "value", settingIndex(st, id));
+    addKey(out, "options");
+    out += '[';
+    for (int o = 0; o < settingOptionCount(id); o++) {
+      char text[48];
+      settingOptionText(id, o, text, sizeof(text));
+      char esc[96];
+      jsonEscape(text, esc, sizeof(esc));
+      if (o) out += ',';
+      out += kQuote;
+      out += esc;
+      out += kQuote;
+    }
+    out += "]}";
+  }
+  out += "]}";
+  sendJson(200, out);
+}
+
+// POST name=: the library title.
+void handleName() {
+  if (!authorized()) return sendError(403, "wrong code");
+  const String name = server.arg("name");
+  if (name.length() > 32) return sendError(400, "name too long");
+  for (size_t i = 0; i < name.length(); i++) {
+    if (uint8_t(name[i]) < 0x20) return sendError(400, "bad name");
+  }
+  prefs::setDeviceName(name.c_str());
+  touch();
+  sendJson(200, "{}");
+}
+
+// POST ssid=&password=: home Wi-Fi for the next Wi-Fi transfer (DELETE: forget).
+// The password is stored on the reader only and never sent back.
+void handleHomeWifi() {
+  if (!authorized()) return sendError(403, "wrong code");
+  if (server.method() == HTTP_DELETE) {
+    prefs::setHomeWifi("", "");
+  } else {
+    const String ssid = server.arg("ssid");
+    const String pass = server.arg("password");
+    if (!ssid.length() || ssid.length() > 32 || pass.length() > 63) {
+      return sendError(400, "network name 1-32 characters, password at most 63");
+    }
+    prefs::setHomeWifi(ssid.c_str(), pass.c_str());
+  }
+  touch();
+  sendJson(200, "{}");
+}
+
+// POST epoch=&tz=: the phone's clock (for the reading statistics' days).
+void handleTime() {
+  if (!authorized()) return sendError(403, "wrong code");
+  const uint32_t epoch = uint32_t(strtoul(server.arg("epoch").c_str(), nullptr, 10));
+  const long tz = server.arg("tz").toInt();
+  if (epoch < kClockValid || tz < -14 * 3600 || tz > 14 * 3600) return sendError(400, "bad time");
+  timeval tv = {time_t(epoch), 0};
+  settimeofday(&tv, nullptr);
+  rtcclock::save(epoch);
+  prefs::setTimeZoneOffset(int32_t(tz));
+  sendJson(200, "{}");
+}
+
+void handleDeletePicture() {
+  if (!authorized()) return sendError(403, "wrong code");
+  const String name = server.arg("name");
+  if (!isSafeFileName(name.c_str(), kPictureExts, 1)) return sendError(400, "bad file name");
+  if (!SD.remove(String(storage::kPicturesDir) + "/" + name)) return sendError(404, "no such picture");
+  touch();
+  sendJson(200, "{}");
+}
+
+// POST confirm=erase: books, originals, bookmarks, pictures, fonts and every
+// setting gone; then a restart.
+void handleReset() {
+  if (!authorized()) return sendError(403, "wrong code");
+  if (server.arg("confirm") != "erase") return sendError(400, "confirm=erase missing");
+  storage::eraseAll();
+  prefs::clearAll();
+  sendJson(200, "{}");
+  restartAtMs = millis() + 1000;
 }
 
 void handleDeleteFont() {
@@ -470,7 +786,7 @@ void handleFile() {
   if (!authorized()) return sendError(403, "wrong code");
   const Kind *kind = findKind(server.arg("kind"));
   const String name = server.arg("name");
-  if (!kind || kind == &kKinds[0] || !isSafeFileName(name.c_str(), kind->exts, kind->extCount)) {
+  if (!kind || kind == &kBookKind || !isSafeFileName(name.c_str(), kind->exts, kind->extCount)) {
     return sendError(400, "bad request");
   }
   fs::File f = SD.open(String(kind->dir) + "/" + name, FILE_READ);
@@ -497,22 +813,44 @@ void addRoutes() {
   server.on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);
   server.on("/api/book", HTTP_DELETE, handleDelete);
   server.on("/api/font", HTTP_DELETE, handleDeleteFont);
+  server.on("/api/move", HTTP_POST, handleMove);
+  server.on("/api/marks", HTTP_GET, handleMarks);
+  server.on("/api/marks", HTTP_POST, handleMarks);
+  server.on("/api/position", HTTP_POST, handlePosition);
+  server.on("/api/page", HTTP_GET, handlePage);
+  server.on("/api/settings", HTTP_GET, handleSettings);
+  server.on("/api/settings", HTTP_POST, handleSettings);
+  server.on("/api/name", HTTP_POST, handleName);
+  server.on("/api/wifi", HTTP_POST, handleHomeWifi);
+  server.on("/api/wifi", HTTP_DELETE, handleHomeWifi);
+  server.on("/api/time", HTTP_POST, handleTime);
+  server.on("/api/picture", HTTP_DELETE, handleDeletePicture);
+  server.on("/api/reset", HTTP_POST, handleReset);
   server.on("/file", HTTP_GET, handleFile);
   server.on("/api/firmware", HTTP_POST, handleFirmwareDone, handleFirmwareData);
   server.onNotFound(handleNotFound);
   routesAdded = true;
 }
 
+// Home Wi-Fi: entered on the page (NVS), else include/secrets.h, else none.
 bool joinHomeNetwork() {
+  String ssid = prefs::homeSsid();
+  String pass = prefs::homePassword();
 #ifdef WIFI_SSID
+  if (!ssid.length()) {
+    ssid = WIFI_SSID;
+    pass = WIFI_PASSWORD;
+  }
+#endif
+  if (!ssid.length()) return false;
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(kHostname);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(ssid.c_str(), pass.c_str());
   const uint32_t start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < kJoinTimeoutMs) delay(100);
   if (WiFi.status() == WL_CONNECTED) {
     state.ownNetwork = false;
-    strlcpy(state.ssid, WIFI_SSID, sizeof(state.ssid));
+    strlcpy(state.ssid, ssid.c_str(), sizeof(state.ssid));
     strlcpy(state.address, WiFi.localIP().toString().c_str(), sizeof(state.address));
     if (MDNS.begin(kHostname)) {
       MDNS.addService("http", "tcp", 80);
@@ -520,9 +858,8 @@ bool joinHomeNetwork() {
     }
     return true;
   }
-  Serial.println("home Wi-Fi not reachable, starting own network");
+  Serial.printf("home Wi-Fi %s not reachable, starting own network\n", ssid.c_str());
   WiFi.disconnect(true);
-#endif
   return false;
 }
 

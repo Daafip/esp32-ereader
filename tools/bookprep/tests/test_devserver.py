@@ -88,8 +88,9 @@ def test_upload_book_source_meta_font_and_restyle_flow(server, tmp_path):
 
     data = info(base)
     (book,) = data["books"]
-    assert book == {"file": "boek.t5b", "title": "Testboek", "author": "A", "pages": 2,
-                    "size": book["size"], "progress": 0, "source": "boek.epub"}  # fmt: skip
+    assert book == {"file": "boek.t5b", "folder": "", "title": "Testboek", "author": "A",
+                    "pages": 2, "size": book["size"], "position": 0, "progress": 0,
+                    "cover": False, "marks": 0, "source": "boek.epub"}  # fmt: skip
     assert data["fonts"] == [{"name": "Mijn Font.ttf", "size": 9}]
 
     assert call(f"{base}/file?kind=source&name=boek.epub&k={CODE}")[1] == b"PK fake epub"
@@ -143,3 +144,74 @@ def test_default_screen_is_the_t5_213(server):
 )  # fmt: skip
 def test_safe_names_match_firmware_rules(name, ok):
     assert is_safe_name(name, (".t5b",)) is ok
+
+
+def post(base, path, **fields):
+    from urllib.parse import urlencode
+
+    body = urlencode(fields).encode()
+    return call(f"{base}{path}?k={CODE}", "POST", body,
+                {"Content-Type": "application/x-www-form-urlencoded"})  # fmt: skip
+
+
+def test_folders_marks_position_and_pages(server, tmp_path):
+    base, root = server
+    assert upload(base, "book", "boek.t5b", t5b_bytes(tmp_path, title="Een"))[0] == 200
+    assert post(base, "/api/move", file="boek.t5b", folder="Klassiek")[0] == 200
+    (book,) = info(base)["books"]
+    assert (book["file"], book["folder"]) == ("Klassiek/boek.t5b", "Klassiek")
+    # a second upload of the same name replaces it in its folder
+    assert upload(base, "book", "boek.t5b", t5b_bytes(tmp_path, title="Een"))[0] == 200
+    assert [b["file"] for b in info(base)["books"]] == ["Klassiek/boek.t5b"]
+    assert post(base, "/api/move", file="../boek.t5b", folder="x")[0] == 400
+
+    assert json.loads(post(base, "/api/marks", file="Klassiek/boek.t5b", page="1")[1]) == {
+        "pages": [1]
+    }
+    assert post(base, "/api/marks", file="Klassiek/boek.t5b", page="9")[0] == 400
+    _, body = call(f"{base}/api/marks?file=Klassiek/boek.t5b&k={CODE}")
+    assert json.loads(body)["pages"] == [1]
+    assert info(base)["books"][0]["marks"] == 1
+
+    assert post(base, "/api/position", file="Klassiek/boek.t5b", page="1")[0] == 200
+    assert info(base)["books"][0]["position"] == 1
+    status, page = call(f"{base}/api/page?file=Klassiek/boek.t5b&n=0&k={CODE}")
+    assert (status, len(page)) == (200, 32 * 122)
+
+    # moving back to the root removes the empty folder
+    assert post(base, "/api/move", file="Klassiek/boek.t5b", folder="")[0] == 200
+    assert not (root / "sd" / "books" / "Klassiek").exists()
+    assert info(base)["books"][0]["position"] == 1  # the position moved along
+
+
+def test_settings_name_wifi_time_pictures_reset(server, tmp_path):
+    base, root = server
+    _, body = call(f"{base}/api/settings?k={CODE}")
+    settings = {s["key"]: s for s in json.loads(body)["settings"]}
+    assert settings["language"]["options"] == ["English", "Nederlands"]
+    assert post(base, "/api/settings", key="language", value="1")[0] == 200
+    assert info(base)["lang"] == "nl"
+    assert post(base, "/api/settings", key="language", value="7")[0] == 400
+
+    assert post(base, "/api/name", name="Davids reader")[0] == 200
+    assert info(base)["name"] == "Davids reader"
+    assert post(base, "/api/wifi", ssid="Thuis", password="geheim123")[0] == 200
+    assert info(base)["homeWifi"] == "Thuis"
+    assert "geheim123" not in (root / "state.json").read_text()  # never stored or sent back
+    assert call(f"{base}/api/wifi?k={CODE}", "DELETE")[0] == 200
+    assert info(base)["homeWifi"] == ""
+
+    assert post(base, "/api/time", epoch="1760000000", tz="7200")[0] == 200
+    assert info(base)["stats"]["clock"] is True
+    assert post(base, "/api/time", epoch="12", tz="0")[0] == 400
+
+    assert upload(base, "sleep", "a.bin", bytes(32 * 122))[0] == 200
+    assert upload(base, "sleep", "b.bin", bytes(100))[0] == 400
+    assert info(base)["pictures"] == ["a.bin"]
+    assert call(f"{base}/api/picture?name=a.bin&k={CODE}", "DELETE")[0] == 200
+
+    assert upload(base, "book", "boek.t5b", t5b_bytes(tmp_path))[0] == 200
+    assert post(base, "/api/reset")[0] == 400
+    assert post(base, "/api/reset", confirm="erase")[0] == 200
+    data = info(base)
+    assert (data["books"], data["name"], data["lang"]) == ([], "", "en")

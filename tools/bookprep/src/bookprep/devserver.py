@@ -8,6 +8,10 @@ reader:
     pixi run web-dev                    # http://localhost:8000
     pixi run web-dev --lan              # reachable from your phone on the same network
     pixi run web-dev --screen 4.7in     # pretend to be a 4.7" reader (T5-4.7", M5Paper)
+
+The card layout matches the reader's (firmware/src/storage.h): /books (one folder
+level), /books/.src, /books/.marks, /sleep, /fonts. Reader settings, the device
+name, home Wi-Fi, positions and the clock live in <root>/state.json.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import random
 import re
 import shutil
 import socket
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -33,12 +38,29 @@ KINDS = {
     "source": ("books/.src", (".epub", ".txt"), 64 << 20),
     "meta": ("books/.src", (".json",), 64 << 10),
     "font": ("fonts", (".ttf", ".otf", ".woff", ".woff2"), 8 << 20),
+    "sleep": ("sleep", (".bin",), 0),  # exactly one page
 }
-# /api/info "board" (firmware: BOARD_NAME), one per screen size for the dev server
-BOARD_FOR_SCREEN = {"t5-213": "t5-213", "4.7in": "t5-47"}
 MIME = {".epub": "application/epub+zip", ".txt": "text/plain", ".json": "application/json",
         ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2",
-        ".t5b": "application/octet-stream"}  # fmt: skip
+        ".t5b": "application/octet-stream", ".bin": "application/octet-stream"}  # fmt: skip
+# /api/info "board" (firmware: BOARD_NAME), one per screen size for the dev server
+BOARD_FOR_SCREEN = {"t5-213": "t5-213", "4.7in": "t5-47"}
+
+# The firmware's settings (lib/core/src/settings.cpp): key, English label, options,
+# default option. The page shows whatever the reader sends.
+SETTINGS = [
+    ("sleepScreen", "Sleep screen", ["book", "cover", "pictures", "keep page"], 0),
+    ("statusBar", "Status bar", ["full", "minimal", "hidden"], 0),
+    ("holdAction", "Hold MENU", ["sleep", "bookmark", "lock", "menu"], 0),
+    ("lockOnSleep", "Lock when asleep", ["off", "on"], 0),
+    ("language", "Language", ["English", "Nederlands"], 0),
+    ("fullEvery", "Full refresh",
+     ["every 5", "every 10", "every 15", "every 20", "every 30", "chapters only"], 1),
+    ("longPress", "Hold time", ["400 ms", "500 ms", "600 ms", "800 ms", "1000 ms"], 2),
+    ("idleMinutes", "Idle sleep", ["2 min", "5 min", "10 min", "20 min", "30 min", "60 min"], 2),
+    ("deepSleep", "Sleep after page", ["off", "on"], 1),
+    ("wakeRefresh", "Wake refresh", ["rewrite", "retain", "full"], 0),
+]  # fmt: skip
 
 
 def is_safe_name(name: str, exts: tuple[str, ...]) -> bool:
@@ -48,6 +70,28 @@ def is_safe_name(name: str, exts: tuple[str, ...]) -> bool:
     if not name.lower().endswith(exts) or name.lower() in exts:
         return False
     return not re.search(r'[\x00-\x1f\x7f/\\:"*?<>|]', name)
+
+
+def is_safe_folder(name: str) -> bool:
+    """isSafeFolderName() in web_util.cpp."""
+    if not 1 <= len(name.encode()) <= 32 or name.startswith(".") or name.endswith(" "):
+        return False
+    return not re.search(r'[\x00-\x1f\x7f/\\:"*?<>|]', name)
+
+
+def is_safe_book_path(path: str) -> bool:
+    """isSafeBookPath() in web_util.cpp: "x.t5b" or "Folder/x.t5b"."""
+    parts = path.split("/")
+    if len(parts) == 1:
+        return is_safe_name(parts[0], (".t5b",))
+    return len(parts) == 2 and is_safe_folder(parts[0]) and is_safe_name(parts[1], (".t5b",))
+
+
+def remap_page(page: int, old: int, new: int) -> int:
+    """remapPage() in bookmarks.cpp."""
+    if new == 0 or old <= 1 or new == 1:
+        return 0
+    return min(new - 1, (page * (new - 1) + (old - 1) // 2) // (old - 1))
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -62,7 +106,17 @@ class Handler(SimpleHTTPRequestHandler):
     # --- helpers -----------------------------------------------------------------------
 
     def query(self) -> dict[str, str]:
-        return {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+        q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+        q.update(getattr(self, "_form", {}))
+        return q
+
+    def read_form(self) -> None:
+        """POST bodies in application/x-www-form-urlencoded count as arguments too
+        (like the firmware's WebServer)."""
+        self._form = {}
+        if "application/x-www-form-urlencoded" in self.headers.get("Content-Type", ""):
+            body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
+            self._form = {k: v[0] for k, v in parse_qs(body, keep_blank_values=True).items()}
 
     def send_json(self, status: int, body: dict) -> None:
         data = json.dumps(body).encode()
@@ -79,19 +133,78 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_json(403, {"error": "wrong code"})
         return False
 
+    def card(self) -> Path:
+        return self.root / "sd"
+
     def sd(self, kind: str) -> Path:
-        d = self.root / "sd" / KINDS[kind][0]
+        d = self.card() / KINDS[kind][0]
         d.mkdir(parents=True, exist_ok=True)
         return d
+
+    def marks_file(self, stem: str) -> Path:
+        return self.card() / "books" / ".marks" / f"{stem}.txt"
+
+    def state(self) -> dict:
+        path = self.root / "state.json"
+        state = json.loads(path.read_text()) if path.exists() else {}
+        state.setdefault("settings", {k: d for k, _, _, d in SETTINGS})
+        state.setdefault("positions", {})
+        state.setdefault("name", "")
+        state.setdefault("wifi", {})
+        return state
+
+    def save_state(self, state: dict) -> None:
+        (self.root / "state.json").write_text(json.dumps(state, indent=1))
+
+    def books(self) -> list[tuple[str, Path, T5BFile]]:
+        """(relative path, file, book) for every valid book, folders one level deep."""
+        root = self.sd("book")
+        out = []
+        for path in sorted([*root.glob("*.t5b"), *root.glob("*/*.t5b")]):
+            if path.parent != root and path.parent.name.startswith("."):
+                continue
+            with contextlib.suppress(ValueError):
+                book = T5BFile(path)
+                size = (book.header.page_w, book.header.page_h)
+                if size == (self.screen.width, self.screen.height):
+                    out.append((path.relative_to(root).as_posix(), path, book))
+        return out
+
+    def book_arg(self) -> tuple[str, Path, T5BFile] | None:
+        rel = self.query().get("file", "")
+        if not is_safe_book_path(rel):
+            self.send_json(400, {"error": "bad file name"})
+            return None
+        path = self.sd("book") / rel
+        try:
+            return rel, path, T5BFile(path)
+        except (OSError, ValueError):
+            self.send_json(404, {"error": "no such book"})
+            return None
+
+    def read_marks(self, stem: str, pages: int) -> list[int]:
+        f = self.marks_file(stem)
+        if not f.exists():
+            return []
+        lines = f.read_text().splitlines()
+        return sorted({int(x) for x in lines if x.strip().isdigit() and int(x) < pages})
+
+    def write_marks(self, stem: str, marks: list[int]) -> None:
+        f = self.marks_file(stem)
+        if not marks:
+            f.unlink(missing_ok=True)
+            return
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("".join(f"{m}\n" for m in sorted(set(marks))[:100]))
 
     # --- routes ------------------------------------------------------------------------
 
     def do_GET(self):
         path = urlparse(self.path).path
-        if path == "/api/info":
-            return self.info()
-        if path == "/file":
-            return self.get_file()
+        routes = {"/api/info": self.info, "/file": self.get_file, "/api/marks": self.marks,
+                  "/api/page": self.page, "/api/settings": self.settings}  # fmt: skip
+        if path in routes:
+            return routes[path]()
         self.path = path  # static: drop the query string
         return super().do_GET()
 
@@ -104,6 +217,12 @@ class Handler(SimpleHTTPRequestHandler):
                 self.read_upload()
                 self.send_json(200, {})
             return None
+        self.read_form()
+        routes = {"/api/move": self.move, "/api/marks": self.marks, "/api/position": self.position,
+                  "/api/settings": self.settings, "/api/name": self.name, "/api/wifi": self.wifi,
+                  "/api/time": self.set_time, "/api/reset": self.reset}  # fmt: skip
+        if path in routes:
+            return routes[path]()
         return self.send_json(404, {"error": "not found"})
 
     def do_DELETE(self):
@@ -112,15 +231,17 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         q = self.query()
         if path == "/api/book":
-            name = q.get("file", "")
-            if not is_safe_name(name, (".t5b",)):
-                return self.send_json(400, {"error": "bad file name"})
-            book = self.sd("book") / name
-            if not book.exists():
-                return self.send_json(404, {"error": "no such book"})
-            book.unlink()
-            for extra in self.sd("source").glob(Path(name).stem + ".*"):
+            got = self.book_arg()
+            if not got:
+                return None
+            _, book_path, _ = got
+            book_path.unlink()
+            for extra in self.sd("source").glob(book_path.stem + ".*"):
                 extra.unlink()
+            self.marks_file(book_path.stem).unlink(missing_ok=True)
+            if book_path.parent != self.sd("book"):
+                with contextlib.suppress(OSError):
+                    book_path.parent.rmdir()  # only when empty
             return self.send_json(200, {})
         if path == "/api/font":
             name = q.get("name", "")
@@ -128,30 +249,42 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(404, {"error": "no such font"})
             (self.sd("font") / name).unlink()
             return self.send_json(200, {})
+        if path == "/api/picture":
+            name = q.get("name", "")
+            if not is_safe_name(name, (".bin",)) or not (self.sd("sleep") / name).exists():
+                return self.send_json(404, {"error": "no such picture"})
+            (self.sd("sleep") / name).unlink()
+            return self.send_json(200, {})
+        if path == "/api/wifi":
+            state = self.state()
+            state["wifi"] = {}
+            self.save_state(state)
+            return self.send_json(200, {})
         return self.send_json(404, {"error": "not found"})
 
     def info(self):
         if not self.authorized():
             return
+        state = self.state()
         books = []
-        for path in sorted(self.sd("book").glob("*.t5b")):
-            try:
-                book = T5BFile(path)
-            except ValueError:
-                continue
+        for rel, path, book in self.books():
+            pages = book.header.page_count
+            pos = state["positions"].get(rel, 0)
             originals = self.sd("source").glob(path.stem + ".*")
             source = next((p.name for p in originals if p.suffix in (".epub", ".txt")), None)
-            books.append(
-                {
-                    "file": path.name,
-                    "title": book.header.title or path.name,
-                    "author": book.header.author,
-                    "pages": book.header.page_count,
-                    "size": path.stat().st_size,
-                    "progress": 0,
-                    "source": source,
-                }
-            )
+            books.append({
+                "file": rel,
+                "folder": rel.rsplit("/", 1)[0] if "/" in rel else "",
+                "title": book.header.title or path.name,
+                "author": book.header.author,
+                "pages": pages,
+                "size": path.stat().st_size,
+                "position": pos,
+                "progress": pos * 100 // (pages - 1) if pages > 1 else 0,
+                "cover": book.cover is not None,
+                "marks": len(self.read_marks(path.stem, pages)),
+                "source": source,
+            })  # fmt: skip
         books.sort(key=lambda b: b["title"].lower())
         usage = shutil.disk_usage(self.root)
         font_files = sorted(self.sd("font").iterdir())
@@ -160,13 +293,21 @@ class Handler(SimpleHTTPRequestHandler):
             for p in font_files
             if p.suffix in KINDS["font"][1]
         ]
+        page_bytes = stride_for(self.screen.width) * self.screen.height
+        pictures = [p.name for p in sorted(self.sd("sleep").glob("*.bin"))
+                    if p.stat().st_size == page_bytes]  # fmt: skip
         sc = self.screen
         screen = {"id": sc.id, "width": sc.width, "height": sc.height, "statusBar": sc.status_bar,
                   "size": sc.font_size, "margin": sc.margin}  # fmt: skip
-        board = BOARD_FOR_SCREEN.get(sc.id, sc.id)
-        self.send_json(200, {"version": "dev", "board": board, "screen": screen, "battery": -1,
-                             "total": usage.total, "free": usage.free, "books": books,
-                             "fonts": fonts})  # fmt: skip
+        stats = {"pages": 0, "seconds": 0, "daysRead": 0, "streak": 0, "bestStreak": 0,
+                 "todayPages": 0, "todaySeconds": 0, "clock": "time" in state}  # fmt: skip
+        self.send_json(200, {
+            "version": "dev", "board": BOARD_FOR_SCREEN.get(sc.id, sc.id),
+            "lang": "nl" if state["settings"].get("language") == 1 else "en",
+            "name": state["name"], "homeWifi": state["wifi"].get("ssid", ""), "locked": False,
+            "screen": screen, "battery": -1, "total": usage.total, "free": usage.free,
+            "stats": stats, "books": books, "fonts": fonts, "pictures": pictures,
+        })  # fmt: skip
 
     def read_upload(self) -> tuple[str, bytes] | None:
         length = int(self.headers.get("Content-Length", 0))
@@ -178,6 +319,21 @@ class Handler(SimpleHTTPRequestHandler):
             if part.get_filename():
                 return part.get_filename(), part.get_payload(decode=True)
         return None
+
+    def book_dir_for(self, name: str) -> Path | None:
+        """bookDirFor() in transfer.cpp: the named folder, else where a book of that
+        name already is, else /books."""
+        q = self.query()
+        root = self.sd("book")
+        if "folder" in q:
+            folder = q["folder"]
+            if not folder:
+                return root
+            return root / folder if is_safe_folder(folder) else None
+        for _, path, _ in self.books():
+            if path.name == name:
+                return path.parent
+        return root
 
     def upload(self):
         if not self.authorized():
@@ -191,37 +347,209 @@ class Handler(SimpleHTTPRequestHandler):
         name, data = got
         name = name.replace("\\", "/").rsplit("/", 1)[-1]
         _, exts, limit = KINDS[kind]
+        page_bytes = stride_for(self.screen.width) * self.screen.height
         if kind == "book":  # as kBookMaxBytes in transfer.cpp: 64 MB or 4096 pages
-            limit = max(limit, 4096 * stride_for(self.screen.width) * self.screen.height)
+            limit = max(limit, 4096 * page_bytes)
+        if kind == "sleep":
+            limit = page_bytes
         if not is_safe_name(name, exts):
             return self.send_json(400, {"error": f"only {'/'.join(exts)} files with a plain name"})
         if len(data) > limit:
             return self.send_json(413, {"error": "file too large"})
-        dest = self.sd(kind) / name
+        if kind == "sleep" and len(data) != page_bytes:
+            return self.send_json(400, {"error": f"a sleep picture is {page_bytes} bytes"})
+        folder = self.book_dir_for(name) if kind == "book" else self.sd(kind)
+        if folder is None:
+            return self.send_json(400, {"error": "bad folder name"})
+        folder.mkdir(parents=True, exist_ok=True)
+        dest = folder / name
         tmp = dest.with_name(dest.name + ".part")
         tmp.write_bytes(data)
         title = name
         if kind == "book":
             try:
                 book = T5BFile(tmp)
-                if (book.header.page_w, book.header.page_h) != (
-                    self.screen.width,
-                    self.screen.height,
-                ):
+                size = (book.header.page_w, book.header.page_h)
+                if size != (self.screen.width, self.screen.height):
                     raise ValueError("made for another screen size")
                 title = book.header.title or name
             except ValueError as e:
                 tmp.unlink()
                 return self.send_json(400, {"error": str(e)})
+            if dest.exists():  # replacing a book (restyled): positions move along
+                self.remap_positions(dest, book.header.page_count)
         tmp.replace(dest)
         return self.send_json(200, {"ok": 1, "title": title})
+
+    def remap_positions(self, dest: Path, new: int) -> None:
+        with contextlib.suppress(ValueError):
+            old = T5BFile(dest).header.page_count
+            state = self.state()
+            rel = dest.relative_to(self.sd("book")).as_posix()
+            if rel in state["positions"]:
+                state["positions"][rel] = remap_page(state["positions"][rel], old, new)
+                self.save_state(state)
+            marks = self.read_marks(dest.stem, old)
+            self.write_marks(dest.stem, [remap_page(m, old, new) for m in marks])
+
+    def move(self):
+        if not self.authorized():
+            return None
+        got = self.book_arg()
+        if not got:
+            return None
+        rel, path, _ = got
+        folder = self.query().get("folder", "")
+        if folder and not is_safe_folder(folder):
+            return self.send_json(400, {"error": "bad name"})
+        dest_dir = self.sd("book") / folder if folder else self.sd("book")
+        dest = dest_dir / path.name
+        if dest == path:
+            return self.send_json(200, {})
+        if dest.exists():
+            return self.send_json(409, {"error": "a book with that name is already there"})
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        path.replace(dest)
+        state = self.state()
+        if rel in state["positions"]:
+            state["positions"][dest.relative_to(self.sd("book")).as_posix()] = state[
+                "positions"
+            ].pop(rel)
+            self.save_state(state)
+        if path.parent != self.sd("book"):
+            with contextlib.suppress(OSError):
+                path.parent.rmdir()
+        return self.send_json(200, {})
+
+    def marks(self):
+        if not self.authorized():
+            return None
+        got = self.book_arg()
+        if not got:
+            return None
+        _, path, book = got
+        pages = book.header.page_count
+        marks = self.read_marks(path.stem, pages)
+        if self.command == "POST":
+            q = self.query()
+            page = int(q["page"]) if q.get("page", "").isdigit() else -1
+            if not 0 <= page < pages:
+                return self.send_json(400, {"error": "bad page"})
+            if q.get("op") == "remove":
+                marks = [m for m in marks if m != page]
+            elif page not in marks:
+                marks.append(page)
+            self.write_marks(path.stem, marks)
+            marks = self.read_marks(path.stem, pages)
+        return self.send_json(200, {"pages": marks})
+
+    def position(self):
+        if not self.authorized():
+            return None
+        got = self.book_arg()
+        if not got:
+            return None
+        rel, _, book = got
+        page = self.query().get("page", "")
+        if not page.isdigit() or int(page) >= book.header.page_count:
+            return self.send_json(400, {"error": "bad page"})
+        state = self.state()
+        state["positions"][rel] = int(page)
+        self.save_state(state)
+        return self.send_json(200, {})
+
+    def page(self):
+        if not self.authorized():
+            return None
+        got = self.book_arg()
+        if not got:
+            return None
+        _, _, book = got
+        n = self.query().get("n", "")
+        if not n.isdigit() or int(n) >= book.header.page_count:
+            return self.send_json(400, {"error": "bad page"})
+        data = book.page_data(int(n))
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+        return None
+
+    def settings(self):
+        if not self.authorized():
+            return None
+        state = self.state()
+        if self.command == "POST":
+            q = self.query()
+            options = {k: len(o) for k, _, o, _ in SETTINGS}
+            key, value = q.get("key", ""), q.get("value", "")
+            if key not in options or not value.isdigit() or int(value) >= options[key]:
+                return self.send_json(400, {"error": "bad setting"})
+            state["settings"][key] = int(value)
+            self.save_state(state)
+        return self.send_json(200, {"settings": [
+            {"key": k, "label": label, "value": state["settings"].get(k, d), "options": opts}
+            for k, label, opts, d in SETTINGS
+        ]})  # fmt: skip
+
+    def name(self):
+        if not self.authorized():
+            return None
+        name = self.query().get("name", "")
+        if len(name.encode()) > 32 or any(ord(c) < 0x20 for c in name):
+            return self.send_json(400, {"error": "bad name"})
+        state = self.state()
+        state["name"] = name
+        self.save_state(state)
+        return self.send_json(200, {})
+
+    def wifi(self):
+        if not self.authorized():
+            return None
+        q = self.query()
+        ssid, password = q.get("ssid", ""), q.get("password", "")
+        if not 1 <= len(ssid.encode()) <= 32 or len(password.encode()) > 63:
+            return self.send_json(
+                400, {"error": "network name 1-32 characters, password at most 63"}
+            )
+        state = self.state()
+        state["wifi"] = {"ssid": ssid}  # the dev server never keeps the password
+        self.save_state(state)
+        return self.send_json(200, {})
+
+    def set_time(self):
+        if not self.authorized():
+            return None
+        q = self.query()
+        try:
+            epoch, tz = int(q.get("epoch", "")), int(q.get("tz", ""))
+        except ValueError:
+            return self.send_json(400, {"error": "bad time"})
+        if epoch < 1700000000 or abs(tz) > 14 * 3600:
+            return self.send_json(400, {"error": "bad time"})
+        state = self.state()
+        state["time"] = {"epoch": epoch, "tz": tz, "at": time.time()}
+        self.save_state(state)
+        return self.send_json(200, {})
+
+    def reset(self):
+        if not self.authorized():
+            return None
+        if self.query().get("confirm") != "erase":
+            return self.send_json(400, {"error": "confirm=erase missing"})
+        for sub in ("books", "sleep", "fonts"):
+            shutil.rmtree(self.card() / sub, ignore_errors=True)
+        (self.root / "state.json").unlink(missing_ok=True)
+        return self.send_json(200, {})
 
     def get_file(self):
         if not self.authorized():
             return None
         q = self.query()
         kind, name = q.get("kind", ""), q.get("name", "")
-        if kind not in ("source", "meta", "font") or not is_safe_name(name, KINDS[kind][1]):
+        allowed = ("source", "meta", "font", "sleep")
+        if kind not in allowed or not is_safe_name(name, KINDS[kind][1]):
             return self.send_json(400, {"error": "bad request"})
         path = self.sd(kind) / name
         if not path.exists():

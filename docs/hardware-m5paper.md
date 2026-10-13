@@ -21,7 +21,8 @@ so books for one open on all three (`--screen 4.7in`). Both have touch.
 | Battery | ADC GPIO3, ×2; charging status GPIO4 (low = charging, not used) | M5 |
 | Power off | PWROFF_PULSE GPIO44: kept low, 5 low/high pulses switch the device off | M5 |
 | Buttons | none (the power button only switches power) | M5 |
-| Other | LED GPIO0, buzzer GPIO21, BM8563 RTC and BMI270 on I2C (not used) | M5 |
+| RTC | BM8563 at 0x51 on the touch I2C bus: keeps UTC while switched off (statistics) | M5 |
+| Other | LED GPIO0, buzzer GPIO21, BMI270 on I2C (not used) | M5 |
 
 - **GPIO47 clash:** FastEPD's preset uses GPIO47 as the dummy D/C pin the S3's LCD
   peripheral insists on, and GPIO47 is also the SD card's CS. `fastepd_panel.cpp`
@@ -44,6 +45,7 @@ so books for one open on all three (`--screen 4.7in`). Both have touch.
 | Buttons | 3-way switch: GPIO37 (BtnA), 38 (press, BtnB), 39 (BtnC); active low, external pull-ups | M5 / VERIFY which end is "down" |
 | Battery | ADC GPIO35, ×2 | M5 |
 | Power hold | GPIO2: high keeps the board on when on battery, low switches it off | M5 |
+| RTC | BM8563 at 0x51 on the touch I2C bus: keeps UTC while switched off (statistics) | M5 |
 
 - **Own IT8951 driver** (`src/it8951_panel.cpp`, about 200 lines). FastEPD 2.2.0
   always refreshes an IT8951 with its flashing full-update mode, so I followed M5GFX's
@@ -86,6 +88,8 @@ so books for one open on all three (`--screen 4.7in`). Both have touch.
   DU partial updates are clean, and the 4-bpp load shows the right pixels.
 - Light-sleep current and wake time per page, and the switch-off on battery.
 - M5Paper: which switch direction is "down" (`kBtnNext` 39 / `kBtnPrev` 37).
+- The BM8563 answers at 0x51 and keeps the time while off (`src/rtc_clock.cpp`;
+  serial: `clock: ... from the RTC` after switching on).
 
 ## Checkpoint results
 

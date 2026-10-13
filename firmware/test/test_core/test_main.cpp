@@ -4,10 +4,14 @@
 
 #include "bitmap.h"
 #include "board_tag.h"
+#include "bookmarks.h"
 #include "button.h"
 #include "golden_header.h"
+#include "i18n.h"
 #include "menu.h"
 #include "policy.h"
+#include "reading_stats.h"
+#include "rtc_time.h"
 #include "settings.h"
 #include "t5b_format.h"
 #include "text_util.h"
@@ -321,6 +325,115 @@ static void test_board_tag_absent() {
   TEST_ASSERT_EQUAL_STRING("", scan.name());
 }
 
+// --- cover block, folders, bookmarks, statistics -------------------------------------
+
+static void test_cover_block() {
+  t5b::Header h;
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::parseHeader(kGoldenHeader, 146, h)));
+  const uint32_t end = h.fileSize();
+  t5b::Cover c;
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::parseCover(h, end, nullptr, 0, c)));
+  TEST_ASSERT_FALSE(c.present);
+  // 20 x 3 cover: stride 3, 9 bytes of bitmap
+  const uint8_t head[12] = {'T', '5', 'C', 'V', 20, 0, 3, 0, 3, 0, 0, 0};
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::validate(h, 250, 122, end + 12 + 9)));
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::parseCover(h, end + 12 + 9, head, 12, c)));
+  TEST_ASSERT_TRUE(c.present);
+  TEST_ASSERT_EQUAL(20, c.w);
+  TEST_ASSERT_EQUAL(3, c.h);
+  TEST_ASSERT_EQUAL(end + 12, c.offset);
+  // wrong length, wrong magic, wrong stride, file too short
+  TEST_ASSERT_EQUAL(int(t5b::Error::SizeMismatch), int(t5b::parseCover(h, end + 12 + 8, head, 12, c)));
+  uint8_t bad[12];
+  memcpy(bad, head, 12);
+  bad[0] = 'X';
+  TEST_ASSERT_EQUAL(int(t5b::Error::SizeMismatch), int(t5b::parseCover(h, end + 21, bad, 12, c)));
+  memcpy(bad, head, 12);
+  bad[8] = 4;
+  TEST_ASSERT_EQUAL(int(t5b::Error::SizeMismatch), int(t5b::parseCover(h, end + 24, bad, 12, c)));
+  TEST_ASSERT_EQUAL(int(t5b::Error::SizeMismatch), int(t5b::validate(h, 250, 122, end - 1)));
+}
+
+static void test_book_paths_and_folders() {
+  TEST_ASSERT_TRUE(isSafeFolderName("Classics"));
+  TEST_ASSERT_TRUE(isSafeFolderName("Nederlands 19e eeuw"));
+  TEST_ASSERT_FALSE(isSafeFolderName(".src"));
+  TEST_ASSERT_FALSE(isSafeFolderName("a/b"));
+  TEST_ASSERT_FALSE(isSafeFolderName(""));
+  TEST_ASSERT_FALSE(isSafeFolderName("trailing "));
+  TEST_ASSERT_TRUE(isSafeBookPath("boek.t5b"));
+  TEST_ASSERT_TRUE(isSafeBookPath("Classics/boek.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookPath("a/b/boek.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookPath(".marks/boek.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookPath("/boek.t5b"));
+  TEST_ASSERT_FALSE(isSafeBookPath("Classics/boek.epub"));
+  TEST_ASSERT_FALSE(isSafeBookPath("../boek.t5b"));
+}
+
+static void test_page_list() {
+  PageList l;
+  TEST_ASSERT_TRUE(l.add(40));
+  TEST_ASSERT_TRUE(l.add(3));
+  TEST_ASSERT_TRUE(l.add(17));
+  TEST_ASSERT_FALSE(l.add(17));
+  TEST_ASSERT_EQUAL(3, l.count());
+  TEST_ASSERT_EQUAL(3, l.at(0));
+  TEST_ASSERT_EQUAL(40, l.at(2));
+  char text[64];
+  TEST_ASSERT_EQUAL(8, l.format(text, sizeof(text)));
+  TEST_ASSERT_EQUAL_STRING("3\n17\n40\n", text);
+  TEST_ASSERT_TRUE(l.remove(17));
+  TEST_ASSERT_FALSE(l.contains(17));
+
+  PageList r;
+  const char in[] = "12\r\n5\nxx\n5\n999\n\n7";
+  r.parse(in, sizeof(in) - 1, 100);
+  TEST_ASSERT_EQUAL(3, r.count());  // 999 out of range, junk and duplicate skipped
+  TEST_ASSERT_EQUAL(5, r.at(0));
+  TEST_ASSERT_EQUAL(12, r.at(2));
+
+  r.remap(100, 199);  // 5 -> 10, 7 -> 14, 12 -> 24
+  TEST_ASSERT_EQUAL(10, r.at(0));
+  TEST_ASSERT_EQUAL(24, r.at(2));
+  TEST_ASSERT_EQUAL(0, remapPage(5, 1, 50));
+  TEST_ASSERT_EQUAL(49, remapPage(99, 100, 50));
+  TEST_ASSERT_EQUAL(0, remapPage(3, 10, 0));
+}
+
+static void test_reading_stats() {
+  const uint32_t day0 = 1760000000u - 1760000000u % 86400;  // a UTC midnight
+  ReadingStats st;
+  recordPage(st, day0 + 3600, 0);
+  recordPage(st, day0 + 3660, 0);   // 60 s on the page
+  recordPage(st, day0 + 9000, 0);   // a pause: no time
+  TEST_ASSERT_EQUAL(3, st.pages);
+  TEST_ASSERT_EQUAL(60, st.seconds);
+  TEST_ASSERT_EQUAL(1, st.daysRead);
+  TEST_ASSERT_EQUAL(1, currentStreak(st, day0 + 9000, 0));
+  TEST_ASSERT_EQUAL(3, todayPages(st, day0 + 9000, 0));
+
+  recordPage(st, day0 + 86400 + 100, 0);  // next day
+  TEST_ASSERT_EQUAL(2, st.streak);
+  TEST_ASSERT_EQUAL(1, todayPages(st, day0 + 86400 + 200, 0));
+  TEST_ASSERT_EQUAL(2, currentStreak(st, day0 + 2 * 86400 + 5, 0));  // not broken yet today
+  TEST_ASSERT_EQUAL(0, currentStreak(st, day0 + 3 * 86400 + 5, 0));  // a day missed
+  recordPage(st, day0 + 3 * 86400 + 10, 0);
+  TEST_ASSERT_EQUAL(1, st.streak);
+  TEST_ASSERT_EQUAL(2, st.bestStreak);
+  TEST_ASSERT_EQUAL(3, st.daysRead);
+
+  // time zone: 23:30 UTC is already tomorrow at UTC+2
+  TEST_ASSERT_EQUAL(localDay(day0 + 86400, 0), localDay(day0 + 84600, 7200));
+  // no clock: pages and time count, days don't
+  ReadingStats nc;
+  recordPage(nc, 1000, 0);
+  recordPage(nc, 1030, 0);
+  TEST_ASSERT_EQUAL(2, nc.pages);
+  TEST_ASSERT_EQUAL(30, nc.seconds);
+  TEST_ASSERT_EQUAL(0, nc.daysRead);
+  TEST_ASSERT_EQUAL(-1, localDay(1030, 0));
+}
+
 // --- bitmap -------------------------------------------------------------------------
 
 static bool pixel(const uint8_t *b, int w, int x, int y) {  // true = black
@@ -474,7 +587,8 @@ static void test_list_model_scrolls_and_wraps() {
 
 // --- settings ---------------------------------------------------------------
 
-static void test_settings_cycle_value_sanitize() {
+static void test_settings_options_keys_and_language() {
+  setLanguage(Lang::En);
   Settings s;
   char text[48];
   TEST_ASSERT_EQUAL_STRING("Full refresh", settingLabel(SettingId::FullEvery));
@@ -491,24 +605,58 @@ static void test_settings_cycle_value_sanitize() {
 
   cycleSetting(s, SettingId::WakeRefresh);
   TEST_ASSERT_EQUAL(int(WakeRefresh::Retain), int(s.wakeRefresh));
-  settingValue(s, SettingId::WakeRefresh, text, sizeof(text));
-  TEST_ASSERT_EQUAL_STRING("retain", text);
   cycleSetting(s, SettingId::DeepSleep);
   settingValue(s, SettingId::DeepSleep, text, sizeof(text));
   TEST_ASSERT_EQUAL_STRING("off", text);
   settingValue(s, SettingId::LongPress, text, sizeof(text));
   TEST_ASSERT_EQUAL_STRING("600 ms", text);
+  TEST_ASSERT_EQUAL_STRING("Long press", settingLabel(SettingId::HoldAction, S::SetLongPress));
 
+  // every option round-trips through its index, every key back to its id
+  for (int id = 0; id < kSettingCount; id++) {
+    const SettingId sid = SettingId(id);
+    TEST_ASSERT_TRUE(settingOptionCount(sid) >= 2);
+    for (int i = 0; i < settingOptionCount(sid); i++) {
+      Settings t;
+      setSettingIndex(t, sid, i);
+      TEST_ASSERT_EQUAL(i, settingIndex(t, sid));
+      settingOptionText(sid, i, text, sizeof(text));
+      TEST_ASSERT_TRUE(text[0] != '\0');
+    }
+    SettingId back;
+    TEST_ASSERT_TRUE(settingFromKey(settingKey(sid), back));
+    TEST_ASSERT_EQUAL(id, int(back));
+    TEST_ASSERT_TRUE(strlen(settingKey(sid)) <= 13);  // NVS keys: "s_" + key <= 15
+  }
+  SettingId none;
+  TEST_ASSERT_FALSE(settingFromKey("nope", none));
+
+  // values outside the lists (old NVS data) read as the first option; bad indexes are ignored
   s.fullEvery = 7;
-  s.longPressMs = 1;
-  s.idleMinutes = 0;
-  s.wakeRefresh = WakeRefresh(9);
-  sanitizeSettings(s);
-  const Settings d;
-  TEST_ASSERT_EQUAL(d.fullEvery, s.fullEvery);
-  TEST_ASSERT_EQUAL(d.longPressMs, s.longPressMs);
-  TEST_ASSERT_EQUAL(d.idleMinutes, s.idleMinutes);
-  TEST_ASSERT_EQUAL(int(d.wakeRefresh), int(s.wakeRefresh));
+  TEST_ASSERT_EQUAL(0, settingIndex(s, SettingId::FullEvery));
+  setSettingIndex(s, SettingId::FullEvery, 99);
+  TEST_ASSERT_EQUAL(7, s.fullEvery);
+
+  // Dutch
+  setLanguage(Lang::Nl);
+  TEST_ASSERT_EQUAL_STRING("Volledig verversen", settingLabel(SettingId::FullEvery));
+  s = Settings();
+  settingValue(s, SettingId::FullEvery, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("elke 10", text);
+  settingValue(s, SettingId::Language, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("English", text);  // each language in its own name
+  setLanguage(Lang::En);
+}
+
+static void test_translations_complete() {
+  for (int i = 0; i < int(S::Count); i++) {
+    TEST_ASSERT_NOT_NULL(tr(S(i), Lang::En));
+    TEST_ASSERT_NOT_NULL(tr(S(i), Lang::Nl));
+    TEST_ASSERT_TRUE(tr(S(i), Lang::En)[0] != '\0');
+    TEST_ASSERT_TRUE(tr(S(i), Lang::Nl)[0] != '\0');
+  }
+  TEST_ASSERT_EQUAL_STRING("Bladwijzers", tr(S::Bookmarks, Lang::Nl));
+  TEST_ASSERT_EQUAL_STRING("?", tr(S::Count, Lang::En));
 }
 
 static void test_wrap_text() {
@@ -601,6 +749,44 @@ static void test_credentials() {
   TEST_ASSERT_EQUAL_STRING("3456", code);
 }
 
+void test_rtc_time() {
+  TEST_ASSERT_EQUAL_INT32(0, daysFromCivil(1970, 1, 1));
+  TEST_ASSERT_EQUAL_INT32(10957, daysFromCivil(2000, 1, 1));
+  TEST_ASSERT_EQUAL_INT32(11017, daysFromCivil(2000, 3, 1));  // 2000 is a leap year
+  int32_t y;
+  unsigned m, d;
+  civilFromDays(daysFromCivil(2026, 10, 13), y, m, d);
+  TEST_ASSERT_EQUAL_INT32(2026, y);
+  TEST_ASSERT_EQUAL_UINT(10, m);
+  TEST_ASSERT_EQUAL_UINT(13, d);
+
+  // 2026-10-13 21:07:45 UTC, a Tuesday
+  const uint32_t t = uint32_t(daysFromCivil(2026, 10, 13)) * 86400 + 21 * 3600 + 7 * 60 + 45;
+  uint8_t r[kRtcRegCount];
+  encodeRtc(t, r);
+  const uint8_t want[kRtcRegCount] = {0x45, 0x07, 0x21, 0x13, 2, 0x10, 0x26};
+  TEST_ASSERT_EQUAL_HEX8_ARRAY(want, r, kRtcRegCount);
+  uint32_t back = 0;
+  TEST_ASSERT_TRUE(decodeRtc(r, back));
+  TEST_ASSERT_EQUAL_UINT32(t, back);
+
+  // leap day, last second of a year
+  const uint32_t edges[] = {uint32_t(daysFromCivil(2028, 2, 29)) * 86400 + 43200,
+                            uint32_t(daysFromCivil(2030, 1, 1)) * 86400 - 1};
+  for (uint32_t e : edges) {
+    encodeRtc(e, r);
+    TEST_ASSERT_TRUE(decodeRtc(r, back));
+    TEST_ASSERT_EQUAL_UINT32(e, back);
+  }
+
+  r[0] |= 0x80;  // VL: the clock stopped
+  TEST_ASSERT_FALSE(decodeRtc(r, back));
+  const uint8_t junk[kRtcRegCount] = {0x00, 0x00, 0x00, 0x00, 0, 0x00, 0x00};  // day 0
+  TEST_ASSERT_FALSE(decodeRtc(junk, back));
+  const uint8_t notBcd[kRtcRegCount] = {0x5A, 0x00, 0x00, 0x01, 0, 0x01, 0x26};
+  TEST_ASSERT_FALSE(decodeRtc(notBcd, back));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_golden_header_from_python_writer);
@@ -620,6 +806,11 @@ int main() {
   RUN_TEST(test_bounce_is_one_tap);
   RUN_TEST(test_click_decoder_after_wake);
   RUN_TEST(test_rotate_1bpp);
+  RUN_TEST(test_cover_block);
+  RUN_TEST(test_book_paths_and_folders);
+  RUN_TEST(test_page_list);
+  RUN_TEST(test_reading_stats);
+  RUN_TEST(test_rtc_time);
   RUN_TEST(test_board_tag_found_across_chunks);
   RUN_TEST(test_board_tag_absent);
   RUN_TEST(test_touch_tap_and_jitter);
@@ -633,7 +824,8 @@ int main() {
   RUN_TEST(test_fit_text);
   RUN_TEST(test_format_progress);
   RUN_TEST(test_list_model_scrolls_and_wraps);
-  RUN_TEST(test_settings_cycle_value_sanitize);
+  RUN_TEST(test_settings_options_keys_and_language);
+  RUN_TEST(test_translations_complete);
   RUN_TEST(test_wrap_text);
   RUN_TEST(test_json_escape);
   RUN_TEST(test_safe_book_name);

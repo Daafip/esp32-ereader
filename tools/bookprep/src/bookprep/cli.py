@@ -22,7 +22,14 @@ from .layout import (
     line_height_for,
 )
 from .normalize import GlyphFallback, font_charset, normalize_text
-from .render import RenderOptions, contact_sheet, enlarge, render_page, with_status_bar
+from .render import (
+    RenderOptions,
+    contact_sheet,
+    cover_bitmap,
+    enlarge,
+    render_page,
+    with_status_bar,
+)
 from .t5b import TocEntry, pack_page, write_t5b
 
 DEFAULT_LANG = "nl"
@@ -59,6 +66,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--no-chapter-break", action="store_true", help="no page break per chapter")
     p.add_argument("--threshold", type=int, default=128, help="AA grey -> black cut-off (0-255)")
     p.add_argument("--mono", action="store_true", help="FreeType mono rendering, no threshold")
+    p.add_argument("--bionic", action="store_true", help="bolder word starts (bionic reading)")
+    p.add_argument("--no-cover", action="store_true", help="leave out the EPUB's cover image")
     p.add_argument("--title", help="override the title")
     p.add_argument("--author", help="override the author")
     p.add_argument("--preview", action="store_true", help="write preview PNGs + contact sheet")
@@ -148,13 +157,18 @@ def main(argv: list[str] | None = None) -> int:
         print("error: the book has no text", file=sys.stderr)
         return 1
 
-    render_opts = RenderOptions(line_height, threshold=args.threshold, mono=args.mono)
+    render_opts = RenderOptions(
+        line_height, threshold=args.threshold, mono=args.mono, bionic=args.bionic
+    )
     images = [render_page(page, font, geometry, render_opts) for page in pages]
     toc = toc_entries(book.chapters, pages)
 
     args.out.mkdir(parents=True, exist_ok=True)
     stem = slug(args.input.stem)
     t5b_path = args.out / f"{stem}.t5b"
+    cover = None
+    if raw.cover and not args.no_cover:
+        cover = cover_bitmap(raw.cover, (screen.cover_w, screen.cover_h))
     header = write_t5b(
         t5b_path,
         title=title,
@@ -163,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         page_h=geometry.height,
         toc=toc,
         pages=(pack_page(img) for img in images),
+        cover=cover,
     )
 
     lines_per_page = geometry.text_height // line_height
@@ -181,7 +196,9 @@ def main(argv: list[str] | None = None) -> int:
         f"author:   {author}",
         f"language: {lang} (hyphenation: {hyphenator.lang if hyphenator else 'off'})",
         f"font:     {font_path.name} {size}px, line height {line_height}px, "
-        f"{'mono' if args.mono else f'threshold {args.threshold}'}",
+        f"{'mono' if args.mono else f'threshold {args.threshold}'}"
+        f"{', bionic' if args.bionic else ''}",
+        f"cover:    {f'{cover.width}x{cover.height}' if cover else 'none'}",
         f"page:     {geometry.width}x{geometry.height}, text area "
         f"{geometry.text_width}x{geometry.text_height} at ({geometry.text_left},"
         f"{geometry.text_top}), status bar {geometry.status_bar}px",

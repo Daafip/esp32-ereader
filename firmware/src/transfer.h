@@ -1,7 +1,7 @@
 // "Wi-Fi transfer": upload, list and delete books from a browser.
 //
-// Starts the reader's own Wi-Fi network (WPA2, password kept in NVS), or joins
-// your home network if include/secrets.h defines WIFI_SSID / WIFI_PASSWORD.
+// Joins your home network (entered on the page, or include/secrets.h's WIFI_SSID /
+// WIFI_PASSWORD), or starts the reader's own network (WPA2, password kept in NVS).
 // Serves the page from include/web_index.h and a small JSON API; every API call
 // needs the 4-digit session code shown on the e-ink screen. Wi-Fi is off
 // whenever this mode isn't running.

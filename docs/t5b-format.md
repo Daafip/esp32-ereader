@@ -19,6 +19,7 @@ NUL-padded and always NUL-terminated within their field.
 | 82 | 64 | author |
 | 146 | 52 × toc_count | TOC entries: start_page (u32, 0-based), title[48] |
 | 146 + 52 × toc_count | page_bytes × page_count | pages |
+| end of the pages | 12 + cover stride × cover h | optional cover block (below) |
 
 `page_bytes = stride × page_h`: 3904 (T5-2.13) or 65280 (4.7" readers). A reader only
 opens books whose page size matches its screen. Page *n* (0-based) starts at
@@ -42,6 +43,27 @@ Identical to bb_epaper's local framebuffer for the landscape 250×122 panel
 
 The bottom 14 rows (status bar) are white. The firmware draws the status bar
 there after copying the page into the framebuffer.
+
+## Cover block (optional)
+
+Added in firmware 0.10.0 for the "cover" sleep screen. The version stays 1: a book
+without a cover is unchanged. Older firmware checks the exact file size and refuses
+a book with a cover, so those need 0.10.0 or later (`--no-cover`, or the page's
+"Cover" box unticked, leaves it out). Right after the last page:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 4 | magic `"T5CV"` |
+| 4 | 2 | w (u16) |
+| 6 | 2 | h (u16) |
+| 8 | 2 | stride (u16) = ceil(w / 8) |
+| 10 | 2 | reserved = 0 |
+| 12 | stride × h | bitmap, same layout as a page |
+
+The cover is the EPUB's cover image scaled to fit 72×104 (T5-2.13) or 420×640 (4.7"
+readers) and dithered; the screen size gives the box (`cover_w`/`cover_h` in
+`layout.py`). A file with anything else after the pages, or a block whose size
+doesn't match, is invalid.
 
 ## Firmware sketch
 

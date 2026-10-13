@@ -60,8 +60,22 @@ def make_epub(path: Path) -> Path:
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
     book.spine = [cover, ch1, ch1b]
+    book.set_cover("cover.png", cover_png(), create_page=False)
     epub.write_epub(str(path), book)
     return path
+
+
+def cover_png() -> bytes:
+    """A small cover image: a dark band across a light background."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (60, 90), (230, 220, 200))
+    ImageDraw.Draw(img).rectangle((0, 30, 59, 59), fill=(30, 30, 60))
+    out = io.BytesIO()
+    img.save(out, "PNG")
+    return out.getvalue()
 
 
 @pytest.fixture

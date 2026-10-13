@@ -50,8 +50,23 @@ const char *errorText(Error e);
 // Parses the 146 header bytes (magic, version, stride consistency).
 Error parseHeader(const uint8_t *data, size_t len, Header &out);
 
-// Checks a parsed header against the panel geometry and the real file size.
+// Checks a parsed header against the panel geometry and the real file size. The
+// file may be longer than the pages: an optional cover block follows them
+// (check it with parseCover()).
 Error validate(const Header &h, uint16_t pageW, uint16_t pageH, uint32_t fileSize);
+
+// Optional cover block right after the last page (docs/t5b-format.md):
+// "T5CV", u16 width, u16 height, u16 stride, u16 reserved, then the 1-bpp bitmap
+// (same bit layout as the pages), and nothing after it.
+constexpr uint32_t kCoverHeaderSize = 12;
+struct Cover {
+  bool present = false;
+  uint16_t w = 0, h = 0, stride = 0;
+  uint32_t offset = 0;  // file offset of the bitmap
+};
+// `head`: the kCoverHeaderSize bytes at h.fileSize() (nullptr if the file ends
+// there). SizeMismatch if trailing data isn't a well-formed cover filling the file.
+Error parseCover(const Header &h, uint32_t fileSize, const uint8_t *head, size_t len, Cover &out);
 
 // Parses one 52-byte TOC entry.
 void parseTocEntry(const uint8_t *data, TocEntry &out);

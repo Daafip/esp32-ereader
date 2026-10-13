@@ -36,8 +36,8 @@
   // tools/bookprep/src/bookprep/layout.py and firmware/include/boards/*.h; the reader
   // reports its own screen in /api/info.
   const screens = {
-    "t5-213": { id: "t5-213", name: "LilyGo T5-2.13", width: 250, height: 122, statusBar: 14, size: 13, margin: 4, marginBottom: 4 },
-    "4.7in": { id: "4.7in", name: "LilyGo T5-4.7\" S3, M5PaperS3, M5Paper", width: 540, height: 960, statusBar: 28, size: 28, margin: 24, marginBottom: 8 },
+    "t5-213": { id: "t5-213", name: "LilyGo T5-2.13", width: 250, height: 122, statusBar: 14, size: 13, margin: 4, marginBottom: 4, coverW: 72, coverH: 104 },
+    "4.7in": { id: "4.7in", name: "LilyGo T5-4.7\" S3, M5PaperS3, M5Paper", width: 540, height: 960, statusBar: 28, size: 28, margin: 24, marginBottom: 8, coverW: 420, coverH: 640 },
   };
 
   // A screen from /api/info (or an id): known fields filled in from the table.
@@ -71,7 +71,7 @@
   const defaults = {
     font: "ubuntu", size: 13, spacing: 1.2, margin: 4, indent: true, paragraphSpacing: 0,
     justify: true, hyphenate: true, lang: "auto", threshold: 128, chapterPageBreak: true,
-    widowOrphan: true,
+    widowOrphan: true, bionic: false, cover: true,
   };
 
   // --- ZIP (EPUB container) ---------------------------------------------------------
@@ -317,7 +317,25 @@
       author: meta("creator").join(", "),
       language: languages[0] || null,
       chapters,
+      cover: await coverImage(zip, opf, manifest),
     };
+  }
+
+  // The cover image file, as bookprep finds it: EPUB 3 "cover-image" item, EPUB 2
+  // <meta name="cover">, or an image called cover. { data, type } or null.
+  async function coverImage(zip, opf, manifest) {
+    const isImage = (item) => item && /^image\//.test(item.mediaType) && zip.has(item.path);
+    let found = [...manifest.values()].find((i) => i.properties.split(/\s+/).includes("cover-image") && isImage(i));
+    if (!found) {
+      const m = byLocalName(opf, "meta").find((e) => e.getAttribute("name") === "cover");
+      if (m) found = manifest.get(m.getAttribute("content"));
+      if (!isImage(found)) found = null;
+    }
+    if (!found) {
+      found = [...manifest.entries()].map(([id, i]) => ({ ...i, id })).find((i) => isImage(i) &&
+        (i.path.toLowerCase().includes("cover") || i.id.toLowerCase().includes("cover")));
+    }
+    return found ? { data: await zip.read(found.path), type: found.mediaType } : null;
   }
 
   const GUTENBERG_START = /^\*\*\* ?START OF (THE|THIS) PROJECT GUTENBERG.*$/im;
@@ -645,10 +663,12 @@
     return out;
   }
 
-  function writeT5b({ title, author, pageW, pageH, toc, pages }) {
+  // cover: { w, h, bits } (packed like a page) or null: the optional cover block.
+  function writeT5b({ title, author, pageW, pageH, toc, pages, cover = null }) {
     const pageBytes = strideFor(pageW) * pageH;
     toc = toc.slice(0, 0xffff);
-    const out = new Uint8Array(HEADER_SIZE + toc.length * TOC_ENTRY_SIZE + pages.length * pageBytes);
+    const coverBytes = cover ? 12 + strideFor(cover.w) * cover.h : 0;
+    const out = new Uint8Array(HEADER_SIZE + toc.length * TOC_ENTRY_SIZE + pages.length * pageBytes + coverBytes);
     const dv = new DataView(out.buffer);
     out.set([0x54, 0x35, 0x42, 0x31], 0); // "T5B1"
     dv.setUint16(4, 1, true);
@@ -670,7 +690,97 @@
       out.set(page, p);
       p += pageBytes;
     }
+    if (cover) {
+      if (cover.bits.length !== strideFor(cover.w) * cover.h) throw new Error("cover has the wrong size");
+      out.set([0x54, 0x35, 0x43, 0x56], p); // "T5CV"
+      dv.setUint16(p + 4, cover.w, true);
+      dv.setUint16(p + 6, cover.h, true);
+      dv.setUint16(p + 8, strideFor(cover.w), true);
+      dv.setUint16(p + 10, 0, true);
+      out.set(cover.bits, p + 12);
+    }
     return out;
+  }
+
+  // --- 1-bit images: covers and sleep pictures ---------------------------------------
+
+  function toGray(rgba) {
+    const gray = new Float32Array(rgba.length / 4);
+    for (let i = 0; i < gray.length; i++) {
+      gray[i] = (rgba[i * 4] * 299 + rgba[i * 4 + 1] * 587 + rgba[i * 4 + 2] * 114) / 1000;
+    }
+    return gray;
+  }
+
+  // Stretches the grey levels so `cutoff` of the pixels clip at each end (as
+  // Pillow's ImageOps.autocontrast(cutoff=1) does with 1 %). In place.
+  function autocontrast(gray, cutoff = 0.01) {
+    const hist = new Uint32Array(256);
+    for (const v of gray) hist[Math.max(0, Math.min(255, Math.round(v)))]++;
+    const clip = Math.floor(gray.length * cutoff);
+    let lo = 0, hi = 255, n = 0;
+    while (lo < 255 && (n += hist[lo]) <= clip) lo++;
+    n = 0;
+    while (hi > 0 && (n += hist[hi]) <= clip) hi--;
+    if (hi <= lo) return gray;
+    const k = 255 / (hi - lo);
+    for (let i = 0; i < gray.length; i++) gray[i] = Math.max(0, Math.min(255, (gray[i] - lo) * k));
+    return gray;
+  }
+
+  // Grey (0-255, w*h values) to the packed page layout (1 = white): Floyd-Steinberg
+  // error diffusion, or a plain threshold when `level` is given.
+  function dither(gray, w, h, level = null) {
+    const err = Float32Array.from(gray);
+    const stride = strideFor(w);
+    const out = new Uint8Array(stride * h).fill(0xff);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const v = err[i] < (level === null ? 128 : level) ? 0 : 255;
+        if (!v) out[y * stride + (x >> 3)] &= ~(0x80 >> (x & 7));
+        if (level !== null) continue;
+        const e = err[i] - v;
+        if (x + 1 < w) err[i + 1] += (e * 7) / 16;
+        if (y + 1 < h) {
+          if (x > 0) err[i + w - 1] += (e * 3) / 16;
+          err[i + w] += (e * 5) / 16;
+          if (x + 1 < w) err[i + w + 1] += e / 16;
+        }
+      }
+    }
+    return out;
+  }
+
+  // An image file (cover) scaled to fit boxW x boxH (never enlarged), contrast
+  // stretched and dithered: { w, h, bits }. Browser only (decodes with the browser).
+  async function coverBitmap(image, boxW, boxH) {
+    const bmp = await createImageBitmap(new Blob([image.data], { type: image.type || "" }));
+    const scale = Math.min(boxW / bmp.width, boxH / bmp.height, 1);
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(w, h) : Object.assign(document.createElement("canvas"), { width: w, height: h });
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, 0, 0, w, h);
+    return { w, h, bits: dither(autocontrast(toGray(ctx.getImageData(0, 0, w, h).data)), w, h) };
+  }
+
+  // Bionic reading: characters of a word to draw bolder, leading punctuation plus
+  // the first letters (1 for short words, else 40 % rounded up). Same as
+  // bionic_prefix() in bookprep/render.py.
+  function bionicPrefix(word) {
+    const chars = [...word];
+    const letters = chars.filter((c) => /\p{L}/u.test(c)).length;
+    const want = letters <= 3 ? 1 : Math.ceil((letters * 2) / 5);
+    let seen = 0, length = 0;
+    for (const c of chars) {
+      length += c.length;
+      if (/\p{L}/u.test(c) && ++seen === want) return length;
+    }
+    return 0;
   }
 
   // RGBA pixels -> 1-bpp page (MSB first, 1 = white, padding bits 1).
@@ -690,7 +800,7 @@
   // --- rendering (browser) ----------------------------------------------------------
 
   // Canvas renderer for one font/size. family must already be loaded (FontFace).
-  function createRenderer(family, size, g, lineHeight, threshold) {
+  function createRenderer(family, size, g, lineHeight, threshold, bionic = false) {
     const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(g.width, g.height) : Object.assign(document.createElement("canvas"), { width: g.width, height: g.height });
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const font = `${size}px "${family}", sans-serif`;
@@ -716,7 +826,18 @@
       ctx.font = font;
       ctx.textBaseline = "alphabetic";
       for (const { y, line } of page) {
-        for (const run of line.runs) ctx.fillText(run.text.replaceAll(NBSP, " "), g.textLeft + run.x, g.textTop + y + baseline);
+        for (const run of line.runs) {
+          const text = run.text.replaceAll(NBSP, " ");
+          const x = g.textLeft + run.x, by = g.textTop + y + baseline;
+          ctx.fillText(text, x, by);
+          if (!bionic) continue;
+          let start = 0;
+          for (const word of text.split(" ")) { // the same glyphs again, 1 px right: bolder, same layout
+            const n = bionicPrefix(word);
+            if (n) ctx.fillText(word.slice(0, n), x + measure(text.slice(0, start)) + 1, by);
+            start += word.length + 1;
+          }
+        }
       }
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, g.height - g.statusBar, g.width, g.statusBar);
@@ -754,7 +875,7 @@
       marginLeft: o.margin, marginRight: o.margin, marginTop: o.margin,
     });
     const lineHeight = lineHeightFor(o.size, o.spacing);
-    const renderer = createRenderer(family, o.size, g, lineHeight, o.threshold);
+    const renderer = createRenderer(family, o.size, g, lineHeight, o.threshold, o.bionic);
     const layoutOpts = {
       lineHeight,
       indent: o.indent ? o.size : 0,
@@ -765,7 +886,7 @@
     };
     const pages = layoutBook(book.chapters, renderer.measure, g, layoutOpts, o.hyphenate ? hyphenator : null);
     const toc = tocEntries(book.chapters, pages);
-    return { pages, toc, renderer, geometry: g, lineHeight };
+    return { pages, toc, renderer, geometry: g, lineHeight, screen: sc, withCover: o.cover };
   }
 
   // Renders every page into a .t5b, yielding to the event loop now and then.
@@ -779,9 +900,14 @@
       }
     }
     if (onProgress) onProgress(layout.pages.length, layout.pages.length);
+    let cover = null;
+    if (layout.withCover && book.cover && typeof createImageBitmap !== "undefined") {
+      try { cover = await coverBitmap(book.cover, layout.screen.coverW, layout.screen.coverH); }
+      catch (e) { cover = null; } // an image the browser can't decode: no cover
+    }
     return writeT5b({
       title: book.title, author: book.author, pageW: layout.geometry.width,
-      pageH: layout.geometry.height, toc: layout.toc, pages: bitmaps,
+      pageH: layout.geometry.height, toc: layout.toc, pages: bitmaps, cover,
     });
   }
 
@@ -795,6 +921,7 @@
     defaults, screens, screenFor, geometry, lineHeightFor, openZip, resolvePath, htmlToBlocks, extractEpub, extractTxt,
     extract, normalizeText, cleanBook, parsePatterns, languageFallback, Hyphenator, dashBreaks,
     breakLines, bookItems, paginate, layoutBook, tocEntries, encodeStr, writeT5b, packPixels,
-    createRenderer, unpackToRgba, typeset, writeBook, slug, NBSP,
+    createRenderer, unpackToRgba, typeset, writeBook, slug, NBSP, toGray, autocontrast, dither,
+    coverBitmap, bionicPrefix,
   };
 });

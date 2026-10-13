@@ -6,6 +6,8 @@ Layout (all integers little-endian, strings UTF-8, NUL-padded, always NUL-termin
                     page_count u32, toc_count u16, title[64], author[64]
     toc      toc_count x 52 B  {start_page u32, title[48]}
     pages    page_count x (stride * page_h) B
+    cover    optional: "T5CV", width u16, height u16, stride u16, reserved u16, then
+             the bitmap (same layout as a page); the file ends with it
 
 Page n starts at ``HEADER.size + toc_count * TOC_ENTRY.size + n * page_bytes``.
 
@@ -32,6 +34,8 @@ TITLE_BYTES = 64
 AUTHOR_BYTES = 64
 TOC_TITLE_BYTES = 48
 MAX_TOC = 0xFFFF
+COVER_MAGIC = b"T5CV"
+COVER_HEADER = struct.Struct("<4sHHHH")
 
 
 @dataclass(frozen=True)
@@ -144,6 +148,12 @@ def unpack_page(data: bytes, width: int, height: int) -> Image.Image:
     return Image.frombytes("1", (width, height), data, "raw", "1")
 
 
+def pack_cover(image: Image.Image) -> bytes:
+    """The optional cover block: header + bitmap of a mode-"1" image."""
+    w, h = image.size
+    return COVER_HEADER.pack(COVER_MAGIC, w, h, stride_for(w), 0) + pack_page(image)
+
+
 def write_t5b(
     path: Path,
     *,
@@ -153,8 +163,9 @@ def write_t5b(
     page_h: int,
     toc: list[TocEntry],
     pages: Iterable[bytes],
+    cover: Image.Image | None = None,
 ) -> Header:
-    """Write a .t5b file. ``pages`` are already-packed bitmaps."""
+    """Write a .t5b file. ``pages`` are already-packed bitmaps; ``cover`` a mode-"1" image."""
     toc = toc[:MAX_TOC]
     page_bytes = stride_for(page_w) * page_h
     pages = list(pages)
@@ -171,6 +182,8 @@ def write_t5b(
             f.write(pack_toc_entry(entry))
         for page in pages:
             f.write(page)
+        if cover is not None:
+            f.write(pack_cover(cover))
     return header
 
 
@@ -187,7 +200,19 @@ class T5BFile:
         ]
         expected = HEADER.size + len(toc_data) + self.header.page_count * self.header.page_bytes
         actual = self.path.stat().st_size
-        if actual != expected:
+        self.cover: Image.Image | None = None
+        if actual > expected:  # the optional cover block
+            with open(self.path, "rb") as f:
+                f.seek(expected)
+                tail = f.read()
+            if len(tail) >= COVER_HEADER.size:
+                magic, w, h, stride, _ = COVER_HEADER.unpack_from(tail)
+                well_formed = magic == COVER_MAGIC and stride == stride_for(w) and w and h
+                if well_formed and len(tail) == COVER_HEADER.size + stride * h:
+                    self.cover = unpack_page(tail[COVER_HEADER.size :], w, h)
+            if self.cover is None:
+                raise ValueError(f"file is {actual} bytes, header implies {expected} (bad cover)")
+        elif actual != expected:
             raise ValueError(f"file is {actual} bytes, header implies {expected}")
 
     def page_data(self, n: int) -> bytes:

@@ -10,10 +10,12 @@ touch + 3-way switch; `docs/hardware-m5paper.md`). The 4.7" boards use portrait 
 
 ## Current phase
 
-Phases 0-5 are written and build; **no code has run on a board yet** (David has none
-yet). Waiting on the hardware checkpoints in `docs/checkpoints.md` (0, 1, 3, 4).
-Checkpoint 2 is done: Ubuntu Regular 13 px (bookprep default). Phase 6 is optional and
-not started except Wi-Fi transfer (done). UI look: check `pixi run ui-preview` after
+Phases 0-5 and 7-9 are written and build (7: T5-4.7" S3, 8: M5PaperS3/M5Paper,
+9: ideas from the Pala One firmware); **no code has run on a board yet** (David has
+none yet). Waiting on the hardware checkpoints in `docs/checkpoints.md` (0, 1, 3, 4,
+the other boards, Phase 9 features). Checkpoint 2 is done: Ubuntu Regular 13 px
+(bookprep default). Phase 6 is optional; Wi-Fi transfer and in-browser conversion
+are done. UI look: check `pixi run ui-preview` after
 any change to `ui.cpp` (both boards; T5-2.13 screens should stay pixel-identical unless
 intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 
@@ -26,6 +28,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Render all screens (PC) | `pixi run ui-preview` -> `out/ui-preview/<board>/` (`t5-213`, `t5-47`, `m5paper` = touch UI) |
 | Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; `reader_t547`, `reader_m5papers3`, `reader_m5paper`) |
 | Images for browser/OTA flashing | `pixi run fw-dist` -> `out/firmware/` |
+| Browser installer (keeps NVS) | `pixi run installer` -> `out/installer/` (after `fw-build`) |
 | Release on GitHub | bump `FW_VERSION`, then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images) |
 | Serial monitor | `pixi run fw-monitor` |
 | Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` (`--screen 4.7in`) |
@@ -75,6 +78,16 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
   `firmware/src/transfer.cpp`: change both together. Re-embed with `pixi run web`.
 - Golden image (`tests/golden/`): regenerate with `BOOKPREP_UPDATE_GOLDEN=1 pixi run test`
   only after an intended rendering change, and look at it before committing.
+- UI texts: add an id with English and Dutch text to the `T5_STRINGS` table in
+  `lib/core/src/i18n.h` and use `tr(S::Id)`; the web page has its own `T` table
+  (en/nl) in `index.html`. Check that Dutch fits with `ui-preview` (23/24-*-nl).
+- Settings: a new one goes in `lib/core/src/settings.*` (options, stable key; NVS
+  stores the option index as `s_<key>`) and in devserver's `SETTINGS` table. The
+  page builds its form from `/api/settings`, so it needs no change.
+- Card layout: books in `/books` and one folder level, originals in `/books/.src`,
+  bookmarks in `/books/.marks/<stem>.txt`, sleep pictures in `/sleep/*.bin` (one
+  full-screen page each), fonts in `/fonts` (`storage.h`).
+- The home Wi-Fi password and the AP password never go back to the page.
 - No secrets in the repo (`firmware/include/secrets.h` is gitignored).
 - Commit per phase; tick `PLAN.md` checkboxes as work lands.
 

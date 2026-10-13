@@ -11,9 +11,10 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Ubuntu,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 main{max-width:620px;margin:0 auto;padding:28px 16px 56px}
-header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:22px}
-h1{font-size:24px;margin:0;letter-spacing:-.02em}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
+h1{font-size:24px;margin:0;letter-spacing:-.02em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .meta{color:var(--muted);font-size:14px;text-align:right}
+.gear{border:0;background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink);width:36px;height:36px;border-radius:50%;cursor:pointer;flex:none;font-size:18px}
 .drop{display:block;background:var(--card);border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 16px;text-align:center;cursor:pointer;transition:border-color .15s,transform .15s}
 .drop:hover,.drop.over{border-color:var(--accent)}
 .drop.over{transform:scale(1.01)}
@@ -21,6 +22,7 @@ h1{font-size:24px;margin:0;letter-spacing:-.02em}
 .drop .hint{color:var(--muted);font-size:14px}
 .drop .plus{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-size:22px;line-height:1;margin-bottom:10px}
 h2{display:flex;justify-content:space-between;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:30px 4px 10px}
+h3{font-size:13px;font-weight:600;color:var(--muted);margin:16px 4px 8px}
 ul{list-style:none;margin:0;padding:0}
 .queue{margin-top:12px}
 .card{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
@@ -35,11 +37,19 @@ ul{list-style:none;margin:0;padding:0}
 .prog .bar{flex:1}
 .prog small{color:var(--muted);font-size:12px;min-width:3ch;text-align:right}
 .queue .bar{margin-top:9px}
-.acts{display:flex;flex:none;gap:2px}
+.acts{display:flex;flex:none;flex-wrap:wrap;justify-content:flex-end;gap:2px;max-width:46%}
 .link{border:0;background:none;color:var(--muted);font:inherit;font-size:14px;padding:7px 9px;border-radius:9px;cursor:pointer}
 .link:hover{color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent)}
 .link.del:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
 .empty{justify-content:center;color:var(--muted);font-size:14px;padding:22px}
+.statline{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
+.statline b{font-size:17px}
+.statline span{color:var(--muted)}
+.pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+.pic{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px}
+.pic canvas{display:block;width:100%;image-rendering:auto;background:#fff;border-radius:3px}
+.pic button{position:absolute;top:2px;right:2px}
+.addpic{display:grid;place-items:center;min-height:80px;color:var(--muted);font-size:14px;cursor:pointer;border-style:dashed}
 .fw{cursor:pointer}
 .fw .bar{margin-top:9px}
 .note{color:var(--muted);font-size:13px;margin:26px 4px 0}
@@ -49,14 +59,16 @@ ul{list-style:none;margin:0;padding:0}
 .keybox input:focus{outline:none;border-color:var(--accent)}
 .btn{border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:600 15px/1 inherit;padding:13px 22px;cursor:pointer}
 .btn.quiet{background:none;color:var(--ink);border:1.5px solid var(--line)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.small{padding:9px 14px;font-size:14px}
 .btn:disabled{opacity:.45;cursor:default}
 .keybox .btn{display:block;margin:16px auto 0}
 .badge{background:var(--accent);color:var(--on-accent);border-radius:999px;font-size:12px;padding:3px 10px;margin-left:8px;vertical-align:3px}
-/* typeset sheet */
+/* sheets */
 dialog{border:0;padding:0;background:var(--bg);color:var(--ink);width:min(620px,100vw);max-width:100vw;max-height:100dvh;margin:auto auto 0;border-radius:20px 20px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.25)}
 @media (min-width:640px){dialog{margin:auto;border-radius:20px;max-height:92dvh}}
 dialog::backdrop{background:rgba(0,0,0,.45)}
-.sheet{display:flex;flex-direction:column;max-height:inherit}
+.sheet{display:flex;flex-direction:column;max-height:inherit;position:relative}
 .sheet-head{display:flex;align-items:flex-start;gap:12px;padding:18px 18px 10px}
 .sheet-head .grow .title{font-size:17px}
 .close{border:0;background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink);width:32px;height:32px;border-radius:50%;font-size:18px;line-height:1;cursor:pointer;flex:none}
@@ -65,7 +77,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .device canvas{display:block;width:100%;aspect-ratio:250/122;image-rendering:pixelated;background:#fff;border-radius:3px}
 .device.portrait canvas{width:min(100%,34dvh);margin:0 auto;image-rendering:auto}
 .pager{display:flex;align-items:center;gap:10px;margin:12px 2px 4px}
-.pager input{flex:1;accent-color:var(--accent)}
+.pager input[type=range]{flex:1;accent-color:var(--accent)}
 .pager .link{font-size:20px;padding:2px 10px}
 .pager small{color:var(--muted);font-size:13px;min-width:11ch;text-align:right}
 .stats{color:var(--muted);font-size:13px;margin:4px 2px 14px}
@@ -73,7 +85,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .field{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .field.wide{grid-column:1/-1}
 .field>span{font-size:12px;color:var(--muted);font-weight:500}
-.field select{font:inherit;font-size:15px;border:0;background:none;color:var(--ink);padding:0 18px 0 0;width:100%;appearance:none;cursor:pointer}
+.field select,.field input[type=text],.field input[type=password],.field input[type=search]{font:inherit;font-size:15px;border:0;background:none;color:var(--ink);padding:0 18px 0 0;width:100%;appearance:none;outline:none}
+.field select{cursor:pointer}
 .field.select{position:relative}
 .field.select::after{content:"";position:absolute;right:13px;bottom:15px;width:10px;height:6px;background:var(--muted);-webkit-mask:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='black' stroke-width='1.8'/></svg>") no-repeat center/contain;mask:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='black' stroke-width='1.8'/></svg>") no-repeat center/contain;pointer-events:none}
 .ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
@@ -87,6 +100,19 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
 .switch:checked{background:var(--accent)}
 .switch:checked::after{left:19px}
+.row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.row .grow{min-width:140px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 6px 6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.chip.on{border-color:var(--accent)}
+.chip b{font-weight:600}
+.chip .x{border:0;background:none;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;padding:0 4px}
+.hits{margin-top:8px}
+.hits li{padding:8px 10px;border-radius:10px;cursor:pointer;font-size:14px}
+.hits li:hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.hits small{color:var(--muted);margin-right:8px}
+.hits mark{background:color-mix(in srgb,var(--accent) 25%,transparent);color:inherit;border-radius:3px}
+.hint{color:var(--muted);font-size:13px;margin:6px 2px}
 .sheet-foot{display:flex;gap:10px;padding:12px 18px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
 .sheet-foot .btn{flex:1}
 .busy{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 88%,transparent);border-radius:inherit}
@@ -98,45 +124,52 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <body>
 <main>
   <header class="top">
-    <h1>T5 Reader<span class="badge" id="demo" hidden>demo</span></h1>
-    <div class="meta" id="meta">Connecting…</div>
+    <h1><span id="name">T5 Reader</span><span class="badge" id="demo" hidden>demo</span></h1>
+    <div class="meta" id="meta" data-t="connecting">Connecting…</div>
+    <button class="gear" id="open-settings" aria-label="Settings" hidden>⚙</button>
   </header>
 
   <form class="keybox" id="keybox" hidden>
-    <b>Enter the code</b>
-    <p>It is shown on the reader's screen.</p>
+    <b data-t="enterCode">Enter the code</b>
+    <p data-t="codeHint">It is shown on the reader's screen.</p>
     <input id="key" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" required>
-    <button class="btn">Continue</button>
+    <button class="btn" data-t="continue">Continue</button>
   </form>
 
   <div id="app" hidden>
     <label class="drop" id="drop">
       <input type="file" id="file" accept=".epub,.txt,.t5b" multiple hidden>
       <span class="plus">+</span>
-      <b>Add books</b>
-      <span class="hint">Drop EPUB or TXT files: you choose the font and size here</span>
+      <b data-t="addBooks">Add books</b>
+      <span class="hint" data-t="dropHint">Drop EPUB or TXT files: you choose the font and size here</span>
     </label>
     <ul class="queue" id="queue"></ul>
-    <h2><span>On the reader</span><span id="count"></span></h2>
-    <ul id="books"></ul>
-    <h2><span>Firmware</span><span id="fwver"></span></h2>
+    <h2><span data-t="reading">Reading</span><span id="streak"></span></h2>
+    <div class="card statline" id="statline"></div>
+    <h2><span data-t="onReader">On the reader</span><span id="count"></span></h2>
+    <div id="books"></div>
+    <h2><span data-t="pictures">Sleep pictures</span><span id="piccount"></span></h2>
+    <div class="pics" id="pics"></div>
+    <p class="hint" data-t="pictureHint">Shown while the reader sleeps (Settings, Sleep screen: pictures).</p>
+    <h2><span data-t="firmware">Firmware</span><span id="fwver"></span></h2>
     <label class="card fw">
       <input type="file" id="fw" accept=".bin" hidden>
       <div class="grow">
-        <div class="title">Update firmware</div>
-        <div class="sub" id="fwsub">The -ota.bin from pixi run fw-dist</div>
+        <div class="title" data-t="updateFirmware">Update firmware</div>
+        <div class="sub" id="fwsub"></div>
         <div class="bar"><i id="fwbar"></i></div>
       </div>
-      <span class="link">Choose</span>
+      <span class="link" data-t="choose">Choose</span>
     </label>
-    <p class="note">Books are typeset in this browser, then only the result goes to the reader.
-      The reader keeps the original, so “Restyle” works from any phone later.
-      <a href="licenses.txt" style="color:inherit">Font and hyphenation licences</a>.</p>
+    <p class="note"><span data-t="note">Books are typeset in this browser, then only the result goes to the reader.
+      The reader keeps the original, so “Restyle” works from any phone later.</span>
+      <a href="licenses.txt" style="color:inherit" data-t="licences">Font and hyphenation licences</a>.</p>
   </div>
 </main>
 
+<!-- typeset an EPUB/TXT for this reader -->
 <dialog id="sheet">
-  <div class="sheet" style="position:relative">
+  <div class="sheet">
     <div class="sheet-head">
       <div class="grow"><div class="title" id="s-title">Book</div><div class="sub" id="s-author"></div></div>
       <button class="close" id="s-close" aria-label="Close">×</button>
@@ -149,29 +182,122 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         <button class="link" id="p-next" aria-label="Next page">›</button>
         <small id="p-label"></small>
       </div>
-      <p class="stats" id="stats">Typesetting…</p>
+      <p class="stats" id="stats"></p>
       <div class="controls">
-        <label class="field select wide"><span>Font</span><select id="c-font"></select></label>
-        <div class="field"><span>Size</span><div class="stepper"><button data-step="size:-1">−</button><b id="v-size"></b><button data-step="size:1">+</button></div></div>
-        <div class="field"><span>Margins</span><div class="stepper"><button data-step="margin:-1">−</button><b id="v-margin"></b><button data-step="margin:1">+</button></div></div>
-        <label class="field select"><span>Line spacing</span><select id="c-spacing">
-          <option value="1">Tight</option><option value="1.1">Snug</option><option value="1.2">Normal</option>
-          <option value="1.3">Relaxed</option><option value="1.45">Loose</option></select></label>
-        <label class="field select"><span>Hyphenation</span><select id="c-hyph"></select></label>
-        <label class="field wide"><span>Weight</span><input type="range" id="c-threshold" min="70" max="210" step="10"><span class="ends"><span>Lighter</span><span>Bolder</span></span></label>
-        <label class="field toggle"><span>Justify</span><input type="checkbox" class="switch" id="c-justify"></label>
-        <label class="field toggle"><span>Indent</span><input type="checkbox" class="switch" id="c-indent"></label>
-        <label class="field toggle wide"><span>Chapters on a new page</span><input type="checkbox" class="switch" id="c-chapter"></label>
+        <label class="field select wide"><span data-t="font">Font</span><select id="c-font"></select></label>
+        <div class="field"><span data-t="size">Size</span><div class="stepper"><button data-step="size:-1">−</button><b id="v-size"></b><button data-step="size:1">+</button></div></div>
+        <div class="field"><span data-t="margins">Margins</span><div class="stepper"><button data-step="margin:-1">−</button><b id="v-margin"></b><button data-step="margin:1">+</button></div></div>
+        <label class="field select"><span data-t="spacing">Line spacing</span><select id="c-spacing"></select></label>
+        <label class="field select"><span data-t="hyphenation">Hyphenation</span><select id="c-hyph"></select></label>
+        <label class="field wide"><span data-t="weight">Weight</span><input type="range" id="c-threshold" min="70" max="210" step="10"><span class="ends"><span data-t="lighter">Lighter</span><span data-t="bolder">Bolder</span></span></label>
+        <label class="field toggle"><span data-t="justify">Justify</span><input type="checkbox" class="switch" id="c-justify"></label>
+        <label class="field toggle"><span data-t="indent">Indent</span><input type="checkbox" class="switch" id="c-indent"></label>
+        <label class="field toggle wide"><span data-t="chapterBreak">Chapters on a new page</span><input type="checkbox" class="switch" id="c-chapter"></label>
+        <label class="field toggle"><span data-t="bionic">Bionic reading</span><input type="checkbox" class="switch" id="c-bionic"></label>
+        <label class="field toggle" id="f-cover"><span data-t="cover">Cover</span><input type="checkbox" class="switch" id="c-cover"></label>
+        <label class="field select wide" id="f-folder"><span data-t="folder">Folder</span><select id="c-folder"></select></label>
       </div>
     </div>
     <div class="sheet-foot">
-      <button class="btn quiet" id="s-download">Download .t5b</button>
-      <button class="btn" id="s-upload">Upload to reader</button>
+      <button class="btn quiet" id="s-download" data-t="download">Download .t5b</button>
+      <button class="btn" id="s-upload" data-t="uploadToReader">Upload to reader</button>
     </div>
-    <div class="busy" id="busy" hidden><div><b id="busy-text">Typesetting…</b><div class="bar"><i id="busy-bar"></i></div></div></div>
+    <div class="busy" id="busy" hidden><div><b id="busy-text"></b><div class="bar"><i id="busy-bar"></i></div></div></div>
   </div>
 </dialog>
 <input type="file" id="fontfile" accept=".ttf,.otf,.woff,.woff2" hidden>
+
+<!-- a book on the reader: its pages, bookmarks, search -->
+<dialog id="reader">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="grow"><div class="title" id="r-title"></div><div class="sub" id="r-author"></div></div>
+      <button class="close" id="r-close" aria-label="Close">×</button>
+    </div>
+    <div class="sheet-body">
+      <div class="device"><canvas id="r-page" width="250" height="122"></canvas></div>
+      <div class="pager">
+        <button class="link" id="r-prev" aria-label="Previous page">‹</button>
+        <input type="range" id="r-slider" min="0" max="0" value="0" aria-label="Page">
+        <button class="link" id="r-next" aria-label="Next page">›</button>
+        <small id="r-label"></small>
+      </div>
+      <div class="row">
+        <button class="btn small quiet" id="r-mark"></button>
+        <button class="btn small" id="r-here" data-t="readHere">Read from here on the reader</button>
+      </div>
+      <p class="hint" id="r-status"></p>
+      <h3 data-t="bookmarks">Bookmarks</h3>
+      <div class="chips" id="r-marks"></div>
+      <h3 data-t="search">Search in the book</h3>
+      <form class="row" id="r-search">
+        <label class="field grow"><input type="search" id="r-query" data-tp="search" autocomplete="off"></label>
+        <button class="btn small" data-t="find">Find</button>
+      </form>
+      <p class="hint" id="r-searchinfo"></p>
+      <ul class="hits" id="r-hits"></ul>
+    </div>
+  </div>
+</dialog>
+
+<!-- reader settings, name, home Wi-Fi, factory reset -->
+<dialog id="settings">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="grow"><div class="title" data-t="settings">Settings</div></div>
+      <button class="close" id="set-close" aria-label="Close">×</button>
+    </div>
+    <div class="sheet-body">
+      <h3 data-t="readerName">Name</h3>
+      <form class="row" id="set-name-form">
+        <label class="field grow"><input type="text" id="set-name" maxlength="32" data-tp="namePlaceholder"></label>
+        <button class="btn small" data-t="save">Save</button>
+      </form>
+      <h3 data-t="readerSettings">On the reader</h3>
+      <div class="controls" id="set-list"></div>
+      <h3 data-t="homeWifi">Home Wi-Fi</h3>
+      <p class="hint" data-t="homeWifiHint"></p>
+      <form id="set-wifi">
+        <div class="controls">
+          <label class="field"><span data-t="network">Network name</span><input type="text" id="wifi-ssid" maxlength="32" autocomplete="off"></label>
+          <label class="field"><span data-t="password">Password</span><input type="password" id="wifi-pass" maxlength="63" autocomplete="new-password"></label>
+        </div>
+        <div class="row"><span class="grow hint" id="wifi-saved"></span><button type="button" class="btn small quiet" id="wifi-forget" data-t="forget">Forget</button><button class="btn small" data-t="save">Save</button></div>
+      </form>
+      <h3 data-t="factoryReset">Factory reset</h3>
+      <p class="hint" data-t="factoryResetHint"></p>
+      <button class="btn small danger" id="reset" data-t="eraseAll">Erase everything</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- sleep picture editor -->
+<dialog id="editor">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="grow"><div class="title" data-t="addPicture">Add a picture</div></div>
+      <button class="close" id="e-close" aria-label="Close">×</button>
+    </div>
+    <div class="sheet-body">
+      <div class="device"><canvas id="e-canvas" width="250" height="122"></canvas></div>
+      <div class="controls" style="margin-top:12px">
+        <label class="field select"><span data-t="fitMode">Size</span><select id="e-fit"><option value="contain" data-t="fit">Fit</option><option value="cover" data-t="fill">Fill</option></select></label>
+        <label class="field toggle"><span data-t="rotate">Rotate</span><input type="checkbox" class="switch" id="e-rotate"></label>
+        <label class="field"><span data-t="zoom">Zoom</span><input type="range" id="e-zoom" min="100" max="300" value="100"></label>
+        <label class="field"><span data-t="threshold">Threshold</span><input type="range" id="e-level" min="40" max="220" value="128"></label>
+        <label class="field"><span data-t="moveX">Left – right</span><input type="range" id="e-x" min="-100" max="100" value="0"></label>
+        <label class="field"><span data-t="moveY">Up – down</span><input type="range" id="e-y" min="-100" max="100" value="0"></label>
+        <label class="field toggle"><span data-t="dithering">Dithering</span><input type="checkbox" class="switch" id="e-dither" checked></label>
+        <label class="field toggle"><span data-t="invert">Invert</span><input type="checkbox" class="switch" id="e-invert"></label>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn quiet" id="e-choose" data-t="chooseImage">Choose an image</button>
+      <button class="btn" id="e-upload" data-t="uploadToReader">Upload to reader</button>
+    </div>
+  </div>
+</dialog>
+<input type="file" id="e-file" accept="image/*" hidden>
 
 <script src="bookprep.js"></script>
 <script>
@@ -182,30 +308,163 @@ const demo = location.protocol === "file:";
 const params = new URLSearchParams(location.search);
 let key = params.get("k") || sessionStorage.getItem("k") || "";
 if (params.has("k")) { sessionStorage.setItem("k", key); history.replaceState(null, "", location.pathname + location.hash); }
-let info = { version: "", battery: -1, free: 0, books: [], fonts: [] };
+let info = { version: "", battery: -1, free: 0, books: [], fonts: [], pictures: [] };
+
+// --- language: the reader's (Settings, Language); demo: the browser's ----------------
+
+const T = {
+  en: {
+    connecting: "Connecting…", notReachable: "Reader not reachable", free: "{0} free", battery: "{0}% battery",
+    enterCode: "Enter the code", codeHint: "It is shown on the reader's screen.", continue: "Continue",
+    addBooks: "Add books", dropHint: "Drop EPUB or TXT files: you choose the font and size here",
+    reading: "Reading", onReader: "On the reader", pictures: "Sleep pictures", firmware: "Firmware",
+    today: "today", pagesWord: "pages", minWord: "min", streakDays: "{0}-day streak", streakLabel: "day streak", best: "best {0}",
+    daysRead: "days read", total: "{0} pages · {1} h in total", clockNote: "The reader's clock is set from this page.",
+    unknownAuthor: "Unknown author", pagesN: "{0} pages", new: "new", open: "Open", restyle: "Restyle",
+    move: "Move", delete: "Delete", noBooks: "No books yet. Add one above.", deleteConfirm: "Delete this book from the reader?",
+    moveTo: "Move to folder (leave empty for none):", noFolder: "No folder", marksN: "{0} bookmarks",
+    waiting: "Waiting…", uploading: "Uploading · {0}% of {1}", added: "Added · {0}", demoNothing: "Demo mode: nothing was sent.",
+    useTypes: "Use .epub, .txt or .t5b files.", cannotRead: "Could not read this file: {0}",
+    font: "Font", size: "Size", margins: "Margins", spacing: "Line spacing", tight: "Tight", snug: "Snug", normal: "Normal",
+    relaxed: "Relaxed", loose: "Loose", hyphenation: "Hyphenation", auto: "Auto", off: "Off", weight: "Weight",
+    lighter: "Lighter", bolder: "Bolder", justify: "Justify", indent: "Indent", chapterBreak: "Chapters on a new page",
+    bionic: "Bionic reading", cover: "Cover", folder: "Folder", newFolder: "New folder…", folderName: "Folder name:",
+    download: "Download .t5b", uploadToReader: "Upload to reader", typesetting: "Typesetting…",
+    typesettingN: "Typesetting · {0} of {1} pages", sending: "Sending to the reader · {0}% of {1}",
+    savingOriginal: "Saving the original for restyling…", statsLine: "{0} lines × ~{1} characters · {2} pages · {3}",
+    addFont: "Add a font…", systemSerif: "System serif", systemSans: "System sans-serif",
+    uploadFailed: "Upload failed: {0}", fontFailed: "Could not add the font: {0}",
+    nl_NL: "Dutch", en_GB: "English (UK)", en_US: "English (US)", fr: "French",
+    pageOf: "{0} / {1}", bookmarkHere: "Bookmark this page", removeBookmark: "Remove bookmark", bookmarks: "Bookmarks",
+    noMarks: "No bookmarks yet.", search: "Search in the book", find: "Find",
+    noSource: "Search needs the original: books added from this page have it.", searching: "Searching…",
+    hitsN: "{0} found", noHits: "Nothing found.", layoutDiffers: "The layout here differs from the reader's (another font?): page numbers are approximate.",
+    readHere: "Read from here on the reader", readHereDone: "The reader opens page {0} when you press done on it.",
+    position: "Reading position: page {0}", loadingPage: "Loading page…",
+    settings: "Settings", readerName: "Name", namePlaceholder: "Shown above the library", save: "Save", saved: "Saved",
+    readerSettings: "On the reader", homeWifi: "Home Wi-Fi",
+    homeWifiHint: "The reader joins this network the next time you start Wi-Fi transfer, and makes its own network if it can't. The password stays on the reader.",
+    network: "Network name", password: "Password", wifiSaved: "Saved: {0}", wifiNone: "None saved: the reader makes its own network.",
+    forget: "Forget", factoryReset: "Factory reset",
+    factoryResetHint: "Erases all books, originals, bookmarks, pictures, fonts and settings on the reader.",
+    eraseAll: "Erase everything", resetConfirm1: "Erase everything on the reader?", resetConfirm2: "Type ERASE to confirm.",
+    resetWord: "ERASE", resetDone: "Erased. The reader restarts.",
+    addPicture: "Add a picture", pictureHint: "Shown while the reader sleeps (Settings, Sleep screen: pictures).",
+    noPictures: "Add a picture", deletePicture: "Delete this picture?", chooseImage: "Choose an image", fitMode: "Size",
+    fit: "Fit", fill: "Fill", zoom: "Zoom", moveX: "Left – right", moveY: "Up – down", rotate: "Rotate",
+    dithering: "Dithering", threshold: "Threshold", invert: "Invert",
+    updateFirmware: "Update firmware", otaHint: "The {0}…-ota.bin from a release or pixi run fw-dist", choose: "Choose",
+    notOta: "This doesn't look like a {0}…-ota.bin file for this reader. Send it anyway?", sendingPct: "Sending · {0}%",
+    updated: "Updated. The reader restarts and leaves Wi-Fi mode.",
+    note: "Books are typeset in this browser, then only the result goes to the reader. The reader keeps the original, so “Restyle” works from any phone later.",
+    licences: "Font and hyphenation licences", connectionLost: "connection lost: is the reader still in Wi-Fi mode?",
+    failed: "failed ({0})", noOriginal: "could not load the original from the reader",
+  },
+  nl: {
+    connecting: "Verbinden…", notReachable: "Lezer niet bereikbaar", free: "{0} vrij", battery: "{0}% batterij",
+    enterCode: "Voer de code in", codeHint: "Die staat op het scherm van de lezer.", continue: "Verder",
+    addBooks: "Boeken toevoegen", dropHint: "Sleep EPUB- of TXT-bestanden hierheen: lettertype en grootte kies je hier",
+    reading: "Lezen", onReader: "Op de lezer", pictures: "Slaapafbeeldingen", firmware: "Firmware",
+    today: "vandaag", pagesWord: "pagina's", minWord: "min", streakDays: "{0} dagen op rij", streakLabel: "dagen op rij", best: "beste {0}",
+    daysRead: "dagen gelezen", total: "{0} pagina's · {1} u in totaal", clockNote: "De klok van de lezer wordt via deze pagina gezet.",
+    unknownAuthor: "Onbekende auteur", pagesN: "{0} pagina's", new: "nieuw", open: "Openen", restyle: "Opmaak",
+    move: "Verplaatsen", delete: "Verwijderen", noBooks: "Nog geen boeken. Voeg er hierboven een toe.",
+    deleteConfirm: "Dit boek van de lezer verwijderen?", moveTo: "Verplaats naar map (leeg laten voor geen):",
+    noFolder: "Geen map", marksN: "{0} bladwijzers",
+    waiting: "Wachten…", uploading: "Versturen · {0}% van {1}", added: "Toegevoegd · {0}", demoNothing: "Demomodus: er is niets verstuurd.",
+    useTypes: "Gebruik .epub-, .txt- of .t5b-bestanden.", cannotRead: "Kan dit bestand niet lezen: {0}",
+    font: "Lettertype", size: "Grootte", margins: "Marges", spacing: "Regelafstand", tight: "Krap", snug: "Smal", normal: "Normaal",
+    relaxed: "Ruim", loose: "Los", hyphenation: "Afbreken", auto: "Automatisch", off: "Uit", weight: "Dikte",
+    lighter: "Lichter", bolder: "Zwaarder", justify: "Uitvullen", indent: "Inspringen", chapterBreak: "Hoofdstukken op een nieuwe pagina",
+    bionic: "Bionisch lezen", cover: "Omslag", folder: "Map", newFolder: "Nieuwe map…", folderName: "Naam van de map:",
+    download: ".t5b downloaden", uploadToReader: "Naar de lezer sturen", typesetting: "Opmaken…",
+    typesettingN: "Opmaken · {0} van {1} pagina's", sending: "Naar de lezer · {0}% van {1}",
+    savingOriginal: "Origineel bewaren voor latere opmaak…", statsLine: "{0} regels × ~{1} tekens · {2} pagina's · {3}",
+    addFont: "Lettertype toevoegen…", systemSerif: "Systeem-serif", systemSans: "Systeem-schreefloos",
+    uploadFailed: "Versturen mislukt: {0}", fontFailed: "Kan het lettertype niet toevoegen: {0}",
+    nl_NL: "Nederlands", en_GB: "Engels (VK)", en_US: "Engels (VS)", fr: "Frans",
+    pageOf: "{0} / {1}", bookmarkHere: "Bladwijzer op deze pagina", removeBookmark: "Bladwijzer weghalen", bookmarks: "Bladwijzers",
+    noMarks: "Nog geen bladwijzers.", search: "Zoeken in het boek", find: "Zoek",
+    noSource: "Zoeken kan met het origineel: boeken die via deze pagina zijn toegevoegd hebben dat.", searching: "Zoeken…",
+    hitsN: "{0} gevonden", noHits: "Niets gevonden.", layoutDiffers: "De opmaak hier wijkt af van die op de lezer (ander lettertype?): paginanummers zijn bij benadering.",
+    readHere: "Hier verder lezen op de lezer", readHereDone: "De lezer opent pagina {0} zodra je daar op klaar drukt.",
+    position: "Leespositie: pagina {0}", loadingPage: "Pagina laden…",
+    settings: "Instellingen", readerName: "Naam", namePlaceholder: "Staat boven de bibliotheek", save: "Bewaren", saved: "Bewaard",
+    readerSettings: "Op de lezer", homeWifi: "Wifi thuis",
+    homeWifiHint: "De lezer gebruikt dit netwerk de volgende keer dat je wifi-overdracht start, en maakt anders zijn eigen netwerk. Het wachtwoord blijft op de lezer.",
+    network: "Netwerknaam", password: "Wachtwoord", wifiSaved: "Bewaard: {0}", wifiNone: "Niets bewaard: de lezer maakt zijn eigen netwerk.",
+    forget: "Vergeten", factoryReset: "Fabrieksinstellingen",
+    factoryResetHint: "Wist alle boeken, originelen, bladwijzers, afbeeldingen, lettertypes en instellingen op de lezer.",
+    eraseAll: "Alles wissen", resetConfirm1: "Alles op de lezer wissen?", resetConfirm2: "Typ WISSEN om te bevestigen.",
+    resetWord: "WISSEN", resetDone: "Gewist. De lezer start opnieuw.",
+    addPicture: "Afbeelding toevoegen", pictureHint: "Te zien als de lezer slaapt (Instellingen, Slaapscherm: afbeeldingen).",
+    noPictures: "Afbeelding toevoegen", deletePicture: "Deze afbeelding verwijderen?", chooseImage: "Kies een afbeelding", fitMode: "Formaat",
+    fit: "Passend", fill: "Vullend", zoom: "Zoom", moveX: "Links – rechts", moveY: "Boven – onder", rotate: "Draaien",
+    dithering: "Rasteren", threshold: "Drempel", invert: "Omkeren",
+    updateFirmware: "Firmware bijwerken", otaHint: "De {0}…-ota.bin uit een release of pixi run fw-dist", choose: "Kiezen",
+    notOta: "Dit lijkt geen {0}…-ota.bin voor deze lezer. Toch versturen?", sendingPct: "Versturen · {0}%",
+    updated: "Bijgewerkt. De lezer start opnieuw en stopt de wifi-modus.",
+    note: "Boeken worden in deze browser opgemaakt; alleen het resultaat gaat naar de lezer. De lezer bewaart het origineel, zodat ‘Opmaak’ later vanaf elke telefoon werkt.",
+    licences: "Licenties van lettertypes en afbreekpatronen", connectionLost: "verbinding verbroken: staat de lezer nog in wifi-modus?",
+    failed: "mislukt ({0})", noOriginal: "kan het origineel niet van de lezer laden",
+  },
+};
+let lang = demo && /^nl/.test(navigator.language) ? "nl" : "en";
+const t = (k, ...a) => (T[lang][k] ?? T.en[k] ?? k).replace(/\{(\d)\}/g, (_, i) => a[i]);
+function applyLang(l) {
+  if (l && T[l]) lang = l;
+  document.documentElement.lang = lang;
+  for (const el of document.querySelectorAll("[data-t]")) el.textContent = t(el.dataset.t);
+  for (const el of document.querySelectorAll("[data-tp]")) el.placeholder = t(el.dataset.tp);
+  $("#c-spacing").innerHTML = [["1", "tight"], ["1.1", "snug"], ["1.2", "normal"], ["1.3", "relaxed"], ["1.45", "loose"]]
+    .map(([v, k]) => `<option value="${v}">${t(k)}</option>`).join("");
+}
+
+// --- helpers ------------------------------------------------------------------------
 
 const size = (b) => b >= 1e9 ? (b / 1073741824).toFixed(1) + " GB" : b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const stem = (name) => name.replace(/[.][^.]*$/, "");
+const stem = (name) => name.replace(/^.*\//, "").replace(/[.][^.]*$/, "");
 const ext = (name) => (name.match(/[.][^.]*$/) || [""])[0].toLowerCase();
 const withKey = (url) => url + (url.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(key);
 const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x !== id; };
+const screen = () => B.screenFor(info.screen);
+const pageBytes = () => Math.ceil(screen().width / 8) * screen().height;
+const folders = () => [...new Set(info.books.map((b) => b.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+const form = (fields, method = "POST") => ({ method, headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(fields).toString() });
+
+// A page bitmap (1 bpp, .t5b layout) onto a canvas sized like the reader's screen.
+function drawBits(canvas, bits, w, h) {
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d").putImageData(new ImageData(B.unpackToRgba(bits, w, h), w, h), 0, 0);
+}
+function fitCanvas(canvas) {
+  const sc = screen();
+  canvas.style.aspectRatio = sc.width + "/" + sc.height;
+  canvas.parentElement.classList.toggle("portrait", sc.height > sc.width);
+}
 
 // --- reader API -------------------------------------------------------------------
 
 const demoData = {
-  version: "demo", board: "t5-213", battery: 72, free: 7.2e9, total: 7.9e9, fonts: [],
+  version: "demo", board: "t5-213", lang, name: "", homeWifi: "", locked: false, battery: 72, free: 7.2e9, total: 7.9e9, fonts: [], pictures: [],
   screen: B.screenFor(params.get("screen") || "t5-213"), // demo of another reader: ?screen=4.7in
+  stats: { pages: 3412, seconds: 220320, daysRead: 41, streak: 6, bestStreak: 14, todayPages: 23, todaySeconds: 1860, clock: true },
   books: [
-    { file: "max_havelaar.t5b", title: "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", author: "Multatuli", pages: 3596, size: 14071000, progress: 37, source: null },
-    { file: "alice.t5b", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, progress: 0, source: null },
+    { file: "Klassiekers/max_havelaar.t5b", folder: "Klassiekers", title: "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", author: "Multatuli", pages: 3596, size: 14071000, position: 1330, progress: 37, marks: 3, cover: true, source: null },
+    { file: "alice.t5b", folder: "", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, position: 0, progress: 0, marks: 0, cover: false, source: null },
   ],
 };
+const demoSettings = [["sleepScreen", "Sleep screen", ["book", "cover", "pictures", "keep page"]], ["statusBar", "Status bar", ["full", "minimal", "hidden"]], ["language", "Language", ["English", "Nederlands"]]]
+  .map(([k, label, options]) => ({ key: k, label, value: 0, options }));
 
 async function api(path, opts = {}) {
   if (demo) {
-    if (opts.method === "DELETE") demoData.books = demoData.books.filter((b) => b.file !== new URLSearchParams(path.split("?")[1]).get("file"));
-    return demoData;
+    if (path.startsWith("/api/book") && opts.method === "DELETE") demoData.books = demoData.books.filter((b) => b.file !== new URLSearchParams(path.split("?")[1]).get("file"));
+    if (path.startsWith("/api/settings")) return { settings: demoSettings };
+    if (path.startsWith("/api/marks")) return { pages: [] };
+    return path === "/api/info" ? demoData : {};
   }
   const r = await fetch(withKey(path), opts);
   const j = await r.json().catch(() => ({}));
@@ -223,65 +482,114 @@ function send(url, blob, name, onProgress) {
       let j = {};
       try { j = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
       if (xhr.status === 200) resolve(j);
-      else reject(new Error(j.error || "failed (" + xhr.status + ")"));
+      else reject(new Error(j.error || t("failed", xhr.status)));
     };
-    xhr.onerror = () => reject(new Error("connection lost: is the reader still in Wi-Fi mode?"));
+    xhr.onerror = () => reject(new Error(t("connectionLost")));
     const form = new FormData();
     form.append("file", blob, name);
     xhr.send(form);
   });
 }
-const upload = (kind, blob, name, onProgress) => send("/api/upload?kind=" + kind, blob, name, onProgress);
+// folder: where a book goes (undefined: the reader keeps it where a book of that name is)
+const upload = (kind, blob, name, onProgress, folder) =>
+  send("/api/upload?kind=" + kind + (folder === undefined ? "" : "&folder=" + encodeURIComponent(folder)), blob, name, onProgress);
 
 async function refresh() {
   try {
     info = await api("/api/info");
+    applyLang(info.lang);
     render();
     show("app");
   } catch (e) {
     if (e.status === 403) { sessionStorage.removeItem("k"); $("#meta").textContent = ""; show("keybox"); $("#key").focus(); }
-    else $("#meta").textContent = "Reader not reachable";
+    else $("#meta").textContent = t("notReachable");
   }
+}
+
+// The phone's clock for the reader (statistics count days).
+function syncClock() {
+  if (demo) return;
+  api("/api/time", form({ epoch: Math.floor(Date.now() / 1000), tz: -new Date().getTimezoneOffset() * 60 })).catch(() => {});
 }
 
 function render() {
-  const battery = info.battery >= 0 ? info.battery + "% battery · " : "";
-  $("#meta").textContent = battery + size(info.free) + " free";
+  $("#name").textContent = info.name || "T5 Reader";
+  $("#open-settings").hidden = false;
+  const battery = info.battery >= 0 ? t("battery", info.battery) + " · " : "";
+  $("#meta").textContent = battery + t("free", size(info.free));
   $("#fwver").textContent = info.version ? "v" + info.version : "";
-  if (!$("#fwsub").classList.contains("ok") && !$("#fwsub").classList.contains("err")) {
-    $("#fwsub").textContent = `The ${otaPrefix()}…-ota.bin from a release or pixi run fw-dist`;
-  }
   $("#count").textContent = info.books.length || "";
-  $("#books").innerHTML = info.books.length ? info.books.map((b) => `
+  renderStats();
+  renderBooks();
+  renderPictures();
+  if (!$("#fwsub").classList.contains("ok") && !$("#fwsub").classList.contains("err")) {
+    $("#fwsub").textContent = t("otaHint", otaPrefix());
+  }
+}
+
+function renderStats() {
+  const s = info.stats || {};
+  $("#streak").textContent = s.streak ? t("streakDays", s.streak) : "";
+  $("#statline").innerHTML = `
+    <div><b>${s.todayPages || 0}</b> <span>${t("pagesWord")} · ${Math.round((s.todaySeconds || 0) / 60)} ${t("minWord")} ${t("today")}</span></div>
+    <div><b>${s.streak || 0}</b> <span>${t("streakLabel")} · ${t("best", s.bestStreak || 0)}</span></div>
+    <div><b>${s.daysRead || 0}</b> <span>${t("daysRead")}</span></div>
+    <div><span>${t("total", s.pages || 0, Math.round((s.seconds || 0) / 3600))}</span></div>`;
+}
+
+function bookCard(b) {
+  const sub = [b.author || t("unknownAuthor"), t("pagesN", b.pages), size(b.size)];
+  if (b.marks) sub.push(t("marksN", b.marks));
+  return `
     <li class="card">
       <div class="grow">
         <div class="title">${esc(b.title)}</div>
-        <div class="sub">${esc(b.author || "Unknown author")} · ${b.pages} pages · ${size(b.size)}</div>
-        <div class="prog"><div class="bar"><i style="width:${b.progress}%"></i></div><small>${b.progress ? b.progress + "%" : "new"}</small></div>
+        <div class="sub">${esc(sub.join(" · "))}</div>
+        <div class="prog"><div class="bar"><i style="width:${b.progress}%"></i></div><small>${b.progress ? b.progress + "%" : t("new")}</small></div>
       </div>
       <div class="acts">
-        ${b.source ? `<button class="link" data-restyle="${esc(b.file)}">Restyle</button>` : ""}
-        <button class="link del" data-del="${esc(b.file)}">Delete</button>
+        <button class="link" data-open="${esc(b.file)}">${t("open")}</button>
+        ${b.source ? `<button class="link" data-restyle="${esc(b.file)}">${t("restyle")}</button>` : ""}
+        <button class="link" data-move="${esc(b.file)}">${t("move")}</button>
+        <button class="link del" data-del="${esc(b.file)}">${t("delete")}</button>
       </div>
-    </li>`).join("") : `<li class="card empty">No books yet. Add one above.</li>`;
+    </li>`;
+}
+
+function renderBooks() {
+  if (!info.books.length) {
+    $("#books").innerHTML = `<ul><li class="card empty">${t("noBooks")}</li></ul>`;
+    return;
+  }
+  const groups = ["", ...folders()].map((f) => [f, info.books.filter((b) => b.folder === f)]).filter(([, bs]) => bs.length);
+  $("#books").innerHTML = groups.map(([f, bs]) =>
+    (f ? `<h3>${esc(f)}</h3>` : "") + `<ul>${bs.map(bookCard).join("")}</ul>`).join("");
 }
 
 $("#books").addEventListener("click", async (e) => {
-  const del = e.target.dataset && e.target.dataset.del;
-  const restyle = e.target.dataset && e.target.dataset.restyle;
+  const d = e.target.dataset || {};
+  const book = info.books.find((b) => b.file === (d.open || d.restyle || d.move || d.del));
+  if (!book) return;
   try {
-    if (del && confirm("Delete this book from the reader?")) {
-      await api("/api/book?file=" + encodeURIComponent(del), { method: "DELETE" });
+    if (d.del && confirm(t("deleteConfirm"))) {
+      await api("/api/book?file=" + encodeURIComponent(book.file), { method: "DELETE" });
       refresh();
     }
-    if (restyle) {
-      const book = info.books.find((b) => b.file === restyle);
+    if (d.move) {
+      const to = prompt(t("moveTo"), book.folder);
+      if (to !== null && to.trim() !== book.folder) {
+        await api("/api/move", form({ file: book.file, folder: to.trim() }));
+        refresh();
+      }
+    }
+    if (d.open) openReader(book);
+    if (d.restyle) {
       const src = await fetch(withKey("/file?kind=source&name=" + encodeURIComponent(book.source)));
-      if (!src.ok) throw new Error("could not load the original from the reader");
+      if (!src.ok) throw new Error(t("noOriginal"));
       let settings = null;
       const meta = await fetch(withKey("/file?kind=meta&name=" + encodeURIComponent(stem(book.source) + ".json")));
       if (meta.ok) settings = await meta.json().catch(() => null);
-      openSheet({ name: book.source, bytes: await src.arrayBuffer(), onReader: true, settings, file: book.file });
+      openSheet({ name: book.source, bytes: await src.arrayBuffer(), onReader: true, settings, file: book.file, folder: book.folder });
     }
   } catch (err) { alert(err.message); }
 });
@@ -291,7 +599,7 @@ $("#books").addEventListener("click", async (e) => {
 function queueItem(name) {
   const li = document.createElement("li");
   li.className = "card";
-  li.innerHTML = `<div class="grow"><div class="title">${esc(name)}</div><div class="sub">Waiting…</div><div class="bar"><i></i></div></div>`;
+  li.innerHTML = `<div class="grow"><div class="title">${esc(name)}</div><div class="sub">${t("waiting")}</div><div class="bar"><i></i></div></div>`;
   $("#queue").append(li);
   const sub = li.querySelector(".sub");
   const bar = li.querySelector("i");
@@ -307,12 +615,12 @@ async function addFiles(files) {
     if ([".epub", ".txt"].includes(ext(f.name))) books.push(f);
     else if (ext(f.name) === ".t5b") {
       const q = queueItem(f.name);
-      if (demo) { q.done("Demo mode: nothing was sent.", "ok"); continue; }
+      if (demo) { q.done(t("demoNothing"), "ok"); continue; }
       try {
-        const r = await upload("book", f, f.name, (p) => q.progress(p, `Uploading · ${Math.round(p * 100)}% of ${size(f.size)}`));
-        q.done("Added · " + (r.title || f.name), "ok");
+        const r = await upload("book", f, f.name, (p) => q.progress(p, t("uploading", Math.round(p * 100), size(f.size))));
+        q.done(t("added", r.title || f.name), "ok");
       } catch (err) { q.done(err.message, "err"); }
-    } else queueItem(f.name).done("Use .epub, .txt or .t5b files.", "err");
+    } else queueItem(f.name).done(t("useTypes"), "err");
   }
   await refresh();
   for (const f of books) await openSheet({ name: f.name, bytes: await f.arrayBuffer(), onReader: false });
@@ -331,7 +639,6 @@ let hyphIndex = { dictionaries: [], aliases: {} };
 const loadedFonts = new Map();
 const sessionFonts = new Map(); // fonts added in demo mode (not stored anywhere)
 const hyphenators = new Map();
-const LANG_NAMES = { nl_NL: "Dutch", en_GB: "English (UK)", en_US: "English (US)", fr: "French" };
 
 async function loadAssets() {
   try { builtinFonts = await (await fetch("fonts/index.json")).json(); } catch (e) { builtinFonts = []; }
@@ -341,7 +648,7 @@ async function loadAssets() {
 function fontChoices() {
   const user = (info.fonts || []).map((f) => ({ id: "user:" + f.name, name: stem(f.name), url: withKey("/file?kind=font&name=" + encodeURIComponent(f.name)) }));
   const session = [...sessionFonts.keys()].map((n) => ({ id: "session:" + n, name: stem(n) }));
-  return [...builtinFonts, ...user, ...session, { id: "system:serif", name: "System serif" }, { id: "system:sans-serif", name: "System sans-serif" }];
+  return [...builtinFonts, ...user, ...session, { id: "system:serif", name: t("systemSerif") }, { id: "system:sans-serif", name: t("systemSans") }];
 }
 
 // Loads a font choice and returns the CSS family name to draw with.
@@ -368,12 +675,18 @@ async function hyphenator(name) {
   return hyphenators.get(name);
 }
 
+// The layout bookprep.js makes of a book with these settings (also for search).
+async function layoutFor(book, s) {
+  const family = await fontFamily(s.font);
+  const lang = s.lang === "auto" ? B.languageFallback(book.language || "nl", hyphIndex.aliases) : s.lang;
+  const hyph = s.hyphenate ? await hyphenator(lang) : null;
+  return B.typeset(book, { ...s, screen: screen() }, family, hyph);
+}
+
 // --- typeset sheet ------------------------------------------------------------------
 
 let current = null; // { source, book, settings, layout, page }
-// The reader's screen (older firmware doesn't report one: the T5-2.13). Sizes and
-// margins are remembered per screen.
-const screen = () => B.screenFor(info.screen);
+// Sizes and margins are remembered per screen.
 const settingsKey = () => "t5:settings" + (screen().id === "t5-213" ? "" : ":" + screen().id);
 function savedSettings() { try { return JSON.parse(localStorage.getItem(settingsKey())) || {}; } catch (e) { return {}; } }
 function saveSettings(s) { try { localStorage.setItem(settingsKey(), JSON.stringify(s)); } catch (e) { /* private mode */ } }
@@ -387,7 +700,7 @@ function limits(name) {
 async function openSheet(source) {
   let raw;
   try { raw = await B.extract(source.bytes, source.name); }
-  catch (err) { queueItem(source.name).done("Could not read this file: " + err.message, "err"); return; }
+  catch (err) { queueItem(source.name).done(t("cannotRead", err.message), "err"); return; }
   const book = B.cleanBook(raw);
   const sc = screen();
   const settings = { ...B.defaults, size: sc.size, margin: sc.margin, ...savedSettings(), ...(source.settings || {}) };
@@ -395,13 +708,14 @@ async function openSheet(source) {
   const canvas = $("#preview");
   canvas.width = sc.width;
   canvas.height = sc.height;
-  canvas.style.aspectRatio = sc.width + "/" + sc.height;
-  canvas.parentElement.classList.toggle("portrait", sc.height > sc.width);
+  fitCanvas(canvas);
   if (!fontChoices().some((f) => f.id === settings.font)) settings.font = B.defaults.font;
-  current = { source, book, settings, layout: null, page: 0 };
+  current = { source, book, settings, layout: null, page: 0, folder: source.folder ?? "" };
   $("#s-title").textContent = book.title;
-  $("#s-author").textContent = book.author || "Unknown author";
+  $("#s-author").textContent = book.author || t("unknownAuthor");
   $("#s-upload").disabled = demo;
+  $("#f-cover").hidden = !book.cover;
+  $("#f-folder").hidden = !!source.onReader; // a restyled book stays where it is
   syncControls();
   $("#sheet").showModal();
   await relayout();
@@ -413,17 +727,25 @@ async function openSheet(source) {
 
 function syncControls() {
   const s = current.settings;
-  $("#c-font").innerHTML = fontChoices().map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("") + `<option value="+add">Add a font…</option>`;
+  $("#c-font").innerHTML = fontChoices().map((f) => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("") + `<option value="+add">${t("addFont")}</option>`;
   $("#c-font").value = s.font;
   const auto = B.languageFallback(current.book.language || "nl", hyphIndex.aliases);
-  $("#c-hyph").innerHTML = [`<option value="auto">Auto${auto ? " (" + (LANG_NAMES[auto] || auto) + ")" : ""}</option>`]
-    .concat(hyphIndex.dictionaries.map((d) => `<option value="${d}">${LANG_NAMES[d] || d}</option>`), [`<option value="off">Off</option>`]).join("");
+  $("#c-hyph").innerHTML = [`<option value="auto">${t("auto")}${auto ? " (" + t(auto) + ")" : ""}</option>`]
+    .concat(hyphIndex.dictionaries.map((d) => `<option value="${d}">${t(d)}</option>`), [`<option value="off">${t("off")}</option>`]).join("");
   $("#c-hyph").value = s.hyphenate ? s.lang : "off";
   $("#c-spacing").value = String(s.spacing);
   $("#c-threshold").value = s.threshold;
   $("#c-justify").checked = s.justify;
   $("#c-indent").checked = s.indent;
   $("#c-chapter").checked = s.chapterPageBreak;
+  $("#c-bionic").checked = !!s.bionic;
+  $("#c-cover").checked = s.cover !== false;
+  $("#c-folder").innerHTML = [["", t("noFolder")], ...folders().map((f) => [f, f]), ["+new", t("newFolder")]]
+    .map(([v, label]) => `<option value="${esc(v)}">${esc(label)}</option>`).join("");
+  if (current.folder && !folders().includes(current.folder)) {
+    $("#c-folder").insertAdjacentHTML("afterbegin", `<option value="${esc(current.folder)}">${esc(current.folder)}</option>`);
+  }
+  $("#c-folder").value = current.folder;
   $("#v-size").textContent = s.size + " px";
   $("#v-margin").textContent = s.margin + " px";
 }
@@ -436,11 +758,8 @@ async function relayout() {
   if (!c) return;
   const s = c.settings;
   saveSettings(s);
-  const family = await fontFamily(s.font);
-  const lang = s.lang === "auto" ? B.languageFallback(c.book.language || "nl", hyphIndex.aliases) : s.lang;
-  const hyph = s.hyphenate ? await hyphenator(lang) : null;
   const fraction = c.layout ? c.page / Math.max(1, c.layout.pages.length - 1) : null;
-  c.layout = B.typeset(c.book, { ...s, screen: screen() }, family, hyph);
+  c.layout = await layoutFor(c.book, s);
   const n = c.layout.pages.length;
   const g = c.layout.geometry;
   const lines = Math.floor(g.textHeight / c.layout.lineHeight);
@@ -449,8 +768,7 @@ async function relayout() {
     if (line.index < line.count - 1 && line.runs.length) { chars += line.runs.reduce((a, r) => a + r.text.length + 1, -1); full++; }
   }
   const avgChars = Math.round(chars / Math.max(1, full));
-  const pageBytes = Math.ceil(g.width / 8) * g.height;
-  $("#stats").textContent = `${lines} lines × ~${avgChars} characters · ${n} pages · ${size(n * pageBytes)}`;
+  $("#stats").textContent = t("statsLine", lines, avgChars, n, size(n * pageBytes()));
   $("#p-slider").max = n - 1;
   setPage(fraction === null ? c.page : Math.round(fraction * (n - 1)));
 }
@@ -459,7 +777,7 @@ function setPage(n) {
   const c = current;
   c.page = Math.max(0, Math.min(c.layout.pages.length - 1, n));
   $("#p-slider").value = c.page;
-  $("#p-label").textContent = `${c.page + 1} / ${c.layout.pages.length}`;
+  $("#p-label").textContent = t("pageOf", c.page + 1, c.layout.pages.length);
   drawPreview();
 }
 
@@ -514,16 +832,25 @@ for (const b of document.querySelectorAll("[data-step]")) {
     changed();
   });
 }
-$("#c-spacing").addEventListener("change", (e) => { current.settings.spacing = +e.target.value; changed(); });
-$("#c-threshold").addEventListener("input", (e) => { current.settings.threshold = +e.target.value; changed(); });
-$("#c-justify").addEventListener("change", (e) => { current.settings.justify = e.target.checked; changed(); });
-$("#c-indent").addEventListener("change", (e) => { current.settings.indent = e.target.checked; changed(); });
-$("#c-chapter").addEventListener("change", (e) => { current.settings.chapterPageBreak = e.target.checked; changed(); });
+const onChange = (id, apply) => $(id).addEventListener(id === "#c-threshold" ? "input" : "change", (e) => { apply(e.target); changed(); });
+onChange("#c-spacing", (el) => { current.settings.spacing = +el.value; });
+onChange("#c-threshold", (el) => { current.settings.threshold = +el.value; });
+onChange("#c-justify", (el) => { current.settings.justify = el.checked; });
+onChange("#c-indent", (el) => { current.settings.indent = el.checked; });
+onChange("#c-chapter", (el) => { current.settings.chapterPageBreak = el.checked; });
+onChange("#c-bionic", (el) => { current.settings.bionic = el.checked; });
+$("#c-cover").addEventListener("change", (e) => { current.settings.cover = e.target.checked; saveSettings(current.settings); });
 $("#c-hyph").addEventListener("change", (e) => {
   const v = e.target.value;
   current.settings.hyphenate = v !== "off";
   if (v !== "off") current.settings.lang = v;
   changed();
+});
+$("#c-folder").addEventListener("change", (e) => {
+  if (e.target.value !== "+new") { current.folder = e.target.value; return; }
+  const name = (prompt(t("folderName")) || "").trim();
+  if (name) current.folder = name;
+  syncControls();
 });
 $("#c-font").addEventListener("change", (e) => {
   if (e.target.value === "+add") { e.target.value = current.settings.font; $("#fontfile").click(); return; }
@@ -543,7 +870,7 @@ $("#fontfile").addEventListener("change", async (e) => {
     }
     syncControls();
     changed();
-  } catch (err) { alert("Could not add the font: " + err.message); }
+  } catch (err) { alert(t("fontFailed", err.message)); }
 });
 $("#s-close").addEventListener("click", () => { $("#sheet").close(); current = null; });
 
@@ -554,14 +881,14 @@ function busy(text, fraction) {
 
 async function buildT5b() {
   await relayout();
-  return B.writeBook(current.book, current.layout, (n, total) => busy(`Typesetting · ${n} of ${total} pages`, n / total));
+  return B.writeBook(current.book, current.layout, (n, total) => busy(t("typesettingN", n, total), n / total));
 }
 
 const fileNameFor = (source) => B.slug(stem(source.name)) + ".t5b";
 
 $("#s-download").addEventListener("click", async () => {
   try {
-    busy("Typesetting…", 0);
+    busy(t("typesetting"), 0);
     const bytes = await buildT5b();
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([bytes])), download: fileNameFor(current.source) });
     a.click();
@@ -572,27 +899,314 @@ $("#s-download").addEventListener("click", async () => {
 
 $("#s-upload").addEventListener("click", async () => {
   const c = current;
-  const name = c.source.file || fileNameFor(c.source);
+  const name = c.source.file ? c.source.file.replace(/^.*\//, "") : fileNameFor(c.source);
   const base = stem(name);
   try {
-    busy("Typesetting…", 0);
+    busy(t("typesetting"), 0);
     const bytes = await buildT5b();
-    await upload("book", new Blob([bytes]), name, (p) => busy(`Sending to the reader · ${Math.round(p * 100)}% of ${size(bytes.length)}`, p));
+    await upload("book", new Blob([bytes]), name, (p) => busy(t("sending", Math.round(p * 100), size(bytes.length)), p), c.folder);
     if (!c.source.onReader) {
-      busy("Saving the original for restyling…", 1);
+      busy(t("savingOriginal"), 1);
       await upload("source", new Blob([c.source.bytes]), base + ext(c.source.name));
     }
     await upload("meta", new Blob([JSON.stringify(c.settings)], { type: "application/json" }), base + ".json");
     $("#sheet").close();
     current = null;
-    queueItem(name).done("Added · " + c.book.title, "ok");
+    queueItem(name).done(t("added", c.book.title), "ok");
     document.body.dataset.upload = "ok";
     refresh();
   } catch (err) {
     document.body.dataset.upload = "error: " + err.message;
-    alert("Upload failed: " + err.message);
+    alert(t("uploadFailed", err.message));
   }
   busy(null);
+});
+
+// --- a book on the reader: pages, bookmarks, search ----------------------------------
+
+let reading = null; // { book, page, marks, pages: Map, search: { layout, texts } }
+
+async function openReader(book) {
+  reading = { book, page: book.position || 0, marks: [], pages: new Map(), search: null };
+  $("#r-title").textContent = book.title;
+  $("#r-author").textContent = book.author || t("unknownAuthor");
+  $("#r-slider").max = book.pages - 1;
+  $("#r-hits").innerHTML = "";
+  $("#r-query").value = "";
+  $("#r-searchinfo").textContent = book.source ? "" : t("noSource");
+  $("#r-search").hidden = !book.source;
+  $("#r-status").textContent = t("position", (book.position || 0) + 1);
+  fitCanvas($("#r-page"));
+  $("#reader").showModal();
+  try { reading.marks = (await api("/api/marks?file=" + encodeURIComponent(book.file))).pages || []; } catch (e) { reading.marks = []; }
+  showReaderPage(reading.page);
+}
+
+async function pageBits(n) {
+  const r = reading;
+  if (r.pages.has(n)) return r.pages.get(n);
+  const res = demo ? null : await fetch(withKey(`/api/page?file=${encodeURIComponent(r.book.file)}&n=${n}`));
+  const bits = res && res.ok ? new Uint8Array(await res.arrayBuffer()) : new Uint8Array(pageBytes()).fill(0xff);
+  r.pages.set(n, bits);
+  return bits;
+}
+
+async function showReaderPage(n) {
+  const r = reading;
+  r.page = Math.max(0, Math.min(r.book.pages - 1, n));
+  $("#r-slider").value = r.page;
+  $("#r-label").textContent = t("pageOf", r.page + 1, r.book.pages);
+  renderMarks();
+  const want = r.page;
+  const bits = await pageBits(want);
+  if (reading === r && r.page === want) drawBits($("#r-page"), bits, screen().width, screen().height);
+}
+
+function renderMarks() {
+  const r = reading;
+  const here = r.marks.includes(r.page);
+  $("#r-mark").textContent = here ? t("removeBookmark") : t("bookmarkHere");
+  $("#r-marks").innerHTML = r.marks.length ? r.marks.map((p) =>
+    `<span class="chip${p === r.page ? " on" : ""}" data-go="${p}"><b>${p + 1}</b><button class="x" data-unmark="${p}" aria-label="${t("removeBookmark")}">×</button></span>`).join("")
+    : `<span class="hint">${t("noMarks")}</span>`;
+}
+
+async function setMark(page, add) {
+  const r = reading;
+  try {
+    r.marks = (await api("/api/marks", form({ file: r.book.file, page, op: add ? "add" : "remove" }))).pages || r.marks;
+  } catch (err) { alert(err.message); }
+  renderMarks();
+}
+
+$("#r-slider").addEventListener("change", (e) => showReaderPage(+e.target.value));
+$("#r-slider").addEventListener("input", (e) => { $("#r-label").textContent = t("pageOf", +e.target.value + 1, reading.book.pages); });
+$("#r-prev").addEventListener("click", () => showReaderPage(reading.page - 1));
+$("#r-next").addEventListener("click", () => showReaderPage(reading.page + 1));
+$("#r-mark").addEventListener("click", () => setMark(reading.page, !reading.marks.includes(reading.page)));
+$("#r-marks").addEventListener("click", (e) => {
+  const d = e.target.closest("[data-unmark],[data-go]");
+  if (!d) return;
+  if (d.dataset.unmark !== undefined) setMark(+d.dataset.unmark, false);
+  else showReaderPage(+d.dataset.go);
+});
+$("#r-here").addEventListener("click", async () => {
+  try {
+    await api("/api/position", form({ file: reading.book.file, page: reading.page }));
+    $("#r-status").textContent = t("readHereDone", reading.page + 1);
+    reading.book.position = reading.page;
+  } catch (err) { alert(err.message); }
+});
+$("#r-close").addEventListener("click", () => { $("#reader").close(); reading = null; refresh(); });
+
+// Search needs the text: typeset the original again with the settings it was
+// made with. Same fonts and settings give the same pages as on the reader.
+const fold = (s) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+async function searchIndex() {
+  const r = reading;
+  if (r.search) return r.search;
+  const book = r.book;
+  const src = await fetch(withKey("/file?kind=source&name=" + encodeURIComponent(book.source)));
+  if (!src.ok) throw new Error(t("noOriginal"));
+  let settings = {};
+  const meta = await fetch(withKey("/file?kind=meta&name=" + encodeURIComponent(stem(book.source) + ".json")));
+  if (meta.ok) settings = await meta.json().catch(() => ({}));
+  const s = { ...B.defaults, size: screen().size, margin: screen().margin, ...settings };
+  const parsed = B.cleanBook(await B.extract(await src.arrayBuffer(), book.source));
+  const layout = await layoutFor(parsed, s);
+  const texts = layout.pages.map((page) => {
+    let out = "";
+    for (const { line } of page) {
+      const text = line.runs.map((x) => x.text).join(" ");
+      out = /\p{L}-$/u.test(out) ? out.slice(0, -1) + text : (out ? out + " " : "") + text; // undo hyphenation
+    }
+    return out.replaceAll(B.NBSP, " ");
+  });
+  r.search = { pages: layout.pages.length, texts, folded: texts.map(fold) };
+  return r.search;
+}
+
+$("#r-search").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = fold($("#r-query").value.trim());
+  if (!q || !reading) return;
+  $("#r-searchinfo").textContent = t("searching");
+  $("#r-hits").innerHTML = "";
+  try {
+    const idx = await searchIndex();
+    const total = reading.book.pages;
+    const map = (p) => idx.pages === total ? p : Math.min(total - 1, Math.round(p * (total - 1) / Math.max(1, idx.pages - 1)));
+    const hits = [];
+    idx.folded.forEach((text, p) => {
+      for (let i = text.indexOf(q); i >= 0 && hits.length < 200; i = text.indexOf(q, i + q.length)) hits.push({ p, i });
+    });
+    $("#r-searchinfo").textContent = (hits.length ? t("hitsN", hits.length) : t("noHits")) + (idx.pages !== total ? " " + t("layoutDiffers") : "");
+    $("#r-hits").innerHTML = hits.map(({ p, i }) => {
+      const text = idx.texts[p];
+      const a = Math.max(0, i - 40), b = Math.min(text.length, i + q.length + 60);
+      return `<li data-page="${map(p)}"><small>${map(p) + 1}</small>${a ? "…" : ""}${esc(text.slice(a, i))}<mark>${esc(text.slice(i, i + q.length))}</mark>${esc(text.slice(i + q.length, b))}${b < text.length ? "…" : ""}</li>`;
+    }).join("");
+  } catch (err) { $("#r-searchinfo").textContent = err.message; }
+});
+$("#r-hits").addEventListener("click", (e) => {
+  const li = e.target.closest("[data-page]");
+  if (li) { showReaderPage(+li.dataset.page); $("#r-page").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+});
+
+// --- settings: the reader's, its name, home Wi-Fi, factory reset ----------------------
+
+async function openSettings() {
+  $("#set-name").value = info.name || "";
+  $("#wifi-ssid").value = info.homeWifi || "";
+  $("#wifi-pass").value = "";
+  $("#wifi-saved").textContent = info.homeWifi ? t("wifiSaved", info.homeWifi) : t("wifiNone");
+  $("#settings").showModal();
+  try {
+    const { settings } = await api("/api/settings");
+    $("#set-list").innerHTML = settings.map((s) => `
+      <label class="field select"><span>${esc(s.label)}</span><select data-key="${esc(s.key)}">
+        ${s.options.map((o, i) => `<option value="${i}"${i === s.value ? " selected" : ""}>${esc(o)}</option>`).join("")}
+      </select></label>`).join("");
+  } catch (err) { $("#set-list").textContent = err.message; }
+}
+
+$("#open-settings").addEventListener("click", openSettings);
+$("#set-close").addEventListener("click", () => { $("#settings").close(); refresh(); });
+$("#set-list").addEventListener("change", async (e) => {
+  const k = e.target.dataset.key;
+  if (!k) return;
+  try {
+    await api("/api/settings", form({ key: k, value: e.target.value }));
+    if (k === "language") { await refresh(); openSettings(); }
+  } catch (err) { alert(err.message); }
+});
+$("#set-name-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/name", form({ name: $("#set-name").value.trim() }));
+    info.name = $("#set-name").value.trim();
+    $("#name").textContent = info.name || "T5 Reader";
+  } catch (err) { alert(err.message); }
+});
+$("#set-wifi").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ssid = $("#wifi-ssid").value.trim();
+  if (!ssid) return;
+  try {
+    await api("/api/wifi", form({ ssid, password: $("#wifi-pass").value }));
+    $("#wifi-pass").value = "";
+    info.homeWifi = ssid;
+    $("#wifi-saved").textContent = t("wifiSaved", ssid);
+  } catch (err) { alert(err.message); }
+});
+$("#wifi-forget").addEventListener("click", async () => {
+  try {
+    await api("/api/wifi", { method: "DELETE" });
+    info.homeWifi = "";
+    $("#wifi-ssid").value = "";
+    $("#wifi-saved").textContent = t("wifiNone");
+  } catch (err) { alert(err.message); }
+});
+$("#reset").addEventListener("click", async () => {
+  if (!confirm(t("resetConfirm1"))) return;
+  if ((prompt(t("resetConfirm2")) || "").trim().toUpperCase() !== t("resetWord")) return;
+  try {
+    await api("/api/reset", form({ confirm: "erase" }));
+    alert(t("resetDone"));
+    $("#settings").close();
+  } catch (err) { alert(err.message); }
+});
+
+// --- sleep pictures --------------------------------------------------------------------
+
+function renderPictures() {
+  const pics = info.pictures || [];
+  $("#piccount").textContent = pics.length || "";
+  $("#pics").innerHTML = pics.map((name) => `<div class="pic"><canvas data-pic="${esc(name)}"></canvas><button class="close" data-delpic="${esc(name)}" aria-label="${t("delete")}">×</button></div>`).join("")
+    + `<label class="pic addpic" id="addpic">${t("noPictures")}</label>`;
+  for (const c of document.querySelectorAll("[data-pic]")) {
+    fitCanvas(c);
+    c.parentElement.classList.remove("portrait");
+    if (demo) continue;
+    fetch(withKey("/file?kind=sleep&name=" + encodeURIComponent(c.dataset.pic))).then((r) => r.ok ? r.arrayBuffer() : null)
+      .then((buf) => { if (buf) drawBits(c, new Uint8Array(buf), screen().width, screen().height); });
+  }
+}
+
+$("#pics").addEventListener("click", async (e) => {
+  if (e.target.closest("#addpic")) return openEditor();
+  const name = e.target.dataset.delpic;
+  if (!name || !confirm(t("deletePicture"))) return;
+  try { await api("/api/picture?name=" + encodeURIComponent(name), { method: "DELETE" }); refresh(); }
+  catch (err) { alert(err.message); }
+});
+
+let editorImage = null; // ImageBitmap
+let editorBits = null;
+
+function openEditor() {
+  const c = $("#e-canvas");
+  c.width = screen().width;
+  c.height = screen().height;
+  fitCanvas(c);
+  editorImage = null;
+  editorBits = null;
+  $("#e-upload").disabled = true;
+  c.getContext("2d").fillStyle = "#fff";
+  c.getContext("2d").fillRect(0, 0, c.width, c.height);
+  $("#editor").showModal();
+  $("#e-file").click();
+}
+
+// The picture as the reader will show it: placed, scaled, then 1-bit.
+function renderEditor() {
+  if (!editorImage) return;
+  const W = screen().width, H = screen().height;
+  const work = Object.assign(document.createElement("canvas"), { width: W, height: H });
+  const ctx = work.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, H);
+  const rotate = $("#e-rotate").checked;
+  const iw = rotate ? editorImage.height : editorImage.width, ih = rotate ? editorImage.width : editorImage.height;
+  const base = $("#e-fit").value === "cover" ? Math.max(W / iw, H / ih) : Math.min(W / iw, H / ih);
+  const scale = base * $("#e-zoom").value / 100;
+  const dw = iw * scale, dh = ih * scale;
+  const x = (W - dw) / 2 + (W - dw) / 2 * -$("#e-x").value / 100 * (dw > W ? 1 : -1);
+  const y = (H - dh) / 2 + (H - dh) / 2 * -$("#e-y").value / 100 * (dh > H ? 1 : -1);
+  ctx.save();
+  ctx.translate(x + dw / 2, y + dh / 2);
+  if (rotate) ctx.rotate(Math.PI / 2);
+  const w = rotate ? dh : dw, h = rotate ? dw : dh;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(editorImage, -w / 2, -h / 2, w, h);
+  ctx.restore();
+  let gray = B.toGray(ctx.getImageData(0, 0, W, H).data);
+  if ($("#e-invert").checked) gray = gray.map((v) => 255 - v);
+  editorBits = $("#e-dither").checked ? B.dither(B.autocontrast(gray), W, H) : B.dither(gray, W, H, +$("#e-level").value);
+  drawBits($("#e-canvas"), editorBits, W, H);
+  $("#e-upload").disabled = demo;
+}
+
+$("#e-file").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  try { editorImage = await createImageBitmap(f); renderEditor(); } catch (err) { alert(t("cannotRead", err.message)); }
+});
+for (const id of ["#e-fit", "#e-rotate", "#e-zoom", "#e-x", "#e-y", "#e-dither", "#e-level", "#e-invert"]) {
+  $(id).addEventListener("input", renderEditor);
+}
+$("#e-choose").addEventListener("click", () => $("#e-file").click());
+$("#e-close").addEventListener("click", () => $("#editor").close());
+$("#e-upload").addEventListener("click", async () => {
+  if (!editorBits) return;
+  const name = "picture-" + new Date().toISOString().replace(/\D/g, "").slice(0, 14) + ".bin";
+  try {
+    await upload("sleep", new Blob([editorBits]), name);
+    $("#editor").close();
+    refresh();
+  } catch (err) { alert(t("uploadFailed", err.message)); }
 });
 
 // --- firmware ---------------------------------------------------------------------------
@@ -608,12 +1222,12 @@ $("#fw").addEventListener("change", async (e) => {
   const bar = $("#fwbar");
   const say = (text, cls = "") => { sub.textContent = text; sub.className = "sub " + cls; };
   const looksRight = file.name.startsWith(otaPrefix()) && /-ota[.]bin$/i.test(file.name);
-  if (!looksRight && !confirm(`This doesn't look like a ${otaPrefix()}…-ota.bin file for this reader. Send it anyway?`)) return;
-  if (demo) return say("Demo mode: nothing was sent.", "ok");
+  if (!looksRight && !confirm(t("notOta", otaPrefix()))) return;
+  if (demo) return say(t("demoNothing"), "ok");
   try {
-    await send("/api/firmware", file, file.name, (p) => { bar.style.width = p * 100 + "%"; say(`Sending · ${Math.round(p * 100)}%`); });
+    await send("/api/firmware", file, file.name, (p) => { bar.style.width = p * 100 + "%"; say(t("sendingPct", Math.round(p * 100))); });
     bar.style.width = "100%";
-    say("Updated. The reader restarts and leaves Wi-Fi mode.", "ok");
+    say(t("updated"), "ok");
   } catch (err) { say(err.message, "err"); }
 });
 
@@ -621,21 +1235,38 @@ $("#keybox").addEventListener("submit", (e) => {
   e.preventDefault();
   key = $("#key").value.trim();
   sessionStorage.setItem("k", key);
-  refresh();
+  refresh().then(syncClock);
 });
 
 $("#demo").hidden = !demo;
+applyLang();
 (async () => {
   await loadAssets();
   await refresh();
-  // development hook: #typeset=<url> opens the sheet for a file on this server;
-  // with &upload it also presses "Upload to reader" (used by the tests)
+  syncClock();
+  // development hooks (used by the tests):
+  //   #typeset=<url>[&upload]   the typeset sheet for a file on this server [and upload it]
+  //   #reader=<book>[&find=<q>] a book's sheet [and search it: body data-hits = count]
+  //   #settings                 the settings sheet
   const hook = location.hash.match(/^#typeset=([^&]+)(&upload)?$/);
   if (hook) {
     const url = decodeURIComponent(hook[1]);
     await openSheet({ name: url.split("/").pop(), bytes: await (await fetch(url)).arrayBuffer(), onReader: false });
     if (hook[2]) $("#s-upload").click();
   }
+  const readerHook = location.hash.match(/^#reader=([^&]+)(?:&find=(.+))?$/);
+  const book = readerHook && info.books.find((b) => b.file === decodeURIComponent(readerHook[1]));
+  if (book) {
+    await openReader(book);
+    if (readerHook[2]) {
+      $("#r-query").value = decodeURIComponent(readerHook[2]);
+      $("#r-search").requestSubmit();
+      const t0 = Date.now();
+      while (!$("#r-searchinfo").textContent.match(/\d|Nothing|Niets/) && Date.now() - t0 < 30000) await new Promise((r) => setTimeout(r, 100));
+      document.body.dataset.hits = $("#r-hits").children.length;
+    }
+  }
+  if (location.hash === "#settings") await openSettings();
 })();
 </script>
 </body>

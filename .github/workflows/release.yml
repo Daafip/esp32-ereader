@@ -1,6 +1,9 @@
-# Builds the firmware for both boards and publishes it as a GitHub release when a
-# version tag is pushed. The tag must match FW_VERSION in firmware/platformio.ini:
-#   git tag v0.8.0 && git push origin v0.8.0
+# Builds the firmware for every board and publishes it as a GitHub release when a
+# version tag is pushed, plus the browser installer on GitHub Pages
+# (https://daafip.github.io/esp32-ereader/). The tag must match FW_VERSION in
+# firmware/platformio.ini:
+#   git tag v0.9.0 && git push origin v0.9.0
+# Pages needs a one-time switch: repository Settings -> Pages -> Source: GitHub Actions.
 name: release
 
 on:
@@ -48,6 +51,13 @@ jobs:
       - name: Release notes
         run: bash tools/release_notes.sh "$VERSION" > out/release-notes.md
 
+      - name: Browser installer
+        run: pixi run installer
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/installer
+
       - uses: softprops/action-gh-release@v3
         with:
           name: Firmware ${{ env.VERSION }}
@@ -55,3 +65,17 @@ jobs:
           prerelease: true  # nothing has run on a board yet
           files: out/firmware/*-${{ env.VERSION }}*.bin
           fail_on_unmatched_files: true
+
+  installer:
+    # A separate job: if Pages isn't switched on, only this job fails, not the release.
+    needs: firmware
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

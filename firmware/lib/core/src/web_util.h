@@ -16,6 +16,13 @@ bool isSafeFileName(const char *name, const char *const *exts, size_t extCount);
 // isSafeFileName for ".t5b".
 bool isSafeBookName(const char *name);
 
+// A library folder (one level below /books): 1-32 bytes, no leading dot, no path
+// separators, no control or shell-special characters.
+bool isSafeFolderName(const char *name);
+
+// A book relative to /books: "name.t5b" or "folder/name.t5b".
+bool isSafeBookPath(const char *path);
+
 // Wi-Fi join QR payload: WIFI:T:WPA;S:<ssid>;P:<password>;; with \ ; , : " escaped.
 bool wifiQrPayload(const char *ssid, const char *password, char *out, size_t outSize);
 

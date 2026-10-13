@@ -16,7 +16,14 @@ import pytest
 
 from bookprep.cli import clean_book, toc_entries
 from bookprep.extract import extract
-from bookprep.layout import FontMeasurer, Hyphenator, LayoutOptions, PageGeometry, layout_book
+from bookprep.layout import (
+    SCREENS,
+    FontMeasurer,
+    Hyphenator,
+    LayoutOptions,
+    PageGeometry,
+    layout_book,
+)
 from bookprep.t5b import T5BFile
 from bookprep.webassets import export_hyphenation
 
@@ -148,3 +155,33 @@ def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, scre
     assert (sd / ".src" / "testboek.epub").read_bytes() == sample_epub.read_bytes()
     settings = json.loads((sd / ".src" / "testboek.json").read_text())
     assert (settings["size"], settings["screen"]) == (size[2], screen)
+    # the EPUB's cover came along, scaled into the screen's cover box
+    box = (SCREENS[screen].cover_w, SCREENS[screen].cover_h)
+    assert book.cover is not None
+    assert book.cover.width <= box[0] and book.cover.height <= box[1]
+
+
+def test_page_searches_a_book_on_the_reader(tmp_path, sample_epub, font_path):
+    """The book sheet: page bitmaps from the reader, search in the original."""
+    from bookprep.cli import main as prep
+    from bookprep.devserver import make_server
+
+    srv = make_server(tmp_path, "1234", port=0, fonts=True)
+    sd = tmp_path / "sd" / "books"
+    (sd / ".src").mkdir(parents=True)
+    assert prep([str(sample_epub), "--out", str(sd)]) == 0
+    shutil.copy(sample_epub, sd / ".src" / "testboek.epub")
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        port = srv.server_address[1]
+        url = f"http://127.0.0.1:{port}/?k=1234#reader=testboek.t5b&find=alinea"
+        dom = subprocess.run(
+            [chromium(), "--headless=new", "--disable-gpu", "--no-first-run",
+             "--virtual-time-budget=60000", "--dump-dom", url],
+            capture_output=True, text=True, timeout=300, check=True,
+        ).stdout  # fmt: skip
+    finally:
+        srv.shutdown()
+    hits = re.search(r'<body[^>]*data-hits="(\d+)"', dom)
+    assert hits and int(hits.group(1)) >= 1, dom[-800:]
+    assert "<mark>alinea</mark>" in dom

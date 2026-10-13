@@ -101,6 +101,8 @@ class Screen:
     font_size: int  # default text size in px
     margin: int  # default left/right/top margin in px
     margin_bottom: int
+    cover_w: int  # the cover is scaled to fit this box (sleep screen)
+    cover_h: int
 
     def geometry(self, margin: int | None = None, status_bar: int | None = None) -> PageGeometry:
         m = self.margin if margin is None else margin
@@ -118,8 +120,8 @@ class Screen:
 SCREENS = {
     s.id: s
     for s in (
-        Screen("t5-213", "LilyGo T5-2.13", 250, 122, 14, 13, 4, 4),
-        Screen("4.7in", 'LilyGo T5-4.7" S3, M5PaperS3, M5Paper', 540, 960, 28, 28, 24, 8),
+        Screen("t5-213", "LilyGo T5-2.13", 250, 122, 14, 13, 4, 4, 72, 104),
+        Screen("4.7in", 'LilyGo T5-4.7" S3, M5PaperS3, M5Paper', 540, 960, 28, 28, 24, 8, 420, 640),
     )
 }
 DEFAULT_SCREEN = "t5-213"

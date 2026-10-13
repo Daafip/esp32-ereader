@@ -3,6 +3,7 @@
 #include <SD.h>
 
 #include "board.h"
+#include "storage.h"
 
 bool Book::open(const char *path) {
   close();
@@ -12,19 +13,13 @@ bool Book::open(const char *path) {
     error_ = "file not found";
     return false;
   }
-  uint8_t buf[t5b::kHeaderSize];
-  if (file_.read(buf, sizeof(buf)) != sizeof(buf)) {
-    error_ = t5b::errorText(t5b::Error::TooShort);
-    file_.close();
-    return false;
-  }
-  t5b::Error err = t5b::parseHeader(buf, sizeof(buf), header_);
-  if (err == t5b::Error::None) err = t5b::validate(header_, kPageW, kPageH, uint32_t(file_.size()));
-  if (err != t5b::Error::None) {
+  const t5b::Error err = storage::checkBook(file_, header_, &cover_);
+  if (err != t5b::Error::None || !file_.seek(t5b::kHeaderSize)) {
     error_ = t5b::errorText(err);
     file_.close();
     return false;
   }
+  strlcpy(stem_, storage::stemOf(path).c_str(), sizeof(stem_));
   const int n = header_.tocCount < kMaxToc ? header_.tocCount : kMaxToc;
   starts_.resize(n);
   uint8_t entry[t5b::kTocEntrySize];
@@ -52,6 +47,12 @@ bool Book::readPage(uint32_t n, uint8_t *dst) {
   if (!open_ || n >= header_.pageCount) return false;
   const uint32_t bytes = header_.pageBytes();
   return file_.seek(header_.pageOffset(n)) && file_.read(dst, bytes) == bytes;
+}
+
+bool Book::readCover(uint8_t *dst) {
+  if (!open_ || !cover_.present) return false;
+  const uint32_t bytes = uint32_t(cover_.stride) * cover_.h;
+  return file_.seek(cover_.offset) && file_.read(dst, bytes) == bytes;
 }
 
 int Book::chapterForPage(uint32_t page) const {

@@ -57,6 +57,31 @@ bool isSafeFileName(const char *name, const char *const *exts, size_t extCount) 
   return true;
 }
 
+bool isSafeFolderName(const char *name) {
+  const size_t n = strlen(name);
+  if (n == 0 || n > 32 || name[0] == '.' || name[n - 1] == ' ') return false;
+  for (size_t i = 0; i < n; i++) {
+    const unsigned char c = static_cast<unsigned char>(name[i]);
+    if (c < 0x20 || c == 0x7F || c == '/' || c == '\\' || c == ':' || c == '"' || c == '*' ||
+        c == '?' || c == '<' || c == '>' || c == '|') {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool isSafeBookPath(const char *path) {
+  const char *slash = strchr(path, '/');
+  if (!slash) return isSafeBookName(path);
+  if (strchr(slash + 1, '/')) return false;
+  char folder[40];
+  const size_t n = size_t(slash - path);
+  if (n == 0 || n >= sizeof(folder)) return false;
+  memcpy(folder, path, n);
+  folder[n] = '\0';
+  return isSafeFolderName(folder) && isSafeBookName(slash + 1);
+}
+
 bool isSafeBookName(const char *name) {
   static const char *const kT5b[] = {".t5b"};
   return isSafeFileName(name, kT5b, 1);

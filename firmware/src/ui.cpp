@@ -140,6 +140,21 @@ void chevron(int x, int cy, int color) {  // 5 x 7, two pixels thick
   }
 }
 
+// Bookmark ribbon, 6 x 9, notch at the bottom.
+void ribbon(int x, int y, int color = kBlack) {
+  epd().fillRect(x, y, 6 * S, 9 * S, color);
+  const int other = color == kBlack ? kWhite : kBlack;
+  for (int t = 0; t < 3 * S; t++) {
+    epd().drawLine(x + 3 * S - t, y + 6 * S + t, x + 3 * S + t - 1, y + 6 * S + t, other);
+  }
+}
+
+// Padlock, 9 x 11.
+void padlock(int x, int y, int color = kBlack) {
+  outline(x + 2 * S, y, 5 * S, 8 * S, 2 * S, color);
+  epd().fillRoundRect(x, y + 5 * S, 9 * S, 6 * S, S, color);
+}
+
 void moon(int cx, int cy) {
   epd().fillCircle(cx, cy, 4 * S, kBlack);
   epd().fillCircle(cx + 2 * S, cy - 2 * S, 3 * S, kWhite);
@@ -315,28 +330,57 @@ Hit hit(int x, int y) {
   return {};
 }
 
-void statusBar(const char *chapter, uint32_t page, uint32_t pageCount, int batteryPct) {
+const char *unlockHint() {
+  if (kHasTouch) return tr(S::UnlockTouch);
+  return kSingleButton ? tr(S::UnlockHold) : tr(S::UnlockMenu);
+}
+
+void statusBar(const StatusView &v) {
   targetCount = 0;  // the reading screen: tap zones, no targets
   const int top = kH - kStatusBarH;
   const int baseline = kH - 3 * S;
   epd().fillRect(0, top, kW, kStatusBarH, kWhite);
-  // reading progress: dotted track, solid fill
   const int x0 = 4 * S, x1 = kW - 5 * S;
+  if (v.mode == StatusBarMode::Hidden) {  // only what would otherwise be a mystery
+    if (v.locked) padlock(x1 + S - 9 * S, baseline - 9 * S);
+    return;
+  }
+  // reading progress: dotted track, solid fill
   for (int x = x0; x <= x1; x += 2 * S) dot(x, top + S, kBlack);
-  if (pageCount) {
-    const int fill = int(uint64_t(x1 - x0 + S) * (page + 1) / pageCount);
+  if (v.pageCount) {
+    const int fill = int(uint64_t(x1 - x0 + S) * (v.page + 1) / v.pageCount);
     if (fill > 0) epd().fillRect(x0, top, fill, 2 * S, kBlack);
   }
+  const bool full = v.mode == StatusBarMode::Full;
   int right = x1 + S;
-  if (batteryPct >= 0) {
-    batteryIcon(right - 16 * S, baseline - 7 * S, batteryPct, kBlack);
+  if (full && v.batteryPct >= 0) {
+    batteryIcon(right - 16 * S, baseline - 7 * S, v.batteryPct, kBlack);
     right -= 16 * S + 7 * S;
   }
+  if (v.locked) {
+    padlock(right - 9 * S, baseline - 9 * S);
+    right -= 9 * S + 6 * S;
+  }
+  if (v.bookmarked) {
+    ribbon(right - 6 * S, baseline - 9 * S);
+    right -= 6 * S + 6 * S;
+  }
   char progress[32];
-  formatProgress(page, pageCount, progress, sizeof(progress));
+  if (full) {
+    formatProgress(v.page, v.pageCount, progress, sizeof(progress));
+  } else {
+    snprintf(progress, sizeof(progress), "%u%%",
+             unsigned(v.pageCount > 1 ? uint64_t(v.page) * 100 / (v.pageCount - 1) : 100));
+  }
   const int pw = width(kSmall, progress);
   text(kSmall, progress, right - pw, baseline, pw, kBlack);
-  text(kSmall, chapter, x0, baseline, right - pw - 12 * S - x0, kBlack);
+  char locked[96];
+  const char *left = full ? v.chapter : nullptr;
+  if (v.locked) {
+    snprintf(locked, sizeof(locked), "%s  \xC2\xB7  %s", tr(S::Locked), unlockHint());
+    left = locked;
+  }
+  text(kSmall, left, x0, baseline, right - pw - 12 * S - x0, kBlack);
 }
 
 void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hint left,
@@ -375,7 +419,7 @@ void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hin
     text(kBody, it.label, x, top + kRowBaseline, end - x, color);
   }
   if (model.count() == 0) {
-    text(kBody, "Nothing here", 0, kRowsTop + 2 * kRowH, kW, kBlack, Align::Center);
+    text(kBody, tr(S::NothingHere), 0, kRowsTop + 2 * kRowH, kW, kBlack, Align::Center);
   }
   scrollbar(model);
   footer(left, right);
@@ -434,48 +478,106 @@ void message(Icon which, const char *headline, const char *line1, const char *li
   footer(left, right);
 }
 
-void sleepScreen(const char *title, const char *author, int percentRead, int batteryPct) {
-  beginScreen();
-  battery(kW - kMargin, 14 * S, batteryPct, kBlack);
+namespace {
 
-  constexpr int kLineH = 21 * S;
-  char lines[2][96];
-  epd().setFont(kDisplay);
-  const int n = wrapText(title && *title ? title : "T5 Reader", kW - 40 * S, measure, nullptr,
-                         kEllipsis, lines[0], sizeof(lines[0]), 2);
-  const bool hasAuthor = author && *author;
-  const bool hasProgress = percentRead >= 0;
-  const int blockH = n * kLineH + (hasAuthor ? 18 * S : 0) + (hasProgress ? 16 * S : 0);
-  int y = kBandTop + 22 * S + (78 * S - blockH) / 2;
-  for (int i = 0; i < n; i++, y += kLineH) {
-    text(kDisplay, lines[i], 0, y + 15 * S, kW, kBlack, Align::Center);
+// 1-bpp bitmap (MSB first, 1 = white) at (x, y): black pixels only.
+void blit(const Bitmap &b, int x0, int y0) {
+  for (int y = 0; y < b.h; y++) {
+    const uint8_t *row = b.bits + y * b.stride;
+    for (int x = 0; x < b.w; x++) {
+      if (row[x >> 3] == 0xFF) {
+        x |= 7;
+        continue;
+      }
+      if (!(row[x >> 3] & (0x80 >> (x & 7)))) epd().drawPixel(x0 + x, y0 + y, kBlack);
+    }
+  }
+}
+
+// Title (up to `maxLines` lines of at most titleW in `font`), author and a
+// reading-progress bar, centred in [x, x + w) starting at y. Returns the height.
+int titleBlock(const SleepView &v, int x, int y, int w, int titleW, const uint8_t *font,
+               int lineH, int maxLines, bool measureOnly) {
+  char lines[3][96];
+  epd().setFont(font);
+  const int n = wrapText(v.title && *v.title ? v.title : "T5 Reader", titleW, measure, nullptr,
+                         kEllipsis, lines[0], sizeof(lines[0]), maxLines);
+  const bool hasAuthor = v.author && *v.author;
+  const bool hasProgress = v.percentRead >= 0;
+  const int blockH = n * lineH + (hasAuthor ? 18 * S : 0) + (hasProgress ? 16 * S : 0);
+  if (measureOnly) return blockH;
+  for (int i = 0; i < n; i++, y += lineH) {
+    text(font, lines[i], x, y + lineH - 6 * S, w, kBlack, Align::Center);
   }
   if (hasAuthor) {
-    text(kBody, author, kMargin, y + 13 * S, kW - 2 * kMargin, kBlack, Align::Center);
+    text(kBody, v.author, x, y + 13 * S, w, kBlack, Align::Center);
     y += 18 * S;
   }
   if (hasProgress) {
     char pct[12];
-    snprintf(pct, sizeof(pct), "%d%%", percentRead);
+    snprintf(pct, sizeof(pct), "%d%%", v.percentRead);
     const int pw = width(kSmall, pct);
-    constexpr int kBarW = 70 * S;
-    const int x = (kW - kBarW - 6 * S - pw) / 2;
-    outline(x, y + 7 * S, kBarW, 5 * S, 2 * S, kBlack);
-    const int fill = (kBarW - 2 * S) * percentRead / 100;
-    if (fill > 0) epd().fillRect(x + S, y + 8 * S, fill, 3 * S, kBlack);
-    text(kSmall, pct, x + kBarW + 6 * S, y + 13 * S, pw, kBlack);
+    const int barW = 70 * S;
+    const int bx = x + (w - barW - 6 * S - pw) / 2;
+    outline(bx, y + 7 * S, barW, 5 * S, 2 * S, kBlack);
+    const int fill = (barW - 2 * S) * v.percentRead / 100;
+    if (fill > 0) epd().fillRect(bx + S, y + 8 * S, fill, 3 * S, kBlack);
+    text(kSmall, pct, bx + barW + 6 * S, y + 13 * S, pw, kBlack);
   }
+  return blockH;
+}
 
-  const char *hint = kSleepHint;
+const char *wakeHint() {
+  if (kLightSleep) return tr(kPowerOffPulsePin >= 0 ? S::OffPowerButton : S::OffSwitch);
+  return tr(kSingleButton ? S::SleepButton : S::SleepAnyButton);
+}
+
+// Moon and wake hint at the bottom; a padlock in front when locked.
+void sleepFooter(bool locked) {
+  const char *hint = wakeHint();
   const int hw = width(kSmall, hint);
-  const int hx = (kW - hw - 12 * S) / 2;
+  const int lockW = locked ? 14 * S : 0;
+  const int hx = (kW - hw - 12 * S - lockW) / 2 + lockW;
+  if (locked) padlock(hx - lockW, kH - 15 * S);
   moon(hx + 4 * S, kH - 10 * S);
   text(kSmall, hint, hx + 12 * S, kH - 6 * S, hw, kBlack);
 }
 
+}  // namespace
+
+void sleepScreen(const SleepView &v) {
+  beginScreen();
+  battery(kW - kMargin, 14 * S, v.batteryPct, kBlack);
+  const Bitmap &c = v.cover;
+  if (c.bits && kW > kH) {  // landscape: cover left, text right, below the battery
+    const int cy = (kH - 14 * S - c.h) / 2;
+    blit(c, kMargin, cy < 2 * S ? 2 * S : cy);
+    const int x = kMargin + c.w + 8 * S, w = kW - kMargin - x;
+    const int top = 18 * S, h = titleBlock(v, x, 0, w, w, kTitle, 17 * S, 3, true);
+    const int y = top + (kH - 14 * S - top - h) / 2;
+    titleBlock(v, x, y < top ? top : y, w, w, kTitle, 17 * S, 3, false);
+  } else if (c.bits) {  // portrait: cover on top, text below
+    const int w = kW - 2 * kMargin;
+    const int h = titleBlock(v, kMargin, 0, w, w, kDisplay, 21 * S, 2, true);
+    const int total = c.h + 12 * S + h;
+    int y = (kH - 14 * S - total) / 2;
+    if (y < 24 * S) y = 24 * S;
+    blit(c, (kW - c.w) / 2, y);
+    titleBlock(v, kMargin, y + c.h + 12 * S, w, w, kDisplay, 21 * S, 2, false);
+  } else {  // the 250x122 design: title, author, progress in the middle band
+    const int w = kW - 2 * kMargin;
+    const int h = titleBlock(v, kMargin, 0, w, kW - 40 * S, kDisplay, 21 * S, 2, true);
+    titleBlock(v, kMargin, kBandTop + 22 * S + (78 * S - h) / 2, w, kW - 40 * S, kDisplay,
+               21 * S, 2, false);
+  }
+  sleepFooter(v.locked);
+}
+
+void lockBadge() { padlock(kMargin, 4 * S); }
+
 const char *retryHint() {
-  if (kHasTouch) return "Tap the screen to try again";
-  return kSingleButton ? "Press the button to try again" : "Press any button to try again";
+  if (kHasTouch) return tr(S::RetryTap);
+  return tr(kSingleButton ? S::RetryButton : S::RetryAnyButton);
 }
 
 void wifiScreen(const WifiView &v, Hint left, Hint right, int batteryPct) {
@@ -507,7 +609,7 @@ void wifiScreen(const WifiView &v, Hint left, Hint right, int batteryPct) {
   const int top = kBandTop;
   if (v.step > 0) {
     char step[24];
-    snprintf(step, sizeof(step), "Step %d of 2", v.step);
+    snprintf(step, sizeof(step), tr(S::StepOf), v.step);
     const int stepRight = top > 0 ? kW - kMargin : batteryLeft - 6 * S;  // battery above the band?
     text(kSmall, step, x, top + 12 * S, stepRight - x, kBlack);
   }
