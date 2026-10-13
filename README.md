@@ -3,7 +3,7 @@
 > [!WARNING]  
 > Although tested by myself, this project was fully coded by AI without human review of the code itself, use at your own risk.
 
-Inspired by [Paul Lagier](https://www.youtube.com/watch?v=IL05zoHBGwA), but his design costs 5 euros - why pay when you can spend endless hours instructing claude code?
+Inspired by [Paul Lagier](https://www.youtube.com/watch?v=IL05zoHBGwA), but his [code](https://github.com/PaulLagier/pala-one-firmware) was only for the `Heltec V1 e-ink` board, so i took the idea and expanded it to other models with my own twist.
 
 ## Supported models
 

@@ -13,6 +13,7 @@ __pycache__/
 
 # bookprep output
 out/
+in/
 
 # secrets (Wi-Fi credentials etc.)
 firmware/include/secrets.h
