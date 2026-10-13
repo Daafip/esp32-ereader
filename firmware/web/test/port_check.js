@@ -47,6 +47,9 @@ out.t5b = Buffer.from(B.writeT5b({
   cover: { ...cases.t5b.cover, bits: new Uint8Array(Buffer.from(cases.t5b.cover.bits, "base64")) },
 })).toString("base64");
 out.bionic = cases.bionic.map((w) => B.bionicPrefix(w));
+out.dither = cases.dither.map((c) =>
+  Buffer.from(B.dither(c.gray, c.w, c.h, { method: c.method, level: c.level })).toString("base64"));
+out.sharpen = Array.from(B.sharpen(cases.sharpen.gray, cases.sharpen.w, cases.sharpen.h));
 
 out.encode = cases.encode.map(([text, size]) => Buffer.from(B.encodeStr(text, size)).toString("base64"));
 out.slug = cases.slug.map((s) => B.slug(s));

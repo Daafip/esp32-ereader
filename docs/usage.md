@@ -206,6 +206,10 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
     progress), **cover** (the same with the book's cover; books without one fall back
     to "book"), **pictures** (your own pictures in turn, made on the page under "Sleep
     pictures") or **keep page** (the page stays; the next press turns it).
+    The picture editor shows exactly what the reader will show. *Method*: Atkinson
+    (default: clean whites and blacks), Floyd–Steinberg (more detail, more noise),
+    pattern, or threshold (drawings, text). *Brightness* and *contrast* help with
+    dark photos (e-paper looks darker than a screen); *sharpen* keeps small details.
   - *Status bar*: **full** (progress line, chapter, page/total, percentage, battery),
     **minimal** (progress line and percentage) or **hidden**.
   - *Long hold* (touch: *Long press*): see "The hold gesture".

@@ -713,11 +713,18 @@
   }
 
   // Stretches the grey levels so `cutoff` of the pixels clip at each end (as
-  // Pillow's ImageOps.autocontrast(cutoff=1) does with 1 %). In place.
-  function autocontrast(gray, cutoff = 0.01) {
+  // Pillow's ImageOps.autocontrast(cutoff=1) does with 1 %). In place. `inside`
+  // (optional, index -> bool) limits the measuring to part of the picture, e.g.
+  // without the white bars around a fitted photo.
+  function autocontrast(gray, cutoff = 0.01, inside = null) {
     const hist = new Uint32Array(256);
-    for (const v of gray) hist[Math.max(0, Math.min(255, Math.round(v)))]++;
-    const clip = Math.floor(gray.length * cutoff);
+    let counted = 0;
+    for (let i = 0; i < gray.length; i++) {
+      if (inside && !inside(i)) continue;
+      hist[Math.max(0, Math.min(255, Math.round(gray[i])))]++;
+      counted++;
+    }
+    const clip = Math.floor(counted * cutoff);
     let lo = 0, hi = 255, n = 0;
     while (lo < 255 && (n += hist[lo]) <= clip) lo++;
     n = 0;
@@ -728,32 +735,85 @@
     return gray;
   }
 
-  // Grey (0-255, w*h values) to the packed page layout (1 = white): Floyd-Steinberg
-  // error diffusion, or a plain threshold when `level` is given.
-  function dither(gray, w, h, level = null) {
-    const err = Float32Array.from(gray);
+  // 8x8 Bayer matrix for ordered dithering (thresholds (n + 0.5) * 4).
+  const BAYER8 = [
+    0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26,
+    12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
+    3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25,
+    15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21,
+  ];
+
+  // Grey (0-255, w*h values) to the packed page layout (1 = white). method:
+  // "atkinson" (default; passes on 6/8 of the error, so clean whites and blacks
+  // on a small 1-bit screen), "floyd" (Floyd-Steinberg: more detail, more noise),
+  // "ordered" (8x8 Bayer pattern) or "threshold" (at `level`). Doubles, so the
+  // result matches dither() in bookprep/render.py bit for bit.
+  function dither(gray, w, h, { method = "atkinson", level = 128 } = {}) {
+    const err = Float64Array.from(gray);
     const stride = strideFor(w);
     const out = new Uint8Array(stride * h).fill(0xff);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
-        const v = err[i] < (level === null ? 128 : level) ? 0 : 255;
-        if (!v) out[y * stride + (x >> 3)] &= ~(0x80 >> (x & 7));
-        if (level !== null) continue;
-        const e = err[i] - v;
-        if (x + 1 < w) err[i + 1] += (e * 7) / 16;
-        if (y + 1 < h) {
-          if (x > 0) err[i + w - 1] += (e * 3) / 16;
-          err[i + w] += (e * 5) / 16;
-          if (x + 1 < w) err[i + w + 1] += e / 16;
+        const limit = method === "ordered" ? (BAYER8[(y & 7) * 8 + (x & 7)] + 0.5) * 4
+          : method === "threshold" ? level : 128;
+        const black = err[i] < limit;
+        if (black) out[y * stride + (x >> 3)] &= ~(0x80 >> (x & 7));
+        const e = err[i] - (black ? 0 : 255);
+        if (method === "floyd") {
+          if (x + 1 < w) err[i + 1] += (e * 7) / 16;
+          if (y + 1 < h) {
+            if (x > 0) err[i + w - 1] += (e * 3) / 16;
+            err[i + w] += (e * 5) / 16;
+            if (x + 1 < w) err[i + w + 1] += e / 16;
+          }
+        } else if (method === "atkinson") {
+          const a = e / 8;
+          if (x + 1 < w) err[i + 1] += a;
+          if (x + 2 < w) err[i + 2] += a;
+          if (y + 1 < h) {
+            if (x > 0) err[i + w - 1] += a;
+            err[i + w] += a;
+            if (x + 1 < w) err[i + w + 1] += a;
+          }
+          if (y + 2 < h) err[i + 2 * w] += a;
         }
       }
     }
     return out;
   }
 
+  // Unsharp mask with a 3x3 box blur (edges repeat): a picture scaled down to the
+  // screen gets soft, and dithering turns soft edges into noise. Same as
+  // sharpen() in bookprep/render.py.
+  function sharpen(gray, w, h, amount = 0.6) {
+    const out = new Float64Array(gray.length);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = Math.min(h - 1, Math.max(0, y + dy));
+          for (let dx = -1; dx <= 1; dx++) sum += gray[yy * w + Math.min(w - 1, Math.max(0, x + dx))];
+        }
+        const v = gray[y * w + x];
+        out[y * w + x] = Math.min(255, Math.max(0, v + amount * (v - sum / 9)));
+      }
+    }
+    return out;
+  }
+
+  // Brightness as a gamma curve (-50..50 = darker..lighter, black and white stay)
+  // and contrast around mid-grey (-50..50). E-paper shows dithered pictures darker
+  // than a monitor does.
+  function adjust(gray, brightness = 0, contrast = 0) {
+    const g = Math.pow(2, -brightness / 50);
+    const k = 1 + contrast / 50;
+    return Float64Array.from(gray, (v) =>
+      Math.min(255, Math.max(0, (255 * Math.pow(Math.max(0, v) / 255, g) - 128) * k + 128)));
+  }
+
   // An image file (cover) scaled to fit boxW x boxH (never enlarged), contrast
-  // stretched and dithered: { w, h, bits }. Browser only (decodes with the browser).
+  // stretched, sharpened and Atkinson dithered: { w, h, bits }. Browser only.
   async function coverBitmap(image, boxW, boxH) {
     const bmp = await createImageBitmap(new Blob([image.data], { type: image.type || "" }));
     const scale = Math.min(boxW / bmp.width, boxH / bmp.height, 1);
@@ -765,7 +825,8 @@
     ctx.fillRect(0, 0, w, h);
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bmp, 0, 0, w, h);
-    return { w, h, bits: dither(autocontrast(toGray(ctx.getImageData(0, 0, w, h).data)), w, h) };
+    const gray = sharpen(autocontrast(toGray(ctx.getImageData(0, 0, w, h).data)), w, h);
+    return { w, h, bits: dither(gray, w, h) };
   }
 
   // Bionic reading: characters of a word to draw bolder, leading punctuation plus
@@ -922,6 +983,6 @@
     extract, normalizeText, cleanBook, parsePatterns, languageFallback, Hyphenator, dashBreaks,
     breakLines, bookItems, paginate, layoutBook, tocEntries, encodeStr, writeT5b, packPixels,
     createRenderer, unpackToRgba, typeset, writeBook, slug, NBSP, toGray, autocontrast, dither,
-    coverBitmap, bionicPrefix,
+    sharpen, adjust, coverBitmap, bionicPrefix,
   };
 });

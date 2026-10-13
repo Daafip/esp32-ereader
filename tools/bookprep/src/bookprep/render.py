@@ -77,9 +77,73 @@ def render_page(
 # --- cover ---------------------------------------------------------------------
 
 
+# 8x8 Bayer matrix for ordered dithering (thresholds (n + 0.5) * 4).
+BAYER8 = (
+    0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26,
+    12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
+    3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25,
+    15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21,
+)  # fmt: skip
+
+
+def dither(
+    gray: list[float], w: int, h: int, method: str = "atkinson", level: int = 128
+) -> Image.Image:
+    """Grey values (0-255, w*h, row by row) to a mode-"1" image. method: "atkinson"
+    (passes on 6/8 of the error: clean whites and blacks on a small 1-bit screen),
+    "floyd" (Floyd-Steinberg), "ordered" (8x8 Bayer) or "threshold" (at `level`).
+    Same as dither() in firmware/web/bookprep.js, bit for bit."""
+    err = [float(v) for v in gray]
+    img = Image.new("1", (w, h), 1)
+    px = img.load()
+    for y in range(h):
+        for x in range(w):
+            i = y * w + x
+            if method == "ordered":
+                limit = (BAYER8[(y & 7) * 8 + (x & 7)] + 0.5) * 4
+            else:
+                limit = level if method == "threshold" else 128
+            black = err[i] < limit
+            if black:
+                px[x, y] = 0
+            e = err[i] - (0 if black else 255)
+            if method == "floyd":
+                if x + 1 < w:
+                    err[i + 1] += e * 7 / 16
+                if y + 1 < h:
+                    if x > 0:
+                        err[i + w - 1] += e * 3 / 16
+                    err[i + w] += e * 5 / 16
+                    if x + 1 < w:
+                        err[i + w + 1] += e / 16
+            elif method == "atkinson":
+                a = e / 8
+                for dx, dy in ((1, 0), (2, 0), (-1, 1), (0, 1), (1, 1), (0, 2)):
+                    if 0 <= x + dx < w and y + dy < h:
+                        err[i + dy * w + dx] += a
+    return img
+
+
+def sharpen(gray: list[float], w: int, h: int, amount: float = 0.6) -> list[float]:
+    """Unsharp mask with a 3x3 box blur (edges repeat), as sharpen() in bookprep.js:
+    a picture scaled down to the screen gets soft, and dithering makes that noise."""
+    out = [0.0] * len(gray)
+    for y in range(h):
+        rows = [min(h - 1, max(0, y + dy)) * w for dy in (-1, 0, 1)]
+        for x in range(w):
+            cols = [min(w - 1, max(0, x + dx)) for dx in (-1, 0, 1)]
+            total = 0.0
+            for r in rows:
+                for c in cols:
+                    total += gray[r + c]
+            v = gray[y * w + x]
+            out[y * w + x] = min(255.0, max(0.0, v + amount * (v - total / 9)))
+    return out
+
+
 def cover_bitmap(data: bytes, box: tuple[int, int]) -> Image.Image | None:
     """A cover image (any format Pillow reads) scaled to fit `box`, contrast
-    stretched and Floyd-Steinberg dithered to 1 bit. None if it can't be read."""
+    stretched, sharpened and Atkinson dithered to 1 bit. None if it can't be read."""
     import io
 
     from PIL import ImageOps, UnidentifiedImageError
@@ -97,7 +161,8 @@ def cover_bitmap(data: bytes, box: tuple[int, int]) -> Image.Image | None:
     img = img.convert("L")
     img.thumbnail(box, Image.Resampling.LANCZOS)
     img = ImageOps.autocontrast(img, cutoff=1)
-    return img.convert("1")  # Floyd-Steinberg
+    w, h = img.size
+    return dither(sharpen([float(v) for v in img.tobytes()], w, h), w, h)  # mode L: 1 byte/px
 
 
 # --- previews ----------------------------------------------------------------

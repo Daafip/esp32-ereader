@@ -25,7 +25,7 @@ from bookprep.layout import (
     line_height_for,
 )
 from bookprep.normalize import normalize_text
-from bookprep.render import bionic_prefix
+from bookprep.render import bionic_prefix, dither, sharpen
 from bookprep.t5b import T5BFile, TocEntry, encode_str, pack_page, write_t5b
 from bookprep.webassets import export_hyphenation, hyphenation_index
 
@@ -154,6 +154,14 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
     aliases = hyphenation_index()["aliases"]
     languages = ["nl", "nl-NL", "en", "en-US", "en-AU", "EN_gb", "de", "de-CH", "fr-BE", "it", ""]
 
+    # pictures: a grey pattern with gradients and fine detail, raw and sharpened
+    gw, gh = 37, 23
+    gray = [float((x * 7 + y * 11 + (x * y) % 13) % 256) for y in range(gh) for x in range(gw)]
+    sharp = sharpen(gray, gw, gh)
+    methods = ("atkinson", "floyd", "ordered", "threshold")
+    dither_cases = [{"w": gw, "h": gh, "gray": g, "method": m, "level": 100}
+                    for g in (gray, sharp) for m in methods]  # fmt: skip
+
     cases = {
         "normalize": NORMALIZE,
         "patterns": {lang: export_hyphenation(lang) for lang in langs},
@@ -176,6 +184,8 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
             "cover": {"w": 13, "h": 4, "bits": base64.b64encode(pack_page(cover_img)).decode()},
         },
         "bionic": BIONIC_WORDS,
+        "dither": dither_cases,
+        "sharpen": {"w": gw, "h": gh, "gray": gray},
         "encode": encode_cases,
         "slug": slugs,
         "lineHeights": [[size, f] for size in range(9, 23) for f in (1.0, 1.1, 1.2, 1.3, 1.45)],
@@ -225,6 +235,10 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
     ]
     assert js["slug"] == [slug(s) for s in slugs]
     assert js["bionic"] == [bionic_prefix(w) for w in BIONIC_WORDS]
+    assert js["sharpen"] == sharp
+    for case, got in zip(dither_cases, js["dither"], strict=True):
+        want = dither(case["gray"], gw, gh, case["method"], case["level"])
+        assert got == base64.b64encode(pack_page(want)).decode(), case["method"]
     assert T5BFile(t5b_path).cover is not None
     assert js["lineHeights"] == [line_height_for(s, f) for s, f in cases["lineHeights"]]
     assert line_height_for(10) == 12 and line_height_for(13) == 16

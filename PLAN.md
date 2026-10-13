@@ -199,7 +199,7 @@ checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.m
 - [x] Home Wi-Fi from the page (NVS; password write-only), comes before `secrets.h`
 - [x] Bookmarks: up to 100 per book in `/books/.marks/<stem>.txt` (`PageList`, lib/core, tested), Bookmarks screen, ribbon in the status bar, remapped with the position on restyle
 - [x] Search on the page: re-typesets the stored original with its stored options, page snippets, page view from `/api/page`, "Read from here" sets the position
-- [x] Sleep screen setting: book / cover (optional `T5CV` block after the pages, `docs/t5b-format.md`; from the EPUB in both converters) / pictures (`/sleep/*.bin`, full-screen 1-bpp, made in the page's picture editor: fit/fill, zoom, rotate, dither or threshold) / keep page
+- [x] Sleep screen setting: book / cover (optional `T5CV` block after the pages, `docs/t5b-format.md`; from the EPUB in both converters) / pictures (`/sleep/*.bin`, full-screen 1-bpp, made in the page's picture editor: fit/fill, zoom, rotate, brightness/contrast, sharpen, Atkinson / Floyd-Steinberg / ordered / threshold; covers: sharpen + Atkinson, parity-tested JS vs Python) / keep page
 - [x] Reading statistics (`ReadingStats`, lib/core, tested): pages, time (≤ 3 min per page), days read, streak; RTC RAM + NVS; clock set from the phone (`/api/time`), kept through power-off by the M5 boards' BM8563 (`rtc_clock.cpp`, `rtc_time` in lib/core, tested)
 - [x] Lock: menu item, hold action, lock when asleep; locked presses go back to sleep without a refresh; unlock = the board's hold gesture
 - [x] Status bar: full / minimal / hidden

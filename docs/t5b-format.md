@@ -61,7 +61,7 @@ a book with a cover, so those need 0.10.0 or later (`--no-cover`, or the page's
 | 12 | stride × h | bitmap, same layout as a page |
 
 The cover is the EPUB's cover image scaled to fit 72×104 (T5-2.13) or 420×640 (4.7"
-readers) and dithered; the screen size gives the box (`cover_w`/`cover_h` in
+readers), sharpened and Atkinson dithered; the screen size gives the box (`cover_w`/`cover_h` in
 `layout.py`). A file with anything else after the pages, or a block whose size
 doesn't match, is invalid.
 

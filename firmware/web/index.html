@@ -284,10 +284,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         <label class="field select"><span data-t="fitMode">Size</span><select id="e-fit"><option value="contain" data-t="fit">Fit</option><option value="cover" data-t="fill">Fill</option></select></label>
         <label class="field toggle"><span data-t="rotate">Rotate</span><input type="checkbox" class="switch" id="e-rotate"></label>
         <label class="field"><span data-t="zoom">Zoom</span><input type="range" id="e-zoom" min="100" max="300" value="100"></label>
-        <label class="field"><span data-t="threshold">Threshold</span><input type="range" id="e-level" min="40" max="220" value="128"></label>
+        <label class="field select"><span data-t="method">Method</span><select id="e-method"><option value="atkinson" data-t="atkinson">Atkinson</option><option value="floyd" data-t="floyd">Floyd–Steinberg</option><option value="ordered" data-t="ordered">Pattern</option><option value="threshold" data-t="threshold">Threshold</option></select></label>
+        <label class="field"><span data-t="brightness">Brightness</span><input type="range" id="e-bright" min="-50" max="50" value="0"></label>
+        <label class="field"><span data-t="contrast">Contrast</span><input type="range" id="e-contrast" min="-50" max="50" value="0"></label>
         <label class="field"><span data-t="moveX">Left – right</span><input type="range" id="e-x" min="-100" max="100" value="0"></label>
         <label class="field"><span data-t="moveY">Up – down</span><input type="range" id="e-y" min="-100" max="100" value="0"></label>
-        <label class="field toggle"><span data-t="dithering">Dithering</span><input type="checkbox" class="switch" id="e-dither" checked></label>
+        <label class="field toggle"><span data-t="sharpen">Sharpen</span><input type="checkbox" class="switch" id="e-sharpen" checked></label>
         <label class="field toggle"><span data-t="invert">Invert</span><input type="checkbox" class="switch" id="e-invert"></label>
       </div>
     </div>
@@ -352,7 +354,8 @@ const T = {
     addPicture: "Add a picture", pictureHint: "Shown while the reader sleeps (Settings, Sleep screen: pictures).",
     noPictures: "Add a picture", deletePicture: "Delete this picture?", chooseImage: "Choose an image", fitMode: "Size",
     fit: "Fit", fill: "Fill", zoom: "Zoom", moveX: "Left – right", moveY: "Up – down", rotate: "Rotate",
-    dithering: "Dithering", threshold: "Threshold", invert: "Invert",
+    method: "Method", atkinson: "Atkinson (clean)", floyd: "Floyd–Steinberg (detail)", ordered: "Pattern",
+    threshold: "Threshold", brightness: "Brightness", contrast: "Contrast", sharpen: "Sharpen", invert: "Invert",
     updateFirmware: "Update firmware", otaHint: "The {0}…-ota.bin from a release or pixi run fw-dist", choose: "Choose",
     notOta: "This doesn't look like a {0}…-ota.bin file for this reader. Send it anyway?", sendingPct: "Sending · {0}%",
     updated: "Updated. The reader restarts and leaves Wi-Fi mode.",
@@ -400,7 +403,8 @@ const T = {
     addPicture: "Afbeelding toevoegen", pictureHint: "Te zien als de lezer slaapt (Instellingen, Slaapscherm: afbeeldingen).",
     noPictures: "Afbeelding toevoegen", deletePicture: "Deze afbeelding verwijderen?", chooseImage: "Kies een afbeelding", fitMode: "Formaat",
     fit: "Passend", fill: "Vullend", zoom: "Zoom", moveX: "Links – rechts", moveY: "Boven – onder", rotate: "Draaien",
-    dithering: "Rasteren", threshold: "Drempel", invert: "Omkeren",
+    method: "Methode", atkinson: "Atkinson (rustig)", floyd: "Floyd–Steinberg (detail)", ordered: "Patroon",
+    threshold: "Drempel", brightness: "Helderheid", contrast: "Contrast", sharpen: "Verscherpen", invert: "Omkeren",
     updateFirmware: "Firmware bijwerken", otaHint: "De {0}…-ota.bin uit een release of pixi run fw-dist", choose: "Kiezen",
     notOta: "Dit lijkt geen {0}…-ota.bin voor deze lezer. Toch versturen?", sendingPct: "Versturen · {0}%",
     updated: "Bijgewerkt. De lezer start opnieuw en stopt de wifi-modus.",
@@ -1181,9 +1185,15 @@ function renderEditor() {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(editorImage, -w / 2, -h / 2, w, h);
   ctx.restore();
-  let gray = B.toGray(ctx.getImageData(0, 0, W, H).data);
+  // contrast measured on the picture only, not the white around a fitted one
+  const x0 = Math.max(0, Math.floor(x)), x1 = Math.min(W, Math.ceil(x + dw));
+  const y0 = Math.max(0, Math.floor(y)), y1 = Math.min(H, Math.ceil(y + dh));
+  const inside = (i) => { const px = i % W, py = (i - px) / W; return px >= x0 && px < x1 && py >= y0 && py < y1; };
+  let gray = B.autocontrast(B.toGray(ctx.getImageData(0, 0, W, H).data), 0.01, inside);
   if ($("#e-invert").checked) gray = gray.map((v) => 255 - v);
-  editorBits = $("#e-dither").checked ? B.dither(B.autocontrast(gray), W, H) : B.dither(gray, W, H, +$("#e-level").value);
+  gray = B.adjust(gray, +$("#e-bright").value, +$("#e-contrast").value);
+  if ($("#e-sharpen").checked) gray = B.sharpen(gray, W, H);
+  editorBits = B.dither(gray, W, H, { method: $("#e-method").value });
   drawBits($("#e-canvas"), editorBits, W, H);
   $("#e-upload").disabled = demo;
 }
@@ -1194,7 +1204,7 @@ $("#e-file").addEventListener("change", async (e) => {
   if (!f) return;
   try { editorImage = await createImageBitmap(f); renderEditor(); } catch (err) { alert(t("cannotRead", err.message)); }
 });
-for (const id of ["#e-fit", "#e-rotate", "#e-zoom", "#e-x", "#e-y", "#e-dither", "#e-level", "#e-invert"]) {
+for (const id of ["#e-fit", "#e-rotate", "#e-zoom", "#e-x", "#e-y", "#e-method", "#e-bright", "#e-contrast", "#e-sharpen", "#e-invert"]) {
   $(id).addEventListener("input", renderEditor);
 }
 $("#e-choose").addEventListener("click", () => $("#e-file").click());
@@ -1248,6 +1258,7 @@ applyLang();
   //   #typeset=<url>[&upload]   the typeset sheet for a file on this server [and upload it]
   //   #reader=<book>[&find=<q>] a book's sheet [and search it: body data-hits = count]
   //   #settings                 the settings sheet
+  //   #editor=<url>             the picture editor with an image from this server
   const hook = location.hash.match(/^#typeset=([^&]+)(&upload)?$/);
   if (hook) {
     const url = decodeURIComponent(hook[1]);
@@ -1267,6 +1278,15 @@ applyLang();
     }
   }
   if (location.hash === "#settings") await openSettings();
+  const editorHook = location.hash.match(/^#editor=(.+)$/);
+  if (editorHook) {
+    openEditor();
+    const img = new Image();  // not fetch(): works from disk (demo) as well
+    img.src = decodeURIComponent(editorHook[1]);
+    await img.decode();
+    editorImage = await createImageBitmap(img);
+    renderEditor();
+  }
 })();
 </script>
 </body>
