@@ -24,8 +24,25 @@ constexpr int kEpdBusy = 4;           // SCHEMATIC
 constexpr int kEpdPowerEn = 12;       // V2.4 only (NC on V2.3.1). Strapping pin: drive only after boot.
 constexpr uint32_t kEpdSpiHz = 8000000;
 
-// Panel constant: provisional until Checkpoint 0 (panel tester decides).
-constexpr int kEpdPanel = EP213_122x250;  // VERIFY
+// Panel (Checkpoint 0, 2026-10-13, panel tester): SSD1680. EP213Z_122x250's init
+// gives real partial updates (~150 ms; with EP213_122x250 every partial update ran
+// the 5 s full waveform). The glass shows RAM bits 8..129 of each 128-bit row, so
+// the RAM window starts 1 byte in (bb_epaper's x_offset; without it the image sat
+// 8 px low, bottom rows cut off).
+constexpr int kEpdPanel = EP213Z_122x250;
+constexpr int kEpdXOffsetBytes = 1;
+// A full refresh takes ~5.2 s, longer than bb_epaper waits for BUSY (5 s).
+constexpr uint32_t kEpdBusyTimeoutMs = 15000;
+// Partial refresh: the OTP's "mode 2" (0xFC etc.) changes nothing on this glass
+// (refresh_test round 1, 2026-10-13). A custom waveform does: Waveshare's SSD1680
+// partial LUT with the 2.13" timing, 632 ms without flashing (round 2, variant B;
+// display_bbep.cpp loadPartialLut). Without it, partial requests become fast ones.
+constexpr bool kEpdPartialWorks = true;
+constexpr bool kEpdCustomPartialLut = true;
+// Fast refresh with the preparation sent before the image (display_bbep.cpp
+// sendFastInit): bb_epaper's order lost the image unless the previous refresh
+// was a full one (refresh_test, 2026-10-13).
+constexpr bool kEpdFastInitFirst = true;
 // Landscape 250x122. 90 vs 270 (which edge is "up") is fixed in Phase 1.
 constexpr int kEpdRotation = 90;          // VERIFY
 
@@ -38,8 +55,8 @@ constexpr int kSdCs = 13;             // SCHEMATIC
 constexpr uint32_t kSdSpiHz = 20000000;
 
 // --- Buttons (active low) ---------------------------------------------------
-constexpr int kBtnUser = 39;          // input-only, no internal pull-up, RTC GPIO3. VERIFY
-constexpr int kBtnBoot = 0;           // BOOT, RTC GPIO11. VERIFY
+constexpr int kBtnUser = 39;          // input-only, no internal pull-up, RTC GPIO3. Checkpoint 0
+constexpr int kBtnBoot = 0;           // BOOT, RTC GPIO11: V2.4 only (not used by the reader)
 
 // --- Battery ----------------------------------------------------------------
 constexpr int kBatAdc = 35;           // ADC1_CH7, input-only. SCHEMATIC
@@ -56,13 +73,14 @@ constexpr int kDefaultFontPx = 13;
 constexpr int kDefaultMarginPx = 4;
 
 // --- Button roles --------------------------------------------------------------
-// NEXT: short = next page / next item, long = previous page / previous item.
-// MENU: short = menu / select, long = sleep / back.
-// Both must be RTC GPIOs (deep-sleep wake). Remap here for the 4-button variant.
+// Only V2.4 has a BOOT button; V2.3.1 has USER and RST (Checkpoint 0, 2026-10-13:
+// David's board, button test). So both use the one-button scheme on USER, as the
+// T5-4.7" does (input.cpp): tap = next, double tap = previous, hold = menu /
+// select, long hold = back / Settings -> Long hold. Must be an RTC GPIO (wake).
 constexpr int kBtnNext = kBtnUser;
-constexpr int kBtnMenu = kBtnBoot;
+constexpr int kBtnMenu = -1;           // none: single-button scheme
 constexpr int kBtnPrev = -1;           // none
-constexpr bool kBtnNextPullup = false;  // GPIO39 has none; the board has an external one
+constexpr bool kBtnNextPullup = false;  // GPIO39 has none; the board has an external one (idle high)
 
 // --- Power ----------------------------------------------------------------------
 constexpr bool kLightSleep = false;    // between pages: deep sleep, buttons wake (ext0/ext1)

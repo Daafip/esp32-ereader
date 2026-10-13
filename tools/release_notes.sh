@@ -4,8 +4,9 @@
 set -euo pipefail
 v=$1
 cat <<NOTES
-Firmware $v for every supported reader. Nothing in this project has been tested on a
-board yet.
+Firmware $v for every supported reader. **Only the LilyGo T5-2.13 (V2.3.1) has been
+tested on hardware;** the T5-4.7" S3, M5PaperS3 and M5Paper builds have not run on a
+board yet (\`docs/checkpoints.md\` lists what to check; reports welcome).
 
 | Board | Flash over USB (at \`0x0\`) | Update over Wi-Fi |
 |---|---|---|

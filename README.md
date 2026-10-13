@@ -13,12 +13,12 @@ reader on USB; leave "Erase device" unticked to keep your settings).
 Firmware available at the [releases](https://github.com/Daafip/esp32-ereader/releases) or build yourself `pixi run fw-build`.
 Flash with platform io, esptools or `pixi run fw-flash`
 
-| Board | Flash over USB (at `0x0`) | Update over Wi-Fi |
-|---|---|---|
-| LilyGo T5-2.13 | `t5-reader-x.x.x.bin` | `t5-reader-x.x.x-ota.bin` |
-| LilyGo T5-4.7" S3 | `t5-47-reader-x.x.x.bin` | `t5-47-reader-x.x.x-ota.bin` |
-| M5Stack M5PaperS3 | `m5papers3-reader-x.x.x.bin` | `m5papers3-reader-x.x.x-ota.bin` |
-| M5Stack M5Paper | `m5paper-reader-x.x.x.bin` | `m5paper-reader-x.x.x-ota.bin` |
+| Board | Flash over USB (at `0x0`) | Update over Wi-Fi | Tested? |
+|---|---|---|---|
+| LilyGo T5-2.13 | `t5-reader-x.x.x.bin` | `t5-reader-x.x.x-ota.bin` | Yes |
+| LilyGo T5-4.7" S3 | `t5-47-reader-x.x.x.bin` | `t5-47-reader-x.x.x-ota.bin` | NO - let me know! |
+| M5Stack M5PaperS3 | `m5papers3-reader-x.x.x.bin` | `m5papers3-reader-x.x.x-ota.bin` | NO - let me know! | 
+| M5Stack M5Paper | `m5paper-reader-x.x.x.bin` | `m5paper-reader-x.x.x-ota.bin` | NO - let me know! | 
 
 The 4.7" boards and the M5 boards have not run this firmware yet: see
 [docs/checkpoints.md](docs/checkpoints.md) for what to check.

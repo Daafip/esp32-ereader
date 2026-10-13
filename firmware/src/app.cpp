@@ -103,12 +103,6 @@ ui::Hint menuHint(S action) { return {Button::Menu, tr(action), tr(S::Back)}; }
 ui::Hint backHint() { return {Button::Menu, tr(S::Back), nullptr}; }
 const ui::Hint kNoHint = {Button::None, nullptr, nullptr};
 
-// The board's word for the MENU hold gesture (Settings label).
-S holdLabel() {
-  if (kHasTouch) return S::SetLongPress;
-  return kSingleButton ? S::SetLongHold : S::SetHoldMenu;
-}
-
 Settings boardDefaults() {
   Settings d;
   if (kHasTouch) d.holdAction = HoldAction::Menu;  // long press opens the menu
@@ -480,8 +474,10 @@ void renderLibrary() {
 }
 
 void showNoBooks() {
+  // Any press starts Wi-Fi transfer: the only way forward without a PC (the card
+  // is read again when it ends). A "retry" here just restarted to the same screen.
   ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksLine1), tr(S::NoBooksLine2),
-              {Button::Menu, tr(S::WifiTransfer), nullptr}, {Button::Next, tr(S::Retry), nullptr});
+              {Button::Next, tr(S::WifiTransfer), nullptr}, kNoHint);
   display::show(Refresh::Full);
   setScreen(Screen::Message);
   messageOffersWifi = true;
@@ -534,7 +530,7 @@ void openStatistics() {
 }
 
 void settingItem(int i, ui::Item &it, void *) {
-  strlcpy(it.label, settingLabel(SettingId(i), holdLabel()), sizeof(it.label));
+  strlcpy(it.label, settingLabel(SettingId(i), ui::holdSettingLabel()), sizeof(it.label));
   settingValue(settings, SettingId(i), it.detail, sizeof(it.detail));
 }
 
@@ -902,6 +898,7 @@ Key touchKey(const TouchEvent &t) {
 void handle(Key k) {
   if (k == Key::Touch) k = touchKey(input::lastTouch());
   if (k == Key::None) return;
+  Serial.printf("key %d on screen %d\n", int(k), int(screen));
   switch (screen) {
     case Screen::Reading: readingKey(k); break;
     case Screen::MainMenu: mainMenuKey(k); break;
@@ -914,7 +911,7 @@ void handle(Key k) {
     case Screen::Statistics: openMainMenu(); break;
     case Screen::WifiTransfer: transferKey(k); break;
     case Screen::Message:
-      if (messageOffersWifi && k == Key::MenuShort) {
+      if (messageOffersWifi) {  // "No books yet"
         startTransfer();
       } else {
         ESP.restart();  // retry from the start (card inserted, book copied)
@@ -995,7 +992,17 @@ void setup() {
     return;
   }
   if (!restoreBook()) {
-    openLibrary();  // first start, or the last book is gone
+    // first start, or the last book is gone. A press that woke "No books yet"
+    // asks for Wi-Fi transfer (it's the only thing that screen offers).
+    if (key != Key::None && shown == Screen::Message) {
+      std::vector<storage::BookEntry> any;
+      const storage::Status status = storage::listAllBooks(any, 1);
+      if (status == storage::Status::NoBooks || status == storage::Status::NoBooksDir) {
+        startTransfer();
+        return;
+      }
+    }
+    openLibrary();
     return;
   }
 

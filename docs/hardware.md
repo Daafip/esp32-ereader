@@ -15,7 +15,7 @@ Source: <https://github.com/Xinyuan-LilyGO/LilyGo-T5-Epaper-Series> (commit `011
 |---|---|---|
 | MCU | ESP32-D0WDQ6 (classic), 4 MB flash, no PSRAM | SCHEMATIC |
 | USB-UART | CP2104 (schematic V2.3) / CH9102 (README, newer batches) | SCHEMATIC |
-| Board version | V2.3.1 or V2.4 | OPEN |
+| Board version | V2.3.1 or V2.4; David's board is a V2.3.1 (no BOOT button) | CHECKED 2026-10-13 |
 | Panel | DEPG0213BN (LilyGo product Q229) or GDEM0213B74 (Q300), both SSD1680 122×250 | OPEN |
 
 V2.4 vs V2.3.1: V2.4 adds GPIO12 = panel power enable, a BOOT button and a better
@@ -119,7 +119,7 @@ Free header GPIOs (for external page-turn buttons, Phase 6): 19 (LED), 21, 22, 2
 | `EP213_122x250` | 122×250 | SSD16xx | Waveshare-style init; full + partial, no fast |
 | `EP213B_122x250` | 122×250 | SSD16xx | GDEY0213B74; full + fast + partial |
 | `EP213ZZ_122x250` | 122×250 | SSD16xx | "LilyGo T3S3": as `EP213_122x250` with RAM x-offset 1 |
-| `EP213Z_122x250` | 122×250 | SSD16xx | CrowPanel; full + fast + partial |
+| `EP213Z_122x250` | 122×250 | SSD16xx | CrowPanel; full + fast + partial. **This board, with x_offset 1** |
 | `EP213Z_122x250_4GRAY` | 122×250 | SSD16xx | 4-gray mode (full refresh only) |
 | `EP213_104x212` | 104×212 | UC81xx | old Inky pHAT; full only |
 
@@ -150,19 +150,54 @@ Filled in from David's reports; see `docs/checkpoints.md` for what to run.
 
 ### Checkpoint 0 (hardware identification)
 
-- Board version / FPC label: _
-- Controller-ID line from the panel tester: _
-- Panel constant that renders correctly: _
-- Panel tester RESULT lines: _
-- Buttons (GPIO, idle level, bounce): _
-- SD test output (bus check, mount speed, random read timing, boot with card in): _
+2026-10-13, first board on the desk (photos of the panel tester):
+
+- Board version: V2.3.1 (buttons: USER and RST only). FPC label: not read yet
+- Controller-ID line from the panel tester: `CONTROLLER-ID: SSD16xx` (BUSY low after reset)
+- Panel constant that renders correctly: **`EP213Z_122x250` with RAM x offset 1 byte**
+  (`kEpdPanel`, `kEpdXOffsetBytes` in `boards/t5_213.h`). Every candidate without the
+  offset drew the image 8 px low: 2 rows of never-written RAM as noise at the top,
+  the bottom 8 rows cut off. The glass shows RAM bits 8..129 of each row, and
+  bb_epaper writes rows into bits 0..127 (row 0 at bit 121 with rotation 90).
+  `EP213ZZ_122x250` has the offset but the `EP213_122x250` init, whose partial
+  update runs the full waveform (5.3 s).
+- Panel tester RESULT lines (real BUSY times, the tester now waits up to 20 s):
+  - `EP213_122x250`: full 5290 ms, partial 5261 ms, no fast
+  - `EP213Z+x1`: full 5169 ms, partial 145 ms, fast 1374 ms
+  - A full refresh takes longer than bb_epaper's 5 s BUSY timeout, so the reader
+    waits for BUSY itself (`kEpdBusyTimeoutMs`).
+  - The 145 ms "partial" did nothing on the glass (see Checkpoint 1).
+- Rotation 90 is upright with the USB port at the top (the photos).
+- Buttons (button test): USER = GPIO39, idle high (external pull-up), clean presses
+  (0 bounces). The second button is RST. No BOOT button on V2.3.1, so the T5-2.13
+  uses the one-button scheme (`kBtnMenu = -1`). GPIO34/36 idle low (nothing there).
+- SD: a 30 GB SDHC and a 971 MB SD card both mount at 20 MHz. With either card in,
+  flashing fails ("Failed to communicate with the flash chip", "serial noise"):
+  **take the card out to flash**, as LilyGo says. A badly seated card stopped mounting
+  and disturbed flashing until it was reinserted.
+- Unplugging USB (no battery connected) once left the chip in download mode.
 
 ### Checkpoint 1 (calibration)
 
-- Upright rotation (90/270): _
-- Calibration page correct (border, corners, staircase `\\`): _
-- Full / fast / partial refresh time: _
-- Ghosting after N partial updates → `FULL_REFRESH_EVERY` (Settings default): _
+2026-10-13, with `diag/refresh_test` (numbered steps, David noted what appeared):
+
+- Upright rotation: 90 (USB port at the top).
+- Full refresh (bb_epaper, 0xF4): 5.2 s, always works.
+- Fast refresh (0xC7 after the EP213Z fast init: soft resets, LUT loaded for a forced
+  100 C): 1.4 s, short flash. **Only shows the new image if the preparation is sent
+  before the image is written** (`sendFastInit()` in `display_bbep.cpp`). In
+  bb_epaper's order (image, then preparation) it only worked right after a full
+  refresh; a reset or 0x22 0xC0 before writing didn't help.
+- Partial refresh from the OTP ("display mode 2", 0xFF / 0xFC / 0xCF): nothing changes
+  on the glass; 0x0C (without clock) hangs BUSY. **A custom LUT works**: Waveshare's
+  SSD1680 partial waveform (bb_epaper's `epd296_init_sequence_part`), loaded after a
+  hardware reset with VGH 0x17, VSH 0x41/0x00/0x32, VCOM 0x36, display option 0x40,
+  border 0x80, then old image -> 0x26, new -> 0x24, 0x22 0x0F. Timings: 2.9" timing
+  840 ms, **2.13" timing (first phase 20 frames) 632 ms** (the reader's choice),
+  stronger 1438 ms; none flashes.
+- Page turn after deep sleep: about 2.4 s from the button with the fast refresh,
+  faster with the partial one (wake ~0.9 s + card + refresh).
+- Ghosting after N partial updates → `fullEvery`: not judged yet (default 10).
 
 ### Checkpoint 3/4 (reading, power)
 

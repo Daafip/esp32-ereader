@@ -79,6 +79,8 @@ t5-reader/
 
 **🧑 HUMAN CHECKPOINT 0:** David reads the FPC ribbon label, flashes the tester + button sketch, and reports: panel label, which panel constant renders correctly, button GPIOs, board version, SD test output (FAT32-formatted card inserted). Claude Code records results in `docs/hardware.md` and fixes `board.h`.
 
+*2026-10-13 (done except the FPC label): V2.3.1 board. Panel = `EP213Z_122x250` + RAM x offset 1 byte (the image sat 8 px low without it); full refresh 5.2 s (the reader waits for BUSY itself); fast refresh only with its preparation sent before the image; OTP partial does nothing, a custom LUT partial works (632 ms, `diag/refresh_test`). One button (GPIO39) + RST, no BOOT: one-button scheme. SD mounts, but must be out for flashing. Released as 1.0.0. Details in `docs/hardware.md`.*
+
 **Done when:** one panel constant confirmed; buttons confirmed.
 
 ## Phase 1 — Display bring-up & layout calibration
@@ -134,7 +136,7 @@ Goal: e-paper keeps the image, so the MCU should deep-sleep after every turn.
 - [x] After render: panel to deep sleep, ESP32 deep sleep; wake via `ext0` on GPIO39 and `ext1` (ALL_LOW, single pin) on GPIO0
 - [x] Keep current book/page in RTC memory (fast path) + NVS (persistent)
 - [x] On wake, detect short vs. long press (sample pin after wake) to decide next/prev
-- [ ] **Spike — partial refresh after deep sleep.** SSD16xx partial updates need the *previous* image in the controller's second RAM, which may be lost. Try in order, keep the first that gives clean results: *(all three implemented, switchable at runtime: Settings > Wake refresh = rewrite (2, default) / retain (1) / full (3); the shown image lives in RTC RAM. Which works: Checkpoint 4)*
+- [x] **Spike — partial refresh after deep sleep.** SSD16xx partial updates need the *previous* image in the controller's second RAM, which may be lost. Try in order, keep the first that gives clean results: *(all three implemented, switchable at runtime: Settings > Wake refresh = rewrite (2, default) / retain (1) / full (3); the shown image lives in RTC RAM. 2026-10-13: on David's panel every partial update is a hardware reset + custom LUT + old image from RTC RAM written again, i.e. "rewrite"; it works after deep sleep. Clean results / ghosting: Checkpoint 4)*
   1. Panel sleep mode that retains RAM, partial refresh as-is
   2. Re-write previous page into the "old" plane and new page into the "new" plane, then partial refresh (we can always re-read page n−1 from storage)
   3. Fallback: fast/full refresh on every wake

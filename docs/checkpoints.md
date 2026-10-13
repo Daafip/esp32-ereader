@@ -1,6 +1,8 @@
 # Hardware checkpoints: what to run when the board arrives
 
-Everything is written and builds; nothing has run on a board yet.
+Everything is written and builds. The T5-2.13 (V2.3.1) runs since 2026-10-13
+(Checkpoint 0 and the refresh part of Checkpoint 1 done, see `docs/hardware.md`); the
+other boards have never run.
 Work top to bottom. Each step says what to send back; results go into
 `docs/hardware.md` → "Checkpoint results".
 

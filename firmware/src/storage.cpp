@@ -24,7 +24,11 @@ bool endsWith(const char *name, const char *ext) {
 bool readEntry(fs::File &f, const String &dir, const String &folder, BookEntry &e) {
   t5b::Header h;
   t5b::Cover cover;
-  if (checkBook(f, h, &cover) != t5b::Error::None) return false;
+  const t5b::Error err = checkBook(f, h, &cover);
+  if (err != t5b::Error::None) {
+    Serial.printf("library: skipped %s/%s: %s\n", dir.c_str(), f.name(), t5b::errorText(err));
+    return false;
+  }
   e.path = dir + "/" + f.name();
   e.folder = folder;
   e.title = h.title[0] ? h.title : f.name();
@@ -77,10 +81,13 @@ bool mount() {
   for (uint32_t hz : speeds) {
     if (SD.begin(kSdCs, sdSpi, hz)) {
       isMounted = true;
+      Serial.printf("card: %u MB, type %d, %u MHz\n", unsigned(SD.cardSize() >> 20),
+                    int(SD.cardType()), unsigned(hz / 1000000));
       return true;
     }
     SD.end();
   }
+  Serial.println("card: not found");
   return false;
 }
 
@@ -111,7 +118,10 @@ Status listLibrary(const char *folder, std::vector<BookEntry> &out, size_t max) 
   if (!isMounted) return Status::NoCard;
   const String dir = *folder ? String(kBooksDir) + "/" + folder : String(kBooksDir);
   fs::File d = SD.open(dir);
-  if (!d || !d.isDirectory()) return Status::NoBooksDir;
+  if (!d || !d.isDirectory()) {
+    Serial.printf("library: no folder %s on the card\n", dir.c_str());
+    return Status::NoBooksDir;
+  }
   for (fs::File f = d.openNextFile(); f && out.size() < max; f = d.openNextFile()) {
     if (f.isDirectory()) {
       if (*folder || f.name()[0] == '.') continue;  // one level; .src, .marks
@@ -127,6 +137,7 @@ Status listLibrary(const char *folder, std::vector<BookEntry> &out, size_t max) 
     if (endsWith(f.name(), ".t5b") && readEntry(f, dir, folder, e)) out.push_back(e);
   }
   std::sort(out.begin(), out.end(), byTitle);
+  Serial.printf("library: %u entries in %s\n", unsigned(out.size()), dir.c_str());
   return out.empty() ? Status::NoBooks : Status::Ok;
 }
 

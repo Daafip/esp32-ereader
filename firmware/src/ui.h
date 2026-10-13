@@ -75,6 +75,9 @@ void statusBar(const StatusView &v);
 
 // "hold MENU to unlock" in the board's words.
 const char *unlockHint();
+// The board's name for the hold gesture while reading (Settings label):
+// "Hold MENU", "Long hold" (one button) or "Long press" (touch).
+S holdSettingLabel();
 
 void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hint left,
           Hint right, int batteryPct);

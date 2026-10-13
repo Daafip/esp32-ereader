@@ -62,7 +62,7 @@ jobs:
         with:
           name: Firmware ${{ env.VERSION }}
           body_path: out/release-notes.md
-          prerelease: true  # nothing has run on a board yet
+          prerelease: false  # the T5-2.13 is tested; the notes say the others aren't
           files: out/firmware/*-${{ env.VERSION }}*.bin
           fail_on_unmatched_files: true
 

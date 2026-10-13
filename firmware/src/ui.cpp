@@ -335,6 +335,11 @@ const char *unlockHint() {
   return kSingleButton ? tr(S::UnlockHold) : tr(S::UnlockMenu);
 }
 
+::S holdSettingLabel() {  // ::S: here S is also the UI scale
+  if (kHasTouch) return S::SetLongPress;
+  return kSingleButton ? S::SetLongHold : S::SetHoldMenu;
+}
+
 void statusBar(const StatusView &v) {
   targetCount = 0;  // the reading screen: tap zones, no targets
   const int top = kH - kStatusBarH;

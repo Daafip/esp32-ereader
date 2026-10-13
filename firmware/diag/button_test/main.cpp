@@ -31,6 +31,8 @@ Watched watched[] = {
     {25, "extra(25)", true},
     {26, "extra(26)", true},
     {27, "extra(27)", true},
+    {34, "extra(34)", false},  // input-only: logs only if something pulls it
+    {36, "extra(36)", false},
 };
 constexpr uint32_t kDebounceMs = 25;
 constexpr uint32_t kLongPressMs = 600;

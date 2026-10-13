@@ -28,16 +28,20 @@ struct Candidate {
   int panel;
   const char *name;
   const char *note;
+  int xOffset;  // RAM x offset in bytes (bb_epaper's x_offset), -1 = the panel's own
 };
 
 // Every 2.13" panel bb_epaper knows that could plausibly sit on a T5.
 const Candidate kCandidates[] = {
-    {EP213_122x250, "EP213_122x250", "DEPG0213BN, T5 V2.3.1/V2.4 (SSD1680)"},
-    {EP213B_122x250, "EP213B_122x250", "GDEY0213B74 (SSD1680)"},
-    {EP213ZZ_122x250, "EP213ZZ_122x250", "LilyGo T3S3 panel, x_offset 1 (SSD1680)"},
-    {EP213Z_122x250, "EP213Z_122x250", "CrowPanel 2.13 (SSD1680)"},
-    {EP213Z_122x250_4GRAY, "EP213Z_122x250_4GRAY", "4-gray mode, GDEM0213B74? (SSD1680)"},
-    {EP213_104x212, "EP213_104x212", "older 104x212 panel (UC8151)"},
+    {EP213_122x250, "EP213_122x250", "DEPG0213BN, T5 V2.3.1/V2.4 (SSD1680)", -1},
+    {EP213B_122x250, "EP213B_122x250", "GDEY0213B74 (SSD1680)", -1},
+    {EP213ZZ_122x250, "EP213ZZ_122x250", "LilyGo T3S3 panel, x_offset 1 (SSD1680)", -1},
+    {EP213Z_122x250, "EP213Z_122x250", "CrowPanel 2.13 (SSD1680)", -1},
+    {EP213Z_122x250_4GRAY, "EP213Z_122x250_4GRAY", "4-gray mode, GDEM0213B74? (SSD1680)", -1},
+    {EP213_104x212, "EP213_104x212", "older 104x212 panel (UC8151)", -1},
+    // Checkpoint 0 (2026-10-13): EP213Z refreshes partially, but the glass shows RAM
+    // bits 8..129 of each row, so the image sat 8 px low.
+    {EP213Z_122x250, "EP213Z+x1", "EP213Z with RAM x offset 1 byte (T5-2.13 here)", 1},
 };
 constexpr int kNumCandidates = sizeof(kCandidates) / sizeof(kCandidates[0]);
 constexpr int kPartialSteps = 5;
@@ -87,6 +91,16 @@ int probeChip() {
   return level ? BBEP_CHIP_UC81xx : BBEP_CHIP_SSD16xx;
 }
 
+// Refresh and wait for BUSY to drop: bb_epaper stops waiting after 5 s, but a
+// full refresh can take longer. Returns the real time in ms (20000 = timed out).
+int refreshAndWait(int mode) {
+  const uint32_t t0 = millis();
+  epd.refresh(mode, false);
+  delay(10);
+  while (epd.isBusy() && millis() - t0 < 20000) delay(5);
+  return int(millis() - t0);
+}
+
 // Select a candidate and bring the panel up. Refuses a candidate whose
 // controller family differs from the probed one.
 bool beginPanel(const Candidate &c) {
@@ -100,6 +114,7 @@ bool beginPanel(const Candidate &c) {
   resetPanel();
   delay(100);
   epd.initIO(kEpdDc, kEpdRst, kEpdBusy, kEpdCs, kEpdMosi, kEpdSck, kEpdSpiHz);
+  if (c.xOffset >= 0) epd._bbep.x_offset = int16_t(c.xOffset);
   epd.setRotation(kEpdRotation);
   return true;
 }
@@ -172,8 +187,7 @@ void runCandidate(int index) {
   // Same image into both controller RAMs, so a later partial update starts
   // from a known "old" image.
   epd.writePlane(gray ? PLANE_BOTH : PLANE_DUPLICATE);
-  epd.refresh(REFRESH_FULL, true);
-  const int fullMs = epd.opTime();
+  const int fullMs = refreshAndWait(REFRESH_FULL);
   Serial.printf("full refresh: data %d ms, refresh %d ms\n", epd.dataTime(), fullMs);
 
   int partialMs = -1;
@@ -184,9 +198,9 @@ void runCandidate(int index) {
       epd.writePlane(PLANE_0_TO_1);  // old image -> RAM 0x26
       drawScreen(c, index, i);
       epd.writePlane(PLANE_0);       // new image -> RAM 0x24
-      epd.refresh(REFRESH_PARTIAL, true);
-      Serial.printf("partial %d: data %d ms, refresh %d ms\n", i, epd.dataTime(), epd.opTime());
-      sum += epd.opTime();
+      const int ms = refreshAndWait(REFRESH_PARTIAL);
+      Serial.printf("partial %d: data %d ms, refresh %d ms\n", i, epd.dataTime(), ms);
+      sum += ms;
     }
     partialMs = sum / kPartialSteps;
   }
@@ -195,8 +209,7 @@ void runCandidate(int index) {
   if (epd.hasFastRefresh() && !gray) {
     drawScreen(c, index, 99);
     epd.writePlane(PLANE_DUPLICATE);
-    epd.refresh(REFRESH_FAST, true);
-    fastMs = epd.opTime();
+    fastMs = refreshAndWait(REFRESH_FAST);
     Serial.printf("fast refresh: refresh %d ms\n", fastMs);
   }
 

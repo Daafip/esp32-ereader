@@ -155,7 +155,7 @@ const Row kBooks[] = {
 
 void settingItem(int i, ui::Item &it, void *) {
   Settings s;
-  strncpy(it.label, settingLabel(SettingId(i)), sizeof(it.label) - 1);
+  strncpy(it.label, settingLabel(SettingId(i), ui::holdSettingLabel()), sizeof(it.label) - 1);
   settingValue(s, SettingId(i), it.detail, sizeof(it.detail));
 }
 
@@ -214,8 +214,8 @@ int main(int argc, char **argv) {
   save("09-no-card");
 
   ui::message(ui::Icon::Book, "No books yet", "Upload them over Wi-Fi, or copy",
-              ".t5b files to /books on the card", {Button::Menu, "Wi-Fi transfer", nullptr},
-              {Button::Next, "retry", nullptr});
+              ".t5b files to /books on the card", {Button::Next, "Wi-Fi transfer", nullptr},
+              {Button::None, nullptr, nullptr});
   save("10-no-books");
 
   ui::message(ui::Icon::Warning, "Cannot open book", "old.t5b", "made for another screen size",
@@ -288,7 +288,7 @@ int main(int argc, char **argv) {
            {Button::Menu, tr(S::Edit), tr(S::Back)}, 72);
   save("23-settings-nl");
   ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksLine1), tr(S::NoBooksLine2),
-              {Button::Menu, tr(S::WifiTransfer), nullptr}, {Button::Next, tr(S::Retry), nullptr});
+              {Button::Next, tr(S::WifiTransfer), nullptr}, {Button::None, nullptr, nullptr});
   save("24-no-books-nl");
   setLanguage(Lang::En);
   return 0;

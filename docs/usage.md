@@ -1,7 +1,8 @@
 # Using the reader
 
-Four boards: the LilyGo **T5-2.13** (the original), the LilyGo **T5-4.7" S3**, and
-M5Stack's **M5PaperS3** and **M5Paper** (later build targets, untested on hardware; see
+Four boards: the LilyGo **T5-2.13** (the original, tested on a V2.3.1 board), the
+LilyGo **T5-4.7" S3**, and M5Stack's **M5PaperS3** and **M5Paper** (later build
+targets, untested on hardware; see
 `docs/hardware-t5-47.md` and `docs/hardware-m5paper.md`). The last three share a 4.7"
 960×540 screen. Everything below applies to all of them unless it says otherwise.
 
@@ -93,7 +94,7 @@ reader opens that page when you press done on it.
 
 ## Wi-Fi transfer (books from a browser)
 
-Menu → **Wi-Fi transfer** (or MENU on the "No books yet" screen).
+Menu → **Wi-Fi transfer**, or any press on the "No books yet" screen.
 
 1. **Join the Wi-Fi**: scan the QR code with your phone, or join `T5-Reader-XXXX`
    with the password on the screen (it stays the same, so laptops can remember it).
@@ -103,11 +104,11 @@ Menu → **Wi-Fi transfer** (or MENU on the "No books yet" screen).
 3. Drop `.epub`/`.txt` files (typeset in the browser, see "Books") or ready `.t5b`
    files on the page. It lists the books on the card with how far you've read each,
    and can open, restyle, move or delete them.
-4. Press MENU on the reader when done (T5-4.7": hold the button; touch: "done").
+4. Hold the button on the reader when done (touch: "done"; M5Paper switch: press).
    Wi-Fi turns off; it also turns off after the idle time without uploads or button
    presses.
 
-NEXT (T5-4.7": tap; touch: the left button) switches between the two QR codes. Uploads are checked: a file that isn't a
+A tap (touch: the left button) switches between the two QR codes. Uploads are checked: a file that isn't a
 valid `.t5b` for this screen is refused and not stored.
 
 The page also shows your reading statistics, and opening it sets the reader's clock
@@ -135,21 +136,16 @@ settings, positions, statistics and the home Wi-Fi from the reader, then restart
 
 ## Buttons
 
-The footer of each menu shows the keys: a black chip is the button (NEXT or MENU),
-an outlined "hold" chip is the long press. On the one-button T5-4.7" the chips name
-the gestures instead: TAP and "2×", HOLD and "long".
+The footer of each menu shows the keys. On the T5 boards the chips name the
+gestures: TAP and "2×", HOLD and "long". (The firmware also knows a two-button
+layout, NEXT and MENU, with an outlined "hold" chip for the long press; no supported
+board uses it at the moment.)
 
-### T5-2.13: two buttons
+### T5-2.13 and T5-4.7": one button
 
-| | NEXT (GPIO39) | MENU (BOOT, GPIO0) |
-|---|---|---|
-| Reading, short | next page | menu |
-| Reading, long (≥ 600 ms) | previous page | Settings → *Hold MENU* (default: sleep screen) |
-| Lists, short | next item | select / change |
-| Lists, long | previous item (repeats while held) | back |
-| Go to position, short / long | +1 % / +10 % | go / back |
-
-### T5-4.7": one button (GPIO21)
+The T5-2.13 uses its user button (GPIO39); the other button, RST, restarts the
+reader. Only the V2.4 board has a BOOT button as well, so the reader doesn't use
+it. The T5-4.7" uses its user button (GPIO21).
 
 | | tap | double tap | hold (≥ 600 ms) | long hold (≥ 1.6 s) |
 |---|---|---|---|---|
@@ -159,8 +155,8 @@ the gestures instead: TAP and "2×", HOLD and "long".
 
 A tap waits 300 ms for a possible second tap, so a page turn starts that much later.
 Hold time follows Settings → Hold time (long hold = that + 1 s). A hold fires when
-you let go; a long hold fires while you keep holding. The BOOT button is wired to
-the display, so the reader can't use it.
+you let go; a long hold fires while you keep holding. On the T5-4.7" the BOOT button
+is wired to the display, so the reader can't use it.
 
 ### M5PaperS3 and M5Paper: touch
 
@@ -184,8 +180,8 @@ switch off; the power button (M5Paper: the switch) turns them on at the same pag
 
 ### The hold gesture
 
-Hold MENU (T5-2.13), long hold (T5-4.7") or long press (touch) while reading does what
-Settings → *Hold MENU* / *Long hold* / *Long press* says: **sleep** (sleep screen),
+A long hold (T5 boards; M5Paper switch: hold the press) or long press (touch) while
+reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep screen),
 **bookmark** (add or remove a bookmark on this page), **lock**, or **menu**.
 
 ## Menu
@@ -212,7 +208,7 @@ Settings → *Hold MENU* / *Long hold* / *Long press* says: **sleep** (sleep scr
     pictures") or **keep page** (the page stays; the next press turns it).
   - *Status bar*: **full** (progress line, chapter, page/total, percentage, battery),
     **minimal** (progress line and percentage) or **hidden**.
-  - *Hold MENU* (T5-4.7": *Long hold*, touch: *Long press*): see "The hold gesture".
+  - *Long hold* (touch: *Long press*): see "The hold gesture".
   - *Lock when asleep*: lock the reader every time the sleep screen appears.
   - *Language*: English or Nederlands (menus, messages and the page).
   - *Full refresh*: a full (flashing) refresh after this many page turns to clear
@@ -222,8 +218,8 @@ Settings → *Hold MENU* / *Long hold* / *Long press* says: **sleep** (sleep scr
   - *Sleep after page*: deep sleep between page turns (battery life). Turn off for
     debugging over USB.
   - *Wake refresh*: how a page turn after deep sleep refreshes (`rewrite`, `retain`,
-    `full`; see `docs/hardware.md`). On the T5-4.7" "retain" behaves like "rewrite":
-    the panel keeps no image, so the reader reads the shown page back from the card.
+    `full`; see `docs/hardware.md`). On the T5-2.13 and the T5-4.7" "retain" behaves
+    like "rewrite": every partial update sends the previous page again.
 - **About**: firmware, battery, book, position, card, wake timing.
 - **Lock**: lock the reader (below).
 - **Sleep**: show the sleep screen now.
@@ -233,8 +229,8 @@ Below 3.4 V the reader shows "Battery low" and stays asleep until charged.
 ### Lock
 
 Locked, the reader ignores every press (in a bag, in a pocket) except the unlock
-gesture: hold MENU (T5-2.13), long hold (T5-4.7") or long press (touch). The status bar
+gesture: a long hold (T5 boards) or long press (touch). The status bar
 says "Locked" with that gesture and shows a padlock, so does the sleep screen. Lock
-from the menu, with the hold gesture (Settings → *Hold MENU*: lock), or every time
+from the menu, with the hold gesture (Settings → *Long hold*: lock), or every time
 it goes to sleep (Settings → *Lock when asleep*). Lock is not a security feature:
 anyone who knows the gesture can unlock it, and the card can be taken out.

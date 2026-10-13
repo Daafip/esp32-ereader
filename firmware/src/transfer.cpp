@@ -18,6 +18,7 @@
 #include "i18n.h"
 #include "prefs.h"
 #include "rtc_clock.h"
+#include "ui.h"
 #include "reading_stats.h"
 #include "settings.h"
 #include "storage.h"
@@ -679,7 +680,7 @@ void handleSettings() {
     if (id == SettingId::Language) setLanguage(st.language);
     touch(tr(S::SettingsChanged));
   }
-  const S holdLabel = kHasTouch ? S::SetLongPress : kSingleButton ? S::SetLongHold : S::SetHoldMenu;
+  const S holdLabel = ui::holdSettingLabel();
   String out = "{";
   addKey(out, "settings");
   out += '[';
@@ -921,6 +922,7 @@ void loop() {
   if (state.ownNetwork) {
     const int n = WiFi.softAPgetStationNum();
     if (n != state.clients) {
+      Serial.printf("Wi-Fi transfer: %d device(s) on the network\n", n);
       state.clients = n;
       changed = true;
       touch();
