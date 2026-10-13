@@ -24,6 +24,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=t5-47`).
 | Render all screens (PC) | `pixi run ui-preview` -> `out/ui-preview/<screen>/` (`t5-213`, `t5-47`) |
 | Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; T5-4.7": `reader_t547`) |
 | Images for browser/OTA flashing | `pixi run fw-dist` -> `out/firmware/` |
+| Release on GitHub | bump `FW_VERSION`, then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images) |
 | Serial monitor | `pixi run fw-monitor` |
 | Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` (`--screen t5-47`) |
 | Font comparison | `pixi run font-sheet book.epub --font a.ttf --sizes 11 12 13` |

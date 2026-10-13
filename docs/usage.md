@@ -76,6 +76,9 @@ wrong, flash over USB as below.
 - **From this PC:** `pixi run fw-flash reader` (SD card out while flashing).
   T5-4.7": `pixi run fw-flash reader_t547` (if no port shows up: hold BOOT, press
   RST, release BOOT).
+- **Ready-made images:** every release on
+  <https://github.com/Daafip/esp32-ereader/releases> has the images below attached
+  (built by GitHub Actions from the version tag).
 - **From a browser, no tools needed:** `pixi run fw-dist` puts one image per sketch
   in `out/firmware/` (`t5-reader-<version>.bin`, `t5-calibration-...`, etc.). In
   Chrome or Edge open <https://espressif.github.io/esptool-js/>, Connect (pick the

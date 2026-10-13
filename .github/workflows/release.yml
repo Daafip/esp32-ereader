@@ -1,0 +1,57 @@
+# Builds the firmware for both boards and publishes it as a GitHub release when a
+# version tag is pushed. The tag must match FW_VERSION in firmware/platformio.ini:
+#   git tag v0.8.0 && git push origin v0.8.0
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write  # create the release and upload the images
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          pixi-version: v0.59.0
+          cache: true
+
+      - name: Cache PlatformIO platforms and toolchains
+        uses: actions/cache@v5
+        with:
+          path: ~/.platformio
+          key: platformio-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Tag matches FW_VERSION
+        run: |
+          version=$(sed -n 's/.*-DFW_VERSION=\\"\([^\\]*\)\\".*/\1/p' firmware/platformio.ini)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match FW_VERSION $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Unit tests (lib/core)
+        run: pixi run fw-test
+
+      - name: Build every env
+        run: pixi run fw-build
+
+      - name: Collect the images
+        run: pixi run fw-dist
+
+      - name: Release notes
+        run: bash tools/release_notes.sh "$VERSION" > out/release-notes.md
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          name: Firmware ${{ env.VERSION }}
+          body_path: out/release-notes.md
+          prerelease: true  # nothing has run on a board yet
+          files: out/firmware/*-${{ env.VERSION }}*.bin
+          fail_on_unmatched_files: true
