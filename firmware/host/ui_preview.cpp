@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
   save("08-about");
 
   ui::message(ui::Icon::Card, "No SD card", "Insert a FAT32 card", "with books in /books",
-              "Press any button to try again");
+              ui::retryHint());
   save("09-no-card");
 
   ui::message(ui::Icon::Book, "No books yet", "Upload them over Wi-Fi, or copy",
@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
   save("10-no-books");
 
   ui::message(ui::Icon::Warning, "Cannot open book", "old.t5b", "made for another screen size",
-              "Press any button to try again");
+              ui::retryHint());
   save("11-error");
 
   ui::sleepScreen(title, "Multatuli", 37, 72);

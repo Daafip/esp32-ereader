@@ -2,7 +2,7 @@
 
 Rendered and packed exactly like book pages, then written as a C header
 (``firmware/include/test_pages.h``, used by the calibration sketch) and as a small
-.t5b (to test the SD path). Run: ``pixi run devpages``. With ``--screen t5-47`` only
+.t5b (to test the SD path). Run: ``pixi run devpages``. With ``--screen 4.7in`` only
 the sample text, as a .t5b for that screen (UI previews).
 
 Calibration pattern (250x122): 1-px border with ticks every 10 px, four different

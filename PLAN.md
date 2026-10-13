@@ -173,6 +173,19 @@ notes in `docs/hardware-t5-47.md`, checks in `docs/checkpoints.md`.
 - [x] `pixi run ui-preview` renders both boards; `fw-dist` adds `t5-47-reader-*.bin`
 - [ ] 🧑 Hardware check (if David gets the board): rotation/mirroring, refresh quality and timing, gestures, wake latency, sleep current
 
+## Phase 8 — M5Stack M5PaperS3 and M5Paper (2026-10-13)
+
+David: "add support for the m5 stack" → PaperS3, then "do both the s3 and the original".
+Untested on hardware; notes in `docs/hardware-m5paper.md`, checks in `docs/checkpoints.md`.
+
+- [x] Board headers `m5paper_s3.h` / `m5paper.h` from M5Unified/M5GFX pin tables; envs `reader_m5papers3`, `reader_m5paper` (`m5stack_paper` board, PSRAM)
+- [x] Canvas backend split from its panel (`panel.h`): FastEPD preset for the PaperS3 (GPIO47 handed back to the SD card after init), own IT8951 driver for the M5Paper (M5GFX protocol, 4-bpp loads, DU/GL16/GC16), SD sharing the IT8951's SPI bus
+- [x] Touch: GT911 driver, `TouchTracker` gestures (lib/core, tested), per-screen mapping (`touchKey()`): tap zones and swipes when reading, tappable rows / footer buttons / Go to bar elsewhere; touch UI metrics (bigger rows and buttons), T5 screens pixel-identical
+- [x] M5Paper 3-way switch: a PREV button role next to NEXT/MENU
+- [x] Power: light sleep between pages (touch INT on the PaperS3 can't wake deep sleep), switch-off when idle/Sleep (PaperS3 PWROFF pulses, M5Paper GPIO2), battery re-read after naps
+- [x] Screen id `t5-47` → `4.7in` (shared by three boards); board tag in every image, Wi-Fi updates for another board refused; `fw-dist`/release notes list all four boards
+- [ ] 🧑 Hardware check (if David gets one): rotation + touch alignment, IT8951 bring-up, refresh quality, SD on the PaperS3, light-sleep current, power-off
+
 ---
 
 ## Decisions

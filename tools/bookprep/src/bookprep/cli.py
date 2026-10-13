@@ -46,11 +46,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         help=f"target reader (default {DEFAULT_SCREEN}): "
         + ", ".join(f"{s.id} = {s.name} {s.width}x{s.height}" for s in SCREENS.values()),
     )  # fmt: skip
-    p.add_argument("--size", type=int, help="font size in pixels (default: 13, t5-47: 28)")
+    p.add_argument("--size", type=int, help="font size in pixels (default: 13, 4.7in: 28)")
     p.add_argument("--line-height", type=int, help="pixels per line (default: 1.2 x size)")
     p.add_argument("--lang", help="hyphenation language (default: EPUB metadata, else nl)")
     p.add_argument("--out", type=Path, default=Path("out"), help="output directory")
-    p.add_argument("--margin", type=int, help="left/right/top margin in px (default: 4, t5-47: 24)")
+    p.add_argument("--margin", type=int, help="left/right/top margin in px (default: 4, 4.7in: 24)")
     p.add_argument("--status-bar", type=int, help="rows reserved for the status bar (default: 14)")
     p.add_argument("--indent", type=int, help="first-line indent in px (default: size)")
     p.add_argument("--paragraph-spacing", type=int, default=0, help="extra px between paragraphs")

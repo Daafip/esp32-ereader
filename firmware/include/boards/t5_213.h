@@ -6,6 +6,10 @@
 #pragma once
 
 #include <stdint.h>
+
+// Short name: release file names (<name>-reader-*.bin) and the tag that Wi-Fi
+// updates check (transfer.cpp), so another board's firmware is refused.
+#define BOARD_NAME "t5-213"
 #include <bb_epaper.h>
 
 #define BOARD_PANEL_BBEPAPER 1  // display_bbep.cpp
@@ -57,4 +61,12 @@ constexpr int kDefaultMarginPx = 4;
 // Both must be RTC GPIOs (deep-sleep wake). Remap here for the 4-button variant.
 constexpr int kBtnNext = kBtnUser;
 constexpr int kBtnMenu = kBtnBoot;
+constexpr int kBtnPrev = -1;           // none
 constexpr bool kBtnNextPullup = false;  // GPIO39 has none; the board has an external one
+
+// --- Power ----------------------------------------------------------------------
+constexpr bool kLightSleep = false;    // between pages: deep sleep, buttons wake (ext0/ext1)
+constexpr int kPowerHoldPin = -1;      // no software power switch
+constexpr int kPowerOffPulsePin = -1;
+constexpr const char *kSleepHint = "Sleeping  \xC2\xB7  press any button";
+constexpr bool kSdSharedSpi = false;   // SD has its own SPI bus

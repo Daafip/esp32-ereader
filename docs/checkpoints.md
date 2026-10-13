@@ -114,7 +114,7 @@ No diagnostic sketches for this board: the reader itself is the test. Results go
 
 1. `pixi run fw-flash reader_t547` (no port? hold BOOT, press RST, release BOOT),
    then `pixi run fw-monitor`. Card with `/books/*.t5b` made for this screen:
-   `pixi run prep book.epub --screen t5-47`, or Wi-Fi transfer (the page typesets
+   `pixi run prep book.epub --screen 4.7in`, or Wi-Fi transfer (the page typesets
    for the screen the reader reports).
 2. First screen: is it upright with the USB port where you want "down", and not
    mirrored? If not, change `kEpdRotation` (90/270) in `boards/t5_47_s3.h`, or tell
@@ -127,3 +127,24 @@ No diagnostic sketches for this board: the reader itself is the test. Results go
    (the reader rebuilds the old page from the card for that).
 5. Leave it asleep with a page shown and measure the current in series with the
    battery (LilyGo: ~380 µA). About → Battery should read about the cell voltage.
+
+## M5PaperS3 / M5Paper (if you get one)
+
+The reader itself is the test here too. Results go in `docs/hardware-m5paper.md` →
+"Checkpoint results". Books: the same as for the T5-4.7" (`--screen 4.7in`, or Wi-Fi).
+
+1. `pixi run fw-flash reader_m5papers3` (or `reader_m5paper`), `pixi run fw-monitor`.
+   M5Paper: the log should show `IT8951: panel 960x540, image buffer at 0x...`.
+2. First screen upright, not mirrored? Tap the top-left corner of a menu: does the
+   top row react? If the image is upside down, flip `kEpdRotation` and `kTouchFlip`
+   together in the board header. **Send:** a photo and what reacted where.
+3. M5Paper: which end of the switch is "down" (should turn to the next page)?
+4. Settings → "Sleep after page: off". Turn pages (tap, swipe), open menus, tap rows,
+   use the footer buttons. **Send:** the `page ...` log lines, ghosting, and anything
+   that is hard to hit with a finger.
+5. "Sleep after page: on" (light sleep between pages): page turns should still be
+   quick and partial. **Send:** the feel, and whether a stray touch keeps it awake.
+6. Menu → Sleep on battery: the device should switch off; the power button
+   (M5Paper: the switch) brings it back at the same page. PaperS3: also check the SD
+   card works (its CS pin is shared with the display driver at start-up).
+

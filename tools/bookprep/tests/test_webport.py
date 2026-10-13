@@ -95,7 +95,7 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
         Chapter("Twee", [Block("heading", "Twee"), Block("text", normalize_text(ENGLISH * 3))]),
     ]  # fmt: skip
     layout_cases = []
-    big = SCREENS["t5-47"]
+    big = SCREENS["4.7in"]
     for screen, margin, lh, spacing in [(None, 4, 16, 0), (None, 8, 13, 3), (big, 24, 34, 0)]:
         if screen:  # the JS side derives the page from its own screens table
             geom = screen.geometry(margin=margin)

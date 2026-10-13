@@ -5,21 +5,28 @@
 
 #include "board.h"
 #include "button.h"
+#include "touch.h"
 
 namespace input {
 namespace {
 
 ButtonTracker next;
 ButtonTracker menu;
+ButtonTracker prev;   // M5Paper
 ClickDecoder single;  // one-button boards
+TouchTracker finger;  // touch boards
+TouchEvent touchEvent;
+bool hasTouch = false;
 uint32_t activityMs = 0;
 
 bool down(int pin) { return pin >= 0 && digitalRead(pin) == LOW; }
 
 void configure(uint16_t longMs, bool repeat) {
   next.setConfig({25, longMs, repeat ? 250u : 0u});
+  prev.setConfig({25, longMs, repeat ? 250u : 0u});
   menu.setConfig({25, longMs, 0});
   single.setConfig({25, longMs, longMs + 1000u, 300});
+  finger.setConfig({longMs, int16_t(12 * kUiScale), int16_t(40 * kUiScale)});
 }
 
 Key translate(ButtonEvent e, bool isNext) {
@@ -46,11 +53,14 @@ Key translate(Gesture g) {
 }  // namespace
 
 void begin(uint16_t longPressMs) {
-  for (int pin : {kBtnNext, kBtnMenu}) {
+  for (int pin : {kBtnNext, kBtnMenu, kBtnPrev}) {
     if (pin >= 0 && rtc_gpio_is_valid_gpio(gpio_num_t(pin))) rtc_gpio_deinit(gpio_num_t(pin));
   }
-  pinMode(kBtnNext, kBtnNextPullup ? INPUT_PULLUP : INPUT);
-  if (!kSingleButton) pinMode(kBtnMenu, INPUT_PULLUP);
+  if (kBtnNext >= 0) pinMode(kBtnNext, kBtnNextPullup ? INPUT_PULLUP : INPUT);
+  // GPIO34-39 are input-only without pull-ups; those boards have external ones
+  if (kBtnMenu >= 0) pinMode(kBtnMenu, kBtnMenu >= 34 ? INPUT : INPUT_PULLUP);
+  if (kBtnPrev >= 0) pinMode(kBtnPrev, kBtnPrev >= 34 ? INPUT : INPUT_PULLUP);
+  hasTouch = touch::begin();
   configure(longPressMs, false);
   activityMs = millis();
 }
@@ -63,19 +73,39 @@ void setRepeat(bool enable) { configure(uint16_t(next.config().longMs), enable);
 
 Key poll() {
   const uint32_t now = millis();
-  Key k;
-  bool busy;
+  Key k = Key::None;
+  bool busy = false;
   if (kSingleButton) {
     k = translate(single.update(down(kBtnNext), now));
     busy = single.busy();
   } else {
     k = translate(next.update(down(kBtnNext), now), true);
     if (k == Key::None) k = translate(menu.update(down(kBtnMenu), now), false);
-    busy = next.isDown() || menu.isDown();
+    if (k == Key::None) {
+      switch (prev.update(down(kBtnPrev), now)) {
+        case ButtonEvent::Short:
+        case ButtonEvent::Long: k = Key::NextLong; break;
+        case ButtonEvent::Repeat: k = Key::NextRepeat; break;
+        case ButtonEvent::None: break;
+      }
+    }
+    busy = next.isDown() || menu.isDown() || prev.isDown();
+  }
+  if (hasTouch) {
+    int x = 0, y = 0;
+    const bool fingerDown = touch::read(x, y);
+    const TouchEvent e = finger.update(fingerDown, x, y, now);
+    if (k == Key::None && e.kind != TouchKind::None) {
+      touchEvent = e;
+      k = Key::Touch;
+    }
+    busy = busy || finger.isDown();
   }
   if (k != Key::None || busy) activityMs = now;
   return k;
 }
+
+TouchEvent lastTouch() { return touchEvent; }
 
 Key wakePress(int pin, uint32_t timeoutMs) {
   if (pin < 0) return Key::None;
@@ -105,7 +135,10 @@ Key wakePress(int pin, uint32_t timeoutMs) {
   return Key::None;
 }
 
-bool anyPressed() { return down(kBtnNext) || down(kBtnMenu); }
+bool anyPressed() {
+  int x, y;
+  return down(kBtnNext) || down(kBtnMenu) || down(kBtnPrev) || (hasTouch && touch::read(x, y));
+}
 
 void waitAllReleased(uint32_t timeoutMs) {
   const uint32_t start = millis();
@@ -118,5 +151,6 @@ void waitAllReleased(uint32_t timeoutMs) {
 }
 
 uint32_t lastActivityMs() { return activityMs; }
+void markActivity() { activityMs = millis(); }
 
 }  // namespace input

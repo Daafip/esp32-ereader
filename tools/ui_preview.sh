@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Builds firmware/host/ui_preview (the real ui.cpp + bb_epaper as a RAM-only
 # display) for the PC once per board, renders every screen and converts them to PNG.
-# Output: out/ui-preview/<screen>/*.png and contact.png, for
-#   t5-213  LilyGo T5-2.13 (250x122)
-#   t5-47   LilyGo T5-4.7" S3 (540x960, -DBOARD_T5_47_S3)
+# Output: out/ui-preview/<board>/*.png and contact.png, for
+#   t5-213     LilyGo T5-2.13 (250x122, two buttons)
+#   t5-47      LilyGo T5-4.7" S3 (540x960, one button)
+#   m5paper    M5PaperS3 / M5Paper (540x960, touch: bigger rows, footer buttons)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -15,18 +16,17 @@ mkdir -p "$build" "$out"
 rm -f "$out"/*.png  # previews from before the per-board folders
 cc -std=c99 -O1 -w -c firmware/lib/qrcodegen/src/qrcodegen.c -o "$build/qrcodegen.o"
 
-for board in t5-213:"" t5-47:-DBOARD_T5_47_S3; do
-  screen=${board%%:*}
-  define=${board#*:}
+for spec in t5-213:t5-213: t5-47:4.7in:-DBOARD_T5_47_S3 m5paper:4.7in:-DBOARD_M5PAPER_S3; do
+  IFS=: read -r board screen define <<<"$spec"
   python -m bookprep.devpages --screen "$screen" --t5b "$build/sample-$screen.t5b" >/dev/null
   c++ -std=gnu++17 -O1 -w $define \
     -I"$bb" -Ifirmware/include -Ifirmware/src -Ifirmware/lib/core/src -Ifirmware/lib/qrcodegen/src \
     firmware/host/host_bb_epaper.cpp firmware/host/display_host.cpp firmware/host/ui_preview.cpp \
     firmware/src/ui.cpp firmware/lib/core/src/*.cpp "$build/qrcodegen.o" \
-    -o "$build/ui_preview-$screen"
-  mkdir -p "$out/$screen"
-  rm -f "$out/$screen"/*.pbm "$out/$screen"/*.png
-  "$build/ui_preview-$screen" "$out/$screen" "$build/sample-$screen.t5b" >/dev/null
+    -o "$build/ui_preview-$board"
+  mkdir -p "$out/$board"
+  rm -f "$out/$board"/*.pbm "$out/$board"/*.png
+  "$build/ui_preview-$board" "$out/$board" "$build/sample-$screen.t5b" >/dev/null
 done
 
 python - "$out" <<'PY'

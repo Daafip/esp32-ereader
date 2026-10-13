@@ -9,7 +9,12 @@
 
 #include <stdint.h>
 
-#define BOARD_PANEL_FASTEPD 1  // display_fastepd.cpp + fastepd_panel.cpp
+// Short name: release file names (<name>-reader-*.bin) and the tag that Wi-Fi
+// updates check (transfer.cpp), so another board's firmware is refused.
+#define BOARD_NAME "t5-47"
+
+#define BOARD_PANEL_CANVAS 1   // display_canvas.cpp: portrait RAM canvas, rotated onto the panel
+#define BOARD_PANEL_FASTEPD 1  // fastepd_panel.cpp
 
 // --- E-paper panel: 8-bit parallel bus + 74HCT4094 shift register for the
 // control lines (output enable, mode, STV, power rails, latch). Same wiring
@@ -46,14 +51,22 @@ constexpr uint32_t kSdSpiHz = 20000000;
 constexpr int kBtnUser = 21;         // RTC GPIO21 (ext0 wake). LILYGO
 constexpr int kBtnNext = kBtnUser;
 constexpr int kBtnMenu = -1;         // none: single-button scheme (input.cpp)
+constexpr int kBtnPrev = -1;         // none
 constexpr bool kBtnNextPullup = true;  // external pull-up unknown: use the internal one. VERIFY
+
+// --- Power ----------------------------------------------------------------------
+constexpr bool kLightSleep = false;  // between pages: deep sleep, the button wakes (ext0)
+constexpr int kPowerHoldPin = -1;    // no software power switch
+constexpr int kPowerOffPulsePin = -1;
+constexpr const char *kSleepHint = "Sleeping  \xC2\xB7  press the button";
+constexpr bool kSdSharedSpi = false;
 
 // --- Battery --------------------------------------------------------------------
 constexpr int kBatAdc = 14;          // ADC2_CH3: read before Wi-Fi starts. LILYGO
 constexpr int kBatDividerNum = 2;    // LilyGo examples: Vbat = 2 x Vpin. LILYGO
 
-// --- Reader geometry: must match bookprep's "t5-47" screen / the .t5b header ----
-constexpr const char *kScreenId = "t5-47";
+// --- Reader geometry: must match bookprep's "4.7in" screen / the .t5b header -----
+constexpr const char *kScreenId = "4.7in";
 constexpr int kPageW = 540;          // portrait
 constexpr int kPageH = 960;
 constexpr int kStatusBarH = 28;      // bottom rows, drawn on the device

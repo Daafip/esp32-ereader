@@ -119,7 +119,7 @@ SCREENS = {
     s.id: s
     for s in (
         Screen("t5-213", "LilyGo T5-2.13", 250, 122, 14, 13, 4, 4),
-        Screen("t5-47", 'LilyGo T5-4.7" S3', 540, 960, 28, 28, 24, 8),
+        Screen("4.7in", 'LilyGo T5-4.7" S3, M5PaperS3, M5Paper', 540, 960, 28, 28, 24, 8),
     )
 }
 DEFAULT_SCREEN = "t5-213"

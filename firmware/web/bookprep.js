@@ -37,7 +37,7 @@
   // reports its own screen in /api/info.
   const screens = {
     "t5-213": { id: "t5-213", name: "LilyGo T5-2.13", width: 250, height: 122, statusBar: 14, size: 13, margin: 4, marginBottom: 4 },
-    "t5-47": { id: "t5-47", name: "LilyGo T5-4.7\" S3", width: 540, height: 960, statusBar: 28, size: 28, margin: 24, marginBottom: 8 },
+    "4.7in": { id: "4.7in", name: "LilyGo T5-4.7\" S3, M5PaperS3, M5Paper", width: 540, height: 960, statusBar: 28, size: 28, margin: 24, marginBottom: 8 },
   };
 
   // A screen from /api/info (or an id): known fields filled in from the table.

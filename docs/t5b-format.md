@@ -10,8 +10,8 @@ NUL-padded and always NUL-terminated within their field.
 |---|---|---|
 | 0 | 4 | magic `"T5B1"` |
 | 4 | 2 | version (u16) = 1 |
-| 6 | 2 | page_w (u16): 250 (T5-2.13) or 540 (T5-4.7") |
-| 8 | 2 | page_h (u16): 122 (T5-2.13) or 960 (T5-4.7") |
+| 6 | 2 | page_w (u16): 250 (T5-2.13) or 540 (4.7" readers) |
+| 8 | 2 | page_h (u16): 122 (T5-2.13) or 960 (4.7" readers) |
 | 10 | 2 | stride (u16) = ceil(page_w / 8): 32 or 68 |
 | 12 | 4 | page_count (u32) |
 | 16 | 2 | toc_count (u16) |
@@ -20,7 +20,7 @@ NUL-padded and always NUL-terminated within their field.
 | 146 | 52 × toc_count | TOC entries: start_page (u32, 0-based), title[48] |
 | 146 + 52 × toc_count | page_bytes × page_count | pages |
 
-`page_bytes = stride × page_h`: 3904 (T5-2.13) or 65280 (T5-4.7"). A reader only
+`page_bytes = stride × page_h`: 3904 (T5-2.13) or 65280 (4.7" readers). A reader only
 opens books whose page size matches its screen. Page *n* (0-based) starts at
 
 ```
@@ -33,12 +33,12 @@ so the reader seeks straight to a page and needs no index.
 
 Identical to bb_epaper's local framebuffer for the landscape 250×122 panel
 (`setRotation(90|270)`), see `docs/hardware.md`, and to the portrait RAM canvas the
-T5-4.7" draws into before rotating it onto the panel (`docs/hardware-t5-47.md`):
+4.7" readers draw into before rotating it onto the panel (`docs/hardware-t5-47.md`):
 
 - row-major, top row first, `stride` bytes per row
 - MSB first: pixel *x* is bit `0x80 >> (x & 7)` of byte `x >> 3`
 - **1 = white, 0 = black**
-- the padding bits at the end of each row are 1 (6 on the T5-2.13, 4 on the T5-4.7")
+- the padding bits at the end of each row are 1 (6 on the T5-2.13, 4 on the 4.7" readers)
 
 The bottom 14 rows (status bar) are white. The firmware draws the status bar
 there after copying the page into the framebuffer.

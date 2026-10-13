@@ -28,10 +28,13 @@ constexpr int kMargin = 8 * S;
 constexpr int kHeaderBaseline = 14 * S;
 constexpr int kHeaderRule = 19 * S;
 constexpr int kRowsTop = 22 * S;
-constexpr int kRowH = 17 * S;
-constexpr int kRowBaseline = 12 * S;
-constexpr int kFooterTop = kH - 13 * S;
-constexpr int kChipH = 12 * S;
+// Touch boards: rows and footer buttons big enough for a finger (about 6 mm).
+constexpr bool T = kHasTouch;
+constexpr int kRowH = (T ? 28 : 17) * S;
+constexpr int kRowBaseline = (T ? 19 : 12) * S;
+constexpr int kRowMid = (T ? 14 : 8) * S;  // centre line for dot and chevron
+constexpr int kFooterTop = kH - (T ? 30 : 13) * S;
+constexpr int kChipH = (T ? 26 : 12) * S;
 // Full-screen layouts (messages, sleep, Wi-Fi, value editor) are laid out in a
 // band of the design's 122 rows, centred on taller screens.
 constexpr int kBandH = 122 * S;
@@ -48,6 +51,26 @@ const uint8_t *const kDisplay = S == 2 ? ui_display_2x : ui_display;
 enum class Align { Left, Center, Right };
 
 BBEPAPER &epd() { return display::epd(); }
+
+// --- touch targets: what was drawn where, for hit() ------------------------------
+
+struct Target {
+  int16_t x, y, w, h;
+  Hit hit;
+};
+Target targets[48];
+int targetCount = 0;
+
+void addTarget(int x, int y, int w, int h, const Hit &what) {
+  if (!kHasTouch || targetCount >= int(sizeof(targets) / sizeof(targets[0]))) return;
+  targets[targetCount++] = {int16_t(x), int16_t(y), int16_t(w), int16_t(h), what};
+}
+
+// Every screen starts on white with no targets.
+void beginScreen() {
+  display::clear();
+  targetCount = 0;
+}
 
 int measure(const char *s, void *) {
   if (strlen(s) > 79) return 10000;  // bb_epaper measures in an 80-byte buffer
@@ -171,12 +194,39 @@ void header(const char *title, int batteryPct) {
 }
 
 // Footer arrow (7 x 4), vertically centred on the chips.
-void arrow(int x, bool up) {
+void arrow(int x, bool up, int color = kBlack) {
   const int cy = kFooterTop + kChipH / 2;
   for (int i = 0; i < 4; i++) {
     const int y = up ? cy - 2 * S + i * S : cy + S - i * S;
-    epd().fillRect(x + 3 * S - i * S, y, (2 * i + 1) * S, S, kBlack);
+    epd().fillRect(x + 3 * S - i * S, y, (2 * i + 1) * S, S, color);
   }
+}
+
+// Touch boards: the chip is the button. Filled for the short-press action,
+// outlined for the second one; the label is the action (text or an arrow).
+int touchChip(const char *label, bool filled, int x, bool draw, Button role, bool second) {
+  const bool isArrow = label == kArrowDown || label == kArrowUp;
+  const int lw = isArrow ? 7 * S : width(kBody, label);
+  int w = lw + 24 * S;
+  if (w < 44 * S) w = 44 * S;
+  if (draw) {
+    if (filled) {
+      epd().fillRoundRect(x, kFooterTop, w, kChipH, kChipH / 2, kBlack);
+    } else {
+      outline(x, kFooterTop, w, kChipH, kChipH / 2, kBlack);
+    }
+    if (isArrow) {
+      arrow(x + (w - 7 * S) / 2, label == kArrowUp, filled ? kWhite : kBlack);
+    } else {
+      text(kBody, label, x, kFooterTop + 17 * S, w, filled ? kWhite : kBlack, Align::Center);
+    }
+    Hit h;
+    h.kind = Hit::Chip;
+    h.button = role;
+    h.second = second;
+    addTarget(x, kFooterTop - 4 * S, w, kH - kFooterTop + 4 * S, h);
+  }
+  return w;
 }
 
 // A key chip: filled (the button) or outlined (the second gesture), then a label
@@ -212,9 +262,14 @@ const char *secondName(Button b) {
   return "hold";
 }
 
-// "[KEY] action (hold) holdAction"; returns the width.
+// "[KEY] action (hold) holdAction"; returns the width. Touch: [action] (holdAction).
 int hintGroup(const Hint &h, int x, bool draw) {
   if (h.button == Button::None) return 0;
+  if (kHasTouch) {
+    int w = touchChip(h.action, true, x, draw, h.button, false);
+    if (h.holdAction) w += 6 * S + touchChip(h.holdAction, false, x + w + 6 * S, draw, h.button, true);
+    return w;
+  }
   int w = chip(keyName(h.button), h.action, true, x, draw);
   if (h.holdAction) w += 7 * S + chip(secondName(h.button), h.holdAction, false, x + w + 7 * S, draw);
   return w;
@@ -246,7 +301,22 @@ void scrollbar(const ListModel &m) {
 
 int menuRows() { return (kFooterTop - kRowsTop) / kRowH; }
 
+Hit hit(int x, int y) {
+  for (int i = 0; i < targetCount; i++) {
+    const Target &t = targets[i];
+    if (x < t.x || y < t.y || x >= t.x + t.w || y >= t.y + t.h) continue;
+    Hit h = t.hit;
+    if (h.kind == Hit::Bar) {
+      h.percent = t.w > 1 ? (x - t.x) * 100 / (t.w - 1) : 0;
+      if (h.percent > 100) h.percent = 100;
+    }
+    return h;
+  }
+  return {};
+}
+
 void statusBar(const char *chapter, uint32_t page, uint32_t pageCount, int batteryPct) {
+  targetCount = 0;  // the reading screen: tap zones, no targets
   const int top = kH - kStatusBarH;
   const int baseline = kH - 3 * S;
   epd().fillRect(0, top, kW, kStatusBarH, kWhite);
@@ -271,7 +341,7 @@ void statusBar(const char *chapter, uint32_t page, uint32_t pageCount, int batte
 
 void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hint left,
           Hint right, int batteryPct) {
-  display::clear();
+  beginScreen();
   header(title, batteryPct);
   for (int r = 0; r < model.visibleRows() && model.first() + r < model.count(); r++) {
     const int i = model.first() + r;
@@ -280,15 +350,21 @@ void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hin
     const int color = selected ? kWhite : kBlack;
     Item it;
     item(i, it, ctx);
-    if (selected) epd().fillRoundRect(4 * S, top + S, kW - 14 * S, kRowH - 2 * S, 7 * S, kBlack);
+    if (selected) {
+      epd().fillRoundRect(4 * S, top + S, kW - 14 * S, kRowH - 2 * S, (T ? 10 : 7) * S, kBlack);
+    }
+    Hit row;
+    row.kind = Hit::Row;
+    row.row = i;
+    addTarget(0, top, kW, kRowH, row);
     int x = kMargin + 4 * S;
     int end = kW - 16 * S;
     if (it.current) {
-      epd().fillCircle(x + S, top + 8 * S, 2 * S, color);
+      epd().fillCircle(x + S, top + kRowMid, 2 * S, color);
       x += 8 * S;
     }
     if (it.chevron) {
-      chevron(end - 4 * S, top + 8 * S, color);
+      chevron(end - 4 * S, top + kRowMid, color);
       end -= 12 * S;
     }
     if (it.detail[0]) {
@@ -307,7 +383,7 @@ void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hin
 
 void details(const char *title, const char *const *labels, const char *const *values, int count,
              Hint left, Hint right, int batteryPct) {
-  display::clear();
+  beginScreen();
   header(title, batteryPct);
   constexpr int kDetailRowH = 14 * S;
   for (int i = 0; i < count && kRowsTop + (i + 1) * kDetailRowH <= kFooterTop; i++) {
@@ -321,11 +397,14 @@ void details(const char *title, const char *const *labels, const char *const *va
 
 void valueEditor(const char *title, const char *value, const char *caption, int percent, Hint left,
                  Hint right, int batteryPct) {
-  display::clear();
+  beginScreen();
   header(title, batteryPct);
   text(kDisplay, value, 0, kBandTop + 52 * S, kW, kBlack, Align::Center);
   const int x = 24 * S, w = kW - 48 * S, y = kBandTop + 62 * S;
   outline(x, y, w, 9 * S, 4 * S, kBlack);
+  Hit bar;
+  bar.kind = Hit::Bar;
+  addTarget(x, y - 12 * S, w, 33 * S, bar);  // tap anywhere along the bar
   const int pct = percent < 0 ? 0 : (percent > 100 ? 100 : percent);
   const int fill = (w - 4 * S) * pct / 100;
   if (fill >= 4 * S) epd().fillRoundRect(x + 2 * S, y + 2 * S, fill, 5 * S, 2 * S, kBlack);
@@ -335,7 +414,7 @@ void valueEditor(const char *title, const char *value, const char *caption, int 
 
 namespace {
 void messageBody(Icon which, const char *headline, const char *line1, const char *line2) {
-  display::clear();
+  beginScreen();
   icon(which, kW / 2, kBandTop + 8 * S);
   text(kTitle, headline, kMargin, kBandTop + 52 * S, kW - 2 * kMargin, kBlack, Align::Center);
   text(kBody, line1, kMargin, kBandTop + 70 * S, kW - 2 * kMargin, kBlack, Align::Center);
@@ -356,7 +435,7 @@ void message(Icon which, const char *headline, const char *line1, const char *li
 }
 
 void sleepScreen(const char *title, const char *author, int percentRead, int batteryPct) {
-  display::clear();
+  beginScreen();
   battery(kW - kMargin, 14 * S, batteryPct, kBlack);
 
   constexpr int kLineH = 21 * S;
@@ -387,16 +466,20 @@ void sleepScreen(const char *title, const char *author, int percentRead, int bat
     text(kSmall, pct, x + kBarW + 6 * S, y + 13 * S, pw, kBlack);
   }
 
-  const char *hint = kSingleButton ? "Sleeping  \xC2\xB7  press the button"
-                                   : "Sleeping  \xC2\xB7  press any button";
+  const char *hint = kSleepHint;
   const int hw = width(kSmall, hint);
   const int hx = (kW - hw - 12 * S) / 2;
   moon(hx + 4 * S, kH - 10 * S);
   text(kSmall, hint, hx + 12 * S, kH - 6 * S, hw, kBlack);
 }
 
+const char *retryHint() {
+  if (kHasTouch) return "Tap the screen to try again";
+  return kSingleButton ? "Press the button to try again" : "Press any button to try again";
+}
+
 void wifiScreen(const WifiView &v, Hint left, Hint right, int batteryPct) {
-  display::clear();
+  beginScreen();
   // QR code: up to version 6 (41 modules), as large as fits in 104 px with a
   // 2-module quiet zone, centred between the top of the band and the footer.
   uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(6)];

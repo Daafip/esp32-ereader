@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "board.h"
+#include "board_tag.h"
 #include "prefs.h"
 #include "storage.h"
 #include "t5b_format.h"
@@ -59,6 +60,13 @@ const Kind kKinds[] = {
     {"meta", kSourceDir, kMetaExts, 1, 64u << 10},
     {"font", kFontDir, kFontExts, 4, 8u << 20},
 };
+
+// The board tag in this firmware; a Wi-Fi update must carry the same one. Images
+// from before 0.9.0 have none and are accepted (the chip is still checked).
+constexpr size_t kTagPrefixLen = 15;  // "T5READER-BOARD:"
+__attribute__((used)) const char kBoardTag[] = "T5READER-BOARD:" BOARD_NAME;
+static_assert(sizeof("T5READER-BOARD:") - 1 == kTagPrefixLen, "prefix length");
+BoardTagScanner fwTag(kBoardTag, kTagPrefixLen);
 
 const Kind *findKind(const String &name) {
   for (const Kind &k : kKinds) {
@@ -181,6 +189,7 @@ void handleInfo() {
   out.reserve(160 + books.size() * 200);
   out = "{";
   addString(out, "version", FW_VERSION);
+  addString(out, "board", BOARD_NAME);
   // This reader's screen: the page typesets books for it (see bookprep.js, screens).
   addKey(out, "screen");
   out += '{';
@@ -388,6 +397,7 @@ void handleFirmwareData() {
       fwStatus = 200;
       fwError = "";
       if (!authorized()) return failFirmware(403, "wrong code");
+      fwTag.reset();
       if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) return failFirmware(500, Update.errorString());
       touch("Updating firmware...");
       break;
@@ -400,6 +410,7 @@ void handleFirmwareData() {
           return failFirmware(400, "firmware for the other board (wrong chip)");
         }
       }
+      fwTag.feed(up.buf, up.currentSize);
       if (Update.write(up.buf, up.currentSize) != up.currentSize) {
         // e.g. "Magic byte is wrong": not an app image (the merged .bin from fw-dist)
         return failFirmware(400, Update.errorString());
@@ -408,6 +419,12 @@ void handleFirmwareData() {
       break;
     case UPLOAD_FILE_END:
       if (fwStatus != 200) return;
+      if (fwTag.found() && strcmp(fwTag.name(), BOARD_NAME) != 0) {
+        char why[96];
+        snprintf(why, sizeof(why), "firmware for another board (%s, this is %s)", fwTag.name(),
+                 BOARD_NAME);
+        return failFirmware(400, why);
+      }
       if (!Update.end(true)) return failFirmware(400, Update.errorString());
       Serial.printf("firmware update ok (%u bytes), restarting\n", unsigned(up.totalSize));
       touch("Firmware updated, restarting");

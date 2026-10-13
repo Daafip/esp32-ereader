@@ -7,7 +7,7 @@ reader:
 
     pixi run web-dev                    # http://localhost:8000
     pixi run web-dev --lan              # reachable from your phone on the same network
-    pixi run web-dev --screen t5-47     # pretend to be the T5-4.7" S3
+    pixi run web-dev --screen 4.7in     # pretend to be a 4.7" reader (T5-4.7", M5Paper)
 """
 
 from __future__ import annotations
@@ -34,6 +34,8 @@ KINDS = {
     "meta": ("books/.src", (".json",), 64 << 10),
     "font": ("fonts", (".ttf", ".otf", ".woff", ".woff2"), 8 << 20),
 }
+# /api/info "board" (firmware: BOARD_NAME), one per screen size for the dev server
+BOARD_FOR_SCREEN = {"t5-213": "t5-213", "4.7in": "t5-47"}
 MIME = {".epub": "application/epub+zip", ".txt": "text/plain", ".json": "application/json",
         ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2",
         ".t5b": "application/octet-stream"}  # fmt: skip
@@ -161,7 +163,8 @@ class Handler(SimpleHTTPRequestHandler):
         sc = self.screen
         screen = {"id": sc.id, "width": sc.width, "height": sc.height, "statusBar": sc.status_bar,
                   "size": sc.font_size, "margin": sc.margin}  # fmt: skip
-        self.send_json(200, {"version": "dev", "screen": screen, "battery": -1,
+        board = BOARD_FOR_SCREEN.get(sc.id, sc.id)
+        self.send_json(200, {"version": "dev", "board": board, "screen": screen, "battery": -1,
                              "total": usage.total, "free": usage.free, "books": books,
                              "fonts": fonts})  # fmt: skip
 

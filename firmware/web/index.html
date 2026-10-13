@@ -194,8 +194,8 @@ const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x 
 // --- reader API -------------------------------------------------------------------
 
 const demoData = {
-  version: "demo", battery: 72, free: 7.2e9, total: 7.9e9, fonts: [],
-  screen: B.screenFor(params.get("screen") || "t5-213"), // demo of another reader: ?screen=t5-47
+  version: "demo", board: "t5-213", battery: 72, free: 7.2e9, total: 7.9e9, fonts: [],
+  screen: B.screenFor(params.get("screen") || "t5-213"), // demo of another reader: ?screen=4.7in
   books: [
     { file: "max_havelaar.t5b", title: "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy", author: "Multatuli", pages: 3596, size: 14071000, progress: 37, source: null },
     { file: "alice.t5b", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, progress: 0, source: null },
@@ -248,6 +248,9 @@ function render() {
   const battery = info.battery >= 0 ? info.battery + "% battery · " : "";
   $("#meta").textContent = battery + size(info.free) + " free";
   $("#fwver").textContent = info.version ? "v" + info.version : "";
+  if (!$("#fwsub").classList.contains("ok") && !$("#fwsub").classList.contains("err")) {
+    $("#fwsub").textContent = `The ${otaPrefix()}…-ota.bin from a release or pixi run fw-dist`;
+  }
   $("#count").textContent = info.books.length || "";
   $("#books").innerHTML = info.books.length ? info.books.map((b) => `
     <li class="card">
@@ -594,6 +597,9 @@ $("#s-upload").addEventListener("click", async () => {
 
 // --- firmware ---------------------------------------------------------------------------
 
+// Release file names start with the board (older firmware doesn't say: the T5-2.13).
+const otaPrefix = () => (!info.board || info.board === "t5-213" ? "t5" : info.board) + "-reader-";
+
 $("#fw").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
@@ -601,7 +607,8 @@ $("#fw").addEventListener("change", async (e) => {
   const sub = $("#fwsub");
   const bar = $("#fwbar");
   const say = (text, cls = "") => { sub.textContent = text; sub.className = "sub " + cls; };
-  if (!/-ota[.]bin$/i.test(file.name) && !confirm("This doesn't look like a t5-reader-…-ota.bin file. Send it anyway?")) return;
+  const looksRight = file.name.startsWith(otaPrefix()) && /-ota[.]bin$/i.test(file.name);
+  if (!looksRight && !confirm(`This doesn't look like a ${otaPrefix()}…-ota.bin file for this reader. Send it anyway?`)) return;
   if (demo) return say("Demo mode: nothing was sent.", "ok");
   try {
     await send("/api/firmware", file, file.name, (p) => { bar.style.width = p * 100 + "%"; say(`Sending · ${Math.round(p * 100)}%`); });

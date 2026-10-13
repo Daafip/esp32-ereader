@@ -117,12 +117,12 @@ def test_uploads_are_validated(server, tmp_path):
 
 
 def test_screen_is_reported_and_enforced(tmp_path):
-    srv = make_server(tmp_path, CODE, port=0, fonts=False, screen="t5-47")
+    srv = make_server(tmp_path, CODE, port=0, fonts=False, screen="4.7in")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{srv.server_address[1]}"
     try:
         assert info(base)["screen"] == {
-            "id": "t5-47", "width": 540, "height": 960, "statusBar": 28, "size": 28, "margin": 24,
+            "id": "4.7in", "width": 540, "height": 960, "statusBar": 28, "size": 28, "margin": 24,
         }  # fmt: skip
         assert upload(base, "book", "klein.t5b", t5b_bytes(tmp_path))[0] == 400
         assert upload(base, "book", "groot.t5b", t5b_bytes(tmp_path, w=540, h=960))[0] == 200

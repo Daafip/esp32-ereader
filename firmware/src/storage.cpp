@@ -13,7 +13,9 @@
 namespace storage {
 namespace {
 
-SPIClass sdSpi(HSPI);
+SPIClass ownSpi(HSPI);
+// M5Paper: the card shares the IT8951's bus, so both use Arduino's global SPI.
+SPIClass &sdSpi = kSdSharedSpi ? SPI : ownSpi;
 bool isMounted = false;
 
 bool endsWithT5b(const char *name) {

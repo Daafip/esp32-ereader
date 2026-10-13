@@ -1,11 +1,11 @@
-// Parallel e-paper (T5-4.7" S3): bb_epaper draws into a portrait RAM canvas in
-// the .t5b page layout; show() rotates it into FastEPD's landscape buffer
-// (fastepd_panel.cpp). The panel has no memory of its own and a page (64 KB)
-// doesn't fit in RTC memory, so after deep sleep the shown image is unknown
-// until the app redraws it (assumeShown()).
+// 4.7" panels (T5-4.7" S3, M5PaperS3, M5Paper): bb_epaper draws into a portrait
+// RAM canvas in the .t5b page layout; show() rotates it into the panel's native
+// landscape buffer (panel.h). A parallel panel has no memory of its own and a
+// page (64 KB) doesn't fit in RTC memory, so after deep sleep the shown image is
+// unknown until the app redraws it (assumeShown()). Light sleep keeps it.
 #include "board.h"
 
-#ifdef BOARD_PANEL_FASTEPD
+#ifdef BOARD_PANEL_CANVAS
 
 #include <Arduino.h>
 #include <esp_attr.h>
@@ -14,7 +14,7 @@
 
 #include "bitmap.h"
 #include "display.h"
-#include "fastepd_panel.h"
+#include "panel.h"
 
 namespace display {
 namespace {
@@ -36,10 +36,17 @@ void begin() {
     canvas.setBuffer(fb);
     clear();
   }
-  if (!panel::begin()) Serial.println("panel: FastEPD init failed (PSRAM?)");
+  if (!panel::begin()) Serial.println("panel: init failed");
 }
 
-void sleep(bool) { panel::powerOff(); }
+void sleep(bool keepPower) {
+  // Keeping the image only works while the chip keeps its RAM: light sleep.
+  if (keepPower && kLightSleep) {
+    panel::standby();
+  } else {
+    panel::powerOff();
+  }
+}
 
 BBEPAPER &epd() { return canvas; }
 uint8_t *framebuffer() { return fb; }
@@ -70,9 +77,10 @@ void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
 }
 
 void assumeShown() {
-  if (!panel::previous()) return;
-  rotate1bpp(fb, kPageW, kPageH, panel::previous(), rotation);
-  panel::previousValid();
+  if (panel::previous()) {
+    rotate1bpp(fb, kPageW, kPageH, panel::previous(), rotation);
+    panel::previousValid();
+  }
   shown = true;
 }
 
@@ -82,4 +90,4 @@ Timing lastTiming() { return timing; }
 
 }  // namespace display
 
-#endif  // BOARD_PANEL_FASTEPD
+#endif  // BOARD_PANEL_CANVAS

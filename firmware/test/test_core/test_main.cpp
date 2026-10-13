@@ -3,6 +3,7 @@
 #include <unity.h>
 
 #include "bitmap.h"
+#include "board_tag.h"
 #include "button.h"
 #include "golden_header.h"
 #include "menu.h"
@@ -10,6 +11,7 @@
 #include "settings.h"
 #include "t5b_format.h"
 #include "text_util.h"
+#include "touch_gesture.h"
 #include "web_util.h"
 
 void setUp() {}
@@ -230,6 +232,93 @@ static void test_click_decoder_after_wake() {
   ClickDecoder h;
   h.startPressed(0);
   TEST_ASSERT_EQUAL(int(Gesture::Hold), int(feed(h, false, 700, 1000)));
+}
+
+// --- touch gestures --------------------------------------------------------------
+
+// Finger down from `from` to `to` (exclusive) moving linearly (x0,y0) -> (x1,y1),
+// 10 ms samples, then released at `to`. Returns every event seen.
+static int stroke(TouchTracker &t, uint32_t from, uint32_t to, int x0, int y0, int x1, int y1,
+                  TouchEvent *events, int max) {
+  int n = 0;
+  for (uint32_t now = from; now < to; now += 10) {
+    const int x = x0 + int((x1 - x0) * int(now - from) / int(to - from));
+    const int y = y0 + int((y1 - y0) * int(now - from) / int(to - from));
+    const TouchEvent e = t.update(true, x, y, now);
+    if (e.kind != TouchKind::None && n < max) events[n++] = e;
+  }
+  const TouchEvent e = t.update(false, 0, 0, to);
+  if (e.kind != TouchKind::None && n < max) events[n++] = e;
+  return n;
+}
+
+static void test_touch_tap_and_jitter() {
+  TouchTracker t;  // long 600 ms, slop 24, swipe 80
+  TouchEvent ev[4];
+  TEST_ASSERT_EQUAL(1, stroke(t, 0, 120, 300, 500, 310, 495, ev, 4));
+  TEST_ASSERT_EQUAL(int(TouchKind::Tap), int(ev[0].kind));
+  TEST_ASSERT_EQUAL(300, ev[0].x);  // where the finger went down
+  TEST_ASSERT_EQUAL(500, ev[0].y);
+  TEST_ASSERT_FALSE(t.isDown());
+}
+
+static void test_touch_long_press_fires_once_while_down() {
+  TouchTracker t;
+  TouchEvent ev[4];
+  TEST_ASSERT_EQUAL(1, stroke(t, 0, 1500, 100, 100, 104, 100, ev, 4));
+  TEST_ASSERT_EQUAL(int(TouchKind::LongPress), int(ev[0].kind));  // nothing on release
+}
+
+static void test_touch_swipes() {
+  TouchTracker t;
+  TouchEvent ev[4];
+  TEST_ASSERT_EQUAL(1, stroke(t, 0, 200, 450, 500, 200, 520, ev, 4));
+  TEST_ASSERT_EQUAL(int(TouchKind::SwipeLeft), int(ev[0].kind));
+  TEST_ASSERT_EQUAL(1, stroke(t, 1000, 1200, 100, 500, 400, 470, ev, 4));
+  TEST_ASSERT_EQUAL(int(TouchKind::SwipeRight), int(ev[0].kind));
+  TEST_ASSERT_EQUAL(1, stroke(t, 2000, 2200, 270, 800, 260, 300, ev, 4));
+  TEST_ASSERT_EQUAL(int(TouchKind::SwipeUp), int(ev[0].kind));
+  // a slow drag that turns into a swipe never fires the long press
+  TEST_ASSERT_EQUAL(1, stroke(t, 3000, 4000, 100, 500, 500, 500, ev, 4));
+  TEST_ASSERT_EQUAL(int(TouchKind::SwipeRight), int(ev[0].kind));
+  // diagonal or too short: nothing
+  TEST_ASSERT_EQUAL(0, stroke(t, 5000, 5200, 100, 100, 300, 300, ev, 4));
+  TEST_ASSERT_EQUAL(0, stroke(t, 6000, 6200, 100, 100, 150, 100, ev, 4));
+}
+
+static void test_reading_tap_zones() {
+  TEST_ASSERT_EQUAL(int(ReadingTap::Prev), int(readingTap(10, 500, 540, 960)));
+  TEST_ASSERT_EQUAL(int(ReadingTap::Next), int(readingTap(200, 500, 540, 960)));
+  TEST_ASSERT_EQUAL(int(ReadingTap::Next), int(readingTap(530, 950, 540, 960)));
+  TEST_ASSERT_EQUAL(int(ReadingTap::Menu), int(readingTap(10, 20, 540, 960)));
+  TEST_ASSERT_EQUAL(int(ReadingTap::Menu), int(readingTap(400, 119, 540, 960)));
+}
+
+// --- board tag ----------------------------------------------------------------------
+
+static void test_board_tag_found_across_chunks() {
+  static const char kPrefix[] = "T5READER-BOARD:";
+  const char image[] = "\xE9\x05junk T5READ T5READER-BOARD:m5paper\0more T5READER-BOARD:t5-213";
+  BoardTagScanner scan(kPrefix, sizeof(kPrefix) - 1);
+  const size_t chunks[] = {1, 3, 7, sizeof(image)};
+  for (size_t chunk : chunks) {
+    scan.reset();
+    for (size_t i = 0; i < sizeof(image); i += chunk) {
+      const size_t n = i + chunk > sizeof(image) ? sizeof(image) - i : chunk;
+      scan.feed(reinterpret_cast<const uint8_t *>(image) + i, n);
+    }
+    TEST_ASSERT_TRUE(scan.found());
+    TEST_ASSERT_EQUAL_STRING("m5paper", scan.name());  // the first one counts
+  }
+}
+
+static void test_board_tag_absent() {
+  static const char kPrefix[] = "T5READER-BOARD:";
+  const char image[] = "no tag here, T5READER-BOARD: (empty) T5READER-BOARX:t5";
+  BoardTagScanner scan(kPrefix, sizeof(kPrefix) - 1);
+  scan.feed(reinterpret_cast<const uint8_t *>(image), sizeof(image));
+  TEST_ASSERT_FALSE(scan.found());
+  TEST_ASSERT_EQUAL_STRING("", scan.name());
 }
 
 // --- bitmap -------------------------------------------------------------------------
@@ -531,6 +620,12 @@ int main() {
   RUN_TEST(test_bounce_is_one_tap);
   RUN_TEST(test_click_decoder_after_wake);
   RUN_TEST(test_rotate_1bpp);
+  RUN_TEST(test_board_tag_found_across_chunks);
+  RUN_TEST(test_board_tag_absent);
+  RUN_TEST(test_touch_tap_and_jitter);
+  RUN_TEST(test_touch_long_press_fires_once_while_down);
+  RUN_TEST(test_touch_swipes);
+  RUN_TEST(test_reading_tap_zones);
   RUN_TEST(test_refresh_policy);
   RUN_TEST(test_battery_percent);
   RUN_TEST(test_utf8_decode);

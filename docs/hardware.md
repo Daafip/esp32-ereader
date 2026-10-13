@@ -1,6 +1,7 @@
 # Hardware notes — LilyGo T5-2.13
 
-(The second board, the LilyGo T5-4.7" S3, has its own page: `docs/hardware-t5-47.md`.)
+(The other boards have their own pages: LilyGo T5-4.7" S3 in `docs/hardware-t5-47.md`,
+M5PaperS3 and M5Paper in `docs/hardware-m5paper.md`.)
 
 Status legend: **SCHEMATIC** = from LilyGo's repo (README, `T5_2.13.pdf` schematic
 V2.3, examples) as of 2026-07; **VERIFIED** = measured on David's board;

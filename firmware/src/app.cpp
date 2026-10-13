@@ -72,8 +72,6 @@ const ui::Hint kListOpen = {Button::Menu, "open", "back"};
 const ui::Hint kListGo = {Button::Menu, "go", "back"};
 const ui::Hint kListChange = {Button::Menu, "edit", "back"};
 const ui::Hint kBack = {Button::Menu, "back", nullptr};
-const char *const kRetryHint =
-    kSingleButton ? "Press the button to try again" : "Press any button to try again";
 
 Settings settings;
 Book book;
@@ -130,7 +128,7 @@ int percentRead() {
 
 void showMessage(ui::Icon icon, const char *title, const char *line1, const char *line2) {
   messageOffersWifi = false;
-  ui::message(icon, title, line1, line2, kRetryHint);
+  ui::message(icon, title, line1, line2, ui::retryHint());
   display::show(Refresh::Full);
   setScreen(Screen::Message);
   Serial.printf("message: %s / %s / %s\n", title, line1 ? line1 : "", line2 ? line2 : "");
@@ -206,10 +204,43 @@ void showReading(Refresh requested) {
                 unsigned(t.dataMs), unsigned(t.refreshMs), unsigned(rtc.imageMs));
 }
 
+void readBattery() {
+  batteryMv = power::batteryMv();
+  batteryPct = batteryMv > kNoBatteryMv ? batteryPercent(batteryMv) : -1;
+}
+
+void showLowBattery() {
+  ui::message(ui::Icon::Battery, "Battery low", "Charge the reader,", "then press a button", nullptr);
+  display::show(Refresh::Full);
+  setScreen(Screen::LowBattery);
+}
+
+// Light-sleep boards (M5): sleep until a touch or button. The idle timer ends
+// in the sleep screen and power-off. Back in loop(), the touch or press that
+// woke the chip is read as usual and the panel still holds its image.
+void nap() {
+  display::sleep(true);
+  input::waitAllReleased();
+  if (!power::lightSleep(uint32_t(settings.idleMinutes) * 60)) enterSleep(true);
+  input::markActivity();
+  rtc.wakes++;
+  readBattery();
+  if (batteryMv > kNoBatteryMv && batteryMv < kBatteryLowMv) {
+    showLowBattery();
+    display::sleep(false);
+    power::deepSleep(0);
+  }
+}
+
 // After a page is on the panel: sleep right away, or stay awake (setting).
 void pageShown() {
   input::setRepeat(false);
-  if (screen == Screen::Reading && settings.deepSleep) enterSleep(false);
+  if (screen != Screen::Reading || !settings.deepSleep) return;
+  if (kLightSleep) {
+    nap();
+  } else {
+    enterSleep(false);
+  }
 }
 
 void resume() {
@@ -432,7 +463,8 @@ ListAction listKey(Key k) {
     case Key::NextRepeat: list.prev(); return ListAction::Moved;
     case Key::MenuShort: return ListAction::Select;
     case Key::MenuLong: return ListAction::Back;
-    case Key::None: break;
+    case Key::None:
+    case Key::Touch: break;  // mapped to keys by touchKey()
   }
   return ListAction::None;
 }
@@ -509,7 +541,8 @@ void goToKey(Key k) {
       resume();
       break;
     case Key::MenuLong: openMainMenu(); break;
-    case Key::None: break;
+    case Key::None:
+    case Key::Touch: break;
   }
 }
 
@@ -550,7 +583,76 @@ void settingsKey(Key k) {
   }
 }
 
+bool isList(Screen s) {
+  return s == Screen::MainMenu || s == Screen::Chapters || s == Screen::Library ||
+         s == Screen::SettingsMenu;
+}
+
+void renderList() {
+  switch (screen) {
+    case Screen::MainMenu: renderMainMenu(); break;
+    case Screen::Chapters: renderChapters(); break;
+    case Screen::Library: renderLibrary(); break;
+    case Screen::SettingsMenu: renderSettings(); break;
+    default: break;
+  }
+}
+
+// Touch boards: what a gesture means on the current screen. Reading: tap zones
+// (left third back, top strip menu, rest next), swipes, long press = menu.
+// Elsewhere: rows and footer buttons as drawn (ui::hit), swipe up/down pages
+// through a list, long press = back, a tap anywhere on a message = any key.
+Key touchKey(const TouchEvent &t) {
+  if (screen == Screen::Reading) {
+    switch (t.kind) {
+      case TouchKind::SwipeLeft: return Key::NextShort;
+      case TouchKind::SwipeRight: return Key::NextLong;
+      case TouchKind::LongPress: return Key::MenuShort;
+      case TouchKind::Tap:
+        switch (readingTap(t.x, t.y, kPageW, kPageH)) {
+          case ReadingTap::Next: return Key::NextShort;
+          case ReadingTap::Prev: return Key::NextLong;
+          case ReadingTap::Menu: return Key::MenuShort;
+        }
+        break;
+      default: break;
+    }
+    return Key::None;
+  }
+  if (t.kind == TouchKind::LongPress) return Key::MenuLong;
+  if (isList(screen) && (t.kind == TouchKind::SwipeUp || t.kind == TouchKind::SwipeDown)) {
+    int i = list.selected() + (t.kind == TouchKind::SwipeUp ? 1 : -1) * list.visibleRows();
+    if (i >= list.count()) i = list.count() - 1;
+    if (i < 0) i = 0;
+    list.select(i);
+    renderList();
+    return Key::None;
+  }
+  if (t.kind != TouchKind::Tap) return Key::None;
+  const ui::Hit h = ui::hit(t.x, t.y);
+  switch (h.kind) {
+    case ui::Hit::Chip:
+      if (h.button == Button::Next) return h.second ? Key::NextLong : Key::NextShort;
+      return h.second ? Key::MenuLong : Key::MenuShort;
+    case ui::Hit::Row:
+      list.select(h.row);
+      return Key::MenuShort;  // open / select / change that row
+    case ui::Hit::Bar:
+      if (screen == Screen::GoTo) {
+        goToPct = h.percent;
+        renderGoTo();
+      }
+      return Key::None;
+    case ui::Hit::None: break;
+  }
+  const bool anyKey = screen == Screen::Message || screen == Screen::About ||
+                      screen == Screen::Sleeping || screen == Screen::LowBattery ||
+                      screen == Screen::None;
+  return anyKey ? Key::NextShort : Key::None;
+}
+
 void handle(Key k) {
+  if (k == Key::Touch) k = touchKey(input::lastTouch());
   if (k == Key::None) return;
   switch (screen) {
     case Screen::Reading: readingKey(k); break;
@@ -597,6 +699,7 @@ bool restoreBook() {
 }  // namespace
 
 void setup() {
+  power::begin();  // M5Paper: hold the power on before anything else
   Serial.begin(115200);
   const power::Wake wake = power::wakeReason();
   prefs::begin();
@@ -613,19 +716,13 @@ void setup() {
   }
   rtc.wakes++;
   const Screen shown = rtc.screen;
-  batteryMv = power::batteryMv();
-  batteryPct = batteryMv > kNoBatteryMv ? batteryPercent(batteryMv) : -1;
+  readBattery();
   Serial.printf("\nT5 reader %s: wake by %s, key %d, battery %u mV, shown screen %d\n", FW_VERSION,
                 power::wakeName(wake), int(key), unsigned(batteryMv), int(shown));
 
   display::begin();
   if (batteryMv > kNoBatteryMv && batteryMv < kBatteryLowMv) {
-    if (shown != Screen::LowBattery) {
-      ui::message(ui::Icon::Battery, "Battery low", "Charge the reader,", "then press a button",
-                  nullptr);
-      display::show(Refresh::Full);
-      setScreen(Screen::LowBattery);
-    }
+    if (shown != Screen::LowBattery) showLowBattery();
     display::sleep(false);
     power::deepSleep(0);
   }
@@ -658,6 +755,11 @@ void loop() {
   if (wifi && int32_t(transfer::info().lastActivityMs - last) > 0) last = transfer::info().lastActivityMs;
   const uint32_t idleMs = uint32_t(settings.idleMinutes) * 60000;
   if (millis() - last > idleMs) enterSleep(screen != Screen::Message);
+  // Light-sleep boards: woken on a page by something that wasn't a gesture
+  // (a brush of the screen): back to sleep after a few seconds.
+  if (kLightSleep && settings.deepSleep && screen == Screen::Reading && millis() - last > 3000) {
+    nap();
+  }
   delay(wifi ? 1 : 5);
 }
 

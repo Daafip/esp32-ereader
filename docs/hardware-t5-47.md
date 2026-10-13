@@ -1,7 +1,8 @@
 # Hardware notes: LilyGo T5-4.7" S3 (second board)
 
 The reader also builds for the LilyGo T5-4.7" S3 (T5-ePaper-S3). It started as an
-example of what porting to another board takes. Nothing here has run on a board yet:
+example of what porting to another board takes; the M5Stack papers followed
+(`docs/hardware-m5paper.md`), sharing this page's canvas backend and FastEPD setup. Nothing here has run on a board yet:
 **LILYGO** = from LilyGo's repo, **VERIFY** = to check on a board.
 
 Source: <https://github.com/Xinyuan-LilyGO/LilyGo-EPD47> (commit `5022422`, 2026-09):
@@ -41,7 +42,7 @@ All in `firmware/include/boards/t5_47_s3.h`.
 
 - **FastEPD 2.2.0** (`bitbank2/FastEPD@2.2.0`, Apache-2.0, same author as bb_epaper)
   drives the panel. It has no preset for this board. Its LilyGo T5 Pro preset uses the
-  same 74HCT4094 control scheme on other pins, so `src/fastepd_panel.cpp` defines a
+  same 74HCT4094 control scheme on other pins, so `src/fastepd_panel.cpp` (behind `src/panel.h`) defines a
   custom panel with this board's pins and reuses FastEPD's `LilyGoEinkPower`,
   `LilyGoIOInit` and `LilyGoRowControl`.
   - The shift-register bit order matches LilyGo's own driver (OE, mode, scan direction,

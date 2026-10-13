@@ -2,11 +2,16 @@
 
 #ifdef BOARD_PANEL_FASTEPD
 
-#include "fastepd_panel.h"
-
 #include <FastEPD.h>
+#include <esp_rom_gpio.h>
+#include <soc/gpio_sig_map.h>
 #include <string.h>
 
+#include "panel.h"
+
+// FastEPD drives the T5-4.7" through a custom panel definition and the M5PaperS3
+// through its own preset (BOARD_FASTEPD_PRESET).
+//
 // FastEPD 2.2.0 functions with external linkage that its public header doesn't
 // declare (FastEPD.inl). FASTEPD::initCustomPanel() only runs the I/O callback;
 // the parallel bus and the buffers need these, as in bbepInitPanel().
@@ -32,9 +37,22 @@ const uint8_t kWaveform[] = {
 };
 static_assert(sizeof(kWaveform) == 16 * 8, "16 gray levels x 8 passes");
 
-class T547 : public FASTEPD {
+class Panel : public FASTEPD {
  public:
+#ifdef BOARD_FASTEPD_PRESET
   int init() {
+    const int rc = initPanel(BOARD_FASTEPD_PRESET);
+    // The preset's dummy D/C pin can be a real pin (PaperS3: the SD card's CS).
+    // The LCD bus never needs it: give it back to the GPIO matrix.
+    esp_rom_gpio_connect_out_signal(kEpdDummyDc, SIG_GPIO_OUT_IDX, false, false);
+    pinMode(kEpdDummyDc, OUTPUT);
+    digitalWrite(kEpdDummyDc, HIGH);
+    return rc;
+  }
+
+  void allOutputsLow() {}
+#else
+  int init() {  // T5-4.7": custom panel on the LilyGo T5 Pro control scheme
     BBPANELDEF &d = _state.panelDef;
     memset(&d, 0, sizeof(d));
     d.width = kEpdNativeW;
@@ -72,13 +90,14 @@ class T547 : public FASTEPD {
     return rc;
   }
 
-  void allOutputsLow() {
+  void allOutputsLow() {  // also cuts the Molex/3.3 V header supply (LilyGo epd_poweroff_all)
     _state.shift_data = 0;
     bbepSendShiftData(&_state);
   }
+#endif
 };
 
-T547 epd;
+Panel epd;
 bool ready = false;
 
 }  // namespace
@@ -99,6 +118,10 @@ void update(Refresh mode) {
     case Refresh::Fast: epd.fullUpdate(CLEAR_NONE, false); break;
     case Refresh::Partial: epd.partialUpdate(false); break;
   }
+}
+
+void standby() {
+  if (ready) epd.einkPower(0);  // updates already end with the rails off
 }
 
 void powerOff() {

@@ -31,7 +31,8 @@ using ItemFn = void (*)(int index, Item &item, void *ctx);
 
 // Footer hint: [KEY] action (hold) holdAction, for the NEXT or MENU role.
 // The chips name the board's gestures: NEXT / MENU and "hold" with two buttons,
-// TAP / HOLD and "2x" / "long" with one (see input.h).
+// TAP / HOLD and "2x" / "long" with one (see input.h). Touch boards draw the
+// actions as buttons instead ([open] (back)), tappable via hit().
 // kArrowDown / kArrowUp as an action draw an arrow instead of text.
 constexpr const char *kArrowDown = "\xE2\x96\xBC";  // U+25BC
 constexpr const char *kArrowUp = "\xE2\x96\xB2";    // U+25B2
@@ -43,6 +44,18 @@ struct Hint {
 };
 
 enum class Icon : uint8_t { Card, Book, Battery, Warning };
+
+// Touch boards: what is under (x, y) on the screen drawn last (rows, footer
+// buttons, the Go to position bar). Kind None: nothing.
+struct Hit {
+  enum Kind : uint8_t { None, Chip, Row, Bar };
+  Kind kind = None;
+  Button button = Button::None;  // Chip: the role it stands for
+  bool second = false;           // Chip: the second (long-press) action
+  int row = -1;                  // Row: list index
+  int percent = 0;               // Bar: position along the bar
+};
+Hit hit(int x, int y);
 
 // Status bar over the bottom rows of a book page. batteryPct < 0 = unknown.
 void statusBar(const char *chapter, uint32_t page, uint32_t pageCount, int batteryPct);
@@ -66,6 +79,9 @@ void message(Icon icon, const char *headline, const char *line1, const char *lin
              Hint right);
 
 void sleepScreen(const char *title, const char *author, int percentRead, int batteryPct);
+
+// "Press any button to try again", in the board's words.
+const char *retryHint();
 
 // Wi-Fi transfer: QR code left, step + instructions right.
 struct WifiView {

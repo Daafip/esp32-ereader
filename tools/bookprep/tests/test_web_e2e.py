@@ -118,7 +118,7 @@ def test_browser_settings_change_layout(tmp_path, sample_epub, font_path):
 
 
 @pytest.mark.parametrize(
-    ("screen", "size"), [("t5-213", (250, 122, 13)), ("t5-47", (540, 960, 28))]
+    ("screen", "size"), [("t5-213", (250, 122, 13)), ("4.7in", (540, 960, 28))]
 )
 def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, screen, size):
     """The real page: open an EPUB, typeset it for the reader's screen (from

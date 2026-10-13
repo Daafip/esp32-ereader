@@ -1,12 +1,36 @@
 #include "power.h"
 
 #include <Arduino.h>
+#include <driver/gpio.h>
 #include <driver/rtc_io.h>
 #include <esp_sleep.h>
 
 #include "board.h"
+#include "touch.h"
 
 namespace power {
+namespace {
+
+// Wake sources for light sleep: the touch INT and the buttons, all active low.
+void enableInputWakeup() {
+  for (int pin : {touch::interruptPin(), kBtnNext, kBtnMenu, kBtnPrev}) {
+    if (pin >= 0) gpio_wakeup_enable(gpio_num_t(pin), GPIO_INTR_LOW_LEVEL);
+  }
+  esp_sleep_enable_gpio_wakeup();
+}
+
+}  // namespace
+
+void begin() {
+  if (kPowerHoldPin >= 0) {
+    pinMode(kPowerHoldPin, OUTPUT);
+    digitalWrite(kPowerHoldPin, HIGH);
+  }
+  if (kPowerOffPulsePin >= 0) {
+    pinMode(kPowerOffPulsePin, OUTPUT);
+    digitalWrite(kPowerOffPulsePin, LOW);
+  }
+}
 
 Wake wakeReason() {
   switch (esp_sleep_get_wakeup_cause()) {
@@ -35,7 +59,33 @@ uint32_t batteryMv() {
   return sum / 16 * kBatDividerNum;
 }
 
+bool lightSleep(uint32_t timerSeconds) {
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  enableInputWakeup();
+  if (timerSeconds) esp_sleep_enable_timer_wakeup(uint64_t(timerSeconds) * 1000000ULL);
+  Serial.flush();
+  esp_light_sleep_start();
+  return esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_TIMER;
+}
+
 void deepSleep(uint32_t timerSeconds) {
+  if (kLightSleep) {  // M5: off
+    Serial.println("power off");
+    Serial.flush();
+    if (kPowerHoldPin >= 0) digitalWrite(kPowerHoldPin, LOW);
+    for (int i = 0; kPowerOffPulsePin >= 0 && i < 5; i++) {  // as M5Unified does it
+      digitalWrite(kPowerOffPulsePin, LOW);
+      delay(50);
+      digitalWrite(kPowerOffPulsePin, HIGH);
+      delay(50);
+    }
+    delay(500);
+    // Still here: USB power. Wait for a touch or button, then start over.
+    if (kPowerHoldPin >= 0) digitalWrite(kPowerHoldPin, HIGH);
+    if (kPowerOffPulsePin >= 0) digitalWrite(kPowerOffPulsePin, LOW);
+    lightSleep(0);
+    esp_restart();
+  }
   // NEXT: ext0, wake on low (T5-2.13: GPIO39 with an external pull-up).
   if (kBtnNextPullup) {
     rtc_gpio_pullup_en(gpio_num_t(kBtnNext));
