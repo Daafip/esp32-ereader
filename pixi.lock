@@ -408,7 +408,7 @@ packages:
 - pypi: ./tools/bookprep
   name: bookprep
   version: 0.1.0
-  sha256: 94170c8ebd98b56a95dec3b99824e8b7bb9c845704ae9a90b03a1871b29ddd08
+  sha256: 216ebfa918acf81fad3c0493c77e3939b97dfc58c6f35f587bc16407512a2f69
   requires_dist:
   - pillow
   - pyphen

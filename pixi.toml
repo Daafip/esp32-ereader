@@ -2,6 +2,8 @@
 name = "t5-reader"
 description = "Pocket e-reader for the LilyGo T5-2.13 (host pre-renders, device blits)"
 authors = ["David Haasnoot <D.Haasnoot@hkv.nl>"]
+license = "GPL-3.0-or-later"
+license-file = "LICENSE"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "win-64"]
 

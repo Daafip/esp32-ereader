@@ -52,4 +52,21 @@ Book conversion:
 
 Tooling: [pixi](https://pixi.sh) runs everything (`pixi run --list`).
 
-Because bb_epaper is GPL-3.0, the firmware images are GPL-3.0 as well.
+## License
+
+GPL-3.0-or-later, see [LICENSE](LICENSE). The firmware links bb_epaper (GPL-3.0-or-later),
+so the firmware images are under the GPL as well.
+
+Third-party parts keep their own licences:
+
+- [FastEPD](https://github.com/bitbank2/FastEPD): Apache-2.0 (downloaded at build time;
+  `firmware/src/fastepd_panel.cpp` contains its waveform table)
+- [QR Code generator](https://github.com/nayuki/QR-Code-generator), vendored in
+  `firmware/lib/qrcodegen`: MIT
+- Fonts: Ubuntu Font Licence 1.0 (Ubuntu; also the bitmap UI fonts in
+  `firmware/include/fonts`) and SIL OFL 1.1 (Literata, Atkinson Hyperlegible,
+  Merriweather)
+- Hyphenation patterns from Pyphen: their own licences
+
+The reader serves the full font licences and the pattern notices at `/licenses.txt`
+on its Wi-Fi page.

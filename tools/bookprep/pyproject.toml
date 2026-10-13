@@ -7,6 +7,7 @@ name = "bookprep"
 version = "0.1.0"
 description = "Pre-render EPUB/TXT books to .t5b page bitmaps for the T5-2.13 e-reader"
 requires-python = ">=3.11"
+license = "GPL-3.0-or-later"  # the whole repository: ../../LICENSE
 # Runtime deps come from conda-forge via pixi.toml; listed here for pip users.
 dependencies = ["pillow", "pyphen", "ebooklib", "beautifulsoup4", "lxml"]
 
