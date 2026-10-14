@@ -1,0 +1,47 @@
+# Publishes the browser installer (https://daafip.github.io/esp32-ereader/) when
+# its page changes on main, with the firmware of the latest release: page fixes go
+# online without a firmware release. New versions are published by release.yml.
+# Runs by hand too (Actions -> installer -> Run workflow).
+name: installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - installer/**
+      - tools/make_installer.py
+      - .github/workflows/installer.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Firmware of the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download --repo "$GITHUB_REPOSITORY" --pattern '*-reader-*.bin' --dir release
+
+      - name: Installer page
+        run: python3 tools/make_installer.py --release release --out out/installer
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/installer
+
+      - id: deploy
+        uses: actions/deploy-pages@v5
