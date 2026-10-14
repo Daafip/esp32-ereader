@@ -28,3 +28,6 @@ int wrapText(const char *text, int maxWidth, MeasureFn measure, void *ctx, const
 
 // "27/3596  ·  1%" (UTF-8 middle dot; page is 0-based, shown 1-based)
 void formatProgress(uint32_t page, uint32_t pageCount, char *out, size_t outSize);
+
+// "6.2 GB", "740 MB", "12 KB" (binary units, rounded; GB with one decimal)
+void formatBytes(uint64_t bytes, char *out, size_t outSize);

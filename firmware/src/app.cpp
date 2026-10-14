@@ -561,8 +561,10 @@ void openAbout() {
   snprintf(v[2], sizeof(v[2]), "%s", book.header().title);
   snprintf(v[3], sizeof(v[3]), tr(S::PositionValue), unsigned(page + 1),
            unsigned(book.pageCount()), book.chapterForPage(page) + 1, book.tocCount());
-  snprintf(v[4], sizeof(v[4]), tr(S::MemoryValue), unsigned(storage::cardSizeMb()),
-           unsigned(ESP.getFreeHeap() / 1024));
+  char card[16] = "-";
+  const int64_t room = storage::freeBytes();
+  if (room >= 0) formatBytes(uint64_t(room), card, sizeof(card));
+  snprintf(v[4], sizeof(v[4]), tr(S::MemoryValue), card, unsigned(ESP.getFreeHeap() / 1024));
   snprintf(v[5], sizeof(v[5]), tr(S::WakeValue), unsigned(rtc.imageMs), unsigned(rtc.wakes));
   const char *labels[] = {tr(S::Firmware), tr(S::Battery), tr(S::Book),
                           tr(S::Position), tr(S::Memory),  tr(S::WakeToPage)};

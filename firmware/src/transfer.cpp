@@ -342,6 +342,23 @@ void handleInfo() {
   sendJson(200, out);
 }
 
+constexpr const char *kCardFull = "not enough space on the SD card";
+
+// Why isSafeFileName() refused an upload's name, for the page.
+const char *badNameReason(String name, const Kind &k) {
+  static char tooLong[48];
+  if (name.length() > kMaxFileName) {
+    snprintf(tooLong, sizeof(tooLong), "file name too long (%u bytes at most)",
+             unsigned(kMaxFileName));
+    return tooLong;
+  }
+  name.toLowerCase();
+  for (size_t i = 0; i < k.extCount; i++) {
+    if (name.endsWith(k.exts[i])) return "file name not allowed (leading dot or \\/:*?\"<>|)";
+  }
+  return "file type not allowed here";
+}
+
 void failUpload(int status, const char *message) {
   if (upStatus == 200) {
     upStatus = status;
@@ -396,7 +413,14 @@ void handleUploadData() {
       const int slash = max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
       if (slash >= 0) name = name.substring(slash + 1);
       if (!isSafeFileName(name.c_str(), upKind->exts, upKind->extCount)) {
-        return failUpload(400, "file type not allowed here");
+        return failUpload(400, badNameReason(name, *upKind));
+      }
+      // Refuse what can't fit at once instead of after a card-full write. The written
+      // copy goes next to a book it replaces, so the whole file must fit. (The body is
+      // still read to the end before the reply: WebServer has no early answer.)
+      const int64_t room = storage::freeBytes();
+      if (room >= 0 && int64_t(server.clientContentLength()) > room) {
+        return failUpload(507, kCardFull);
       }
       String dir = upKind->dir;
       if (upKind == &kBookKind) {
@@ -424,15 +448,21 @@ void handleUploadData() {
         memcpy(upBuf + upFill, up.buf + offset, n);
         upFill += n;
         offset += n;
-        if (upFill == sizeof(upBuf) && !flushUpload()) return failUpload(507, "SD card full?");
+        if (upFill == sizeof(upBuf) && !flushUpload()) return failUpload(507, kCardFull);
       }
       state.lastActivityMs = millis();
       break;
     }
     case UPLOAD_FILE_END: {
       if (upStatus != 200) return;
-      if (!flushUpload()) return failUpload(507, "SD card full?");
+      if (!flushUpload()) return failUpload(507, kCardFull);
       upFile.close();
+      {  // the last bytes sit in a stdio buffer until close(), which can't report a full card
+        fs::File f = SD.open(upTmp, FILE_READ);
+        const size_t stored = f ? f.size() : 0;
+        if (f) f.close();
+        if (stored != up.totalSize) return failUpload(507, kCardFull);
+      }
       const bool isBook = upKind == &kBookKind;
       if (isBook && !validateUpload()) return;
       if (upKind == &kPictureKind && up.totalSize != size_t(kPageBytes)) {
@@ -479,13 +509,20 @@ void handleUploadData() {
   }
 }
 
+// The reply carries the card's free space, so the page's storage line stays current.
 void handleUploadDone() {
-  if (upStatus != 200) return sendError(upStatus, upError.c_str());
+  if (upStatus != 200 && upStatus != 507) return sendError(upStatus, upError.c_str());
   String out = "{";
-  addInt(out, "ok", 1);
-  addString(out, "title", upTitle);
+  if (upStatus == 200) {
+    addInt(out, "ok", 1);
+    addString(out, "title", upTitle);
+  } else {
+    addString(out, "error", upError.c_str());
+  }
+  const int64_t room = storage::freeBytes();
+  if (room >= 0) addNumber(out, "free", uint64_t(room));
   out += '}';
-  sendJson(200, out);
+  sendJson(upStatus, out);
 }
 
 void failFirmware(int status, const char *message) {

@@ -93,7 +93,10 @@ bool mount() {
 
 bool mounted() { return isMounted; }
 
-uint32_t cardSizeMb() { return isMounted ? uint32_t(SD.cardSize() >> 20) : 0; }
+int64_t freeBytes() {
+  const uint64_t total = isMounted ? SD.totalBytes() : 0;
+  return total ? int64_t(total - SD.usedBytes()) : -1;
+}
 
 t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover) {
   uint8_t buf[t5b::kHeaderSize];

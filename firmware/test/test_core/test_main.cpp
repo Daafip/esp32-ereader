@@ -558,6 +558,22 @@ static void test_format_progress() {
   TEST_ASSERT_EQUAL_STRING("3596/3596  \xC2\xB7  100%", out);
 }
 
+static void test_format_bytes() {
+  char out[16];
+  formatBytes(0, out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("0 KB", out);
+  formatBytes(1536, out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("2 KB", out);
+  formatBytes(740ull << 20, out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("740 MB", out);
+  formatBytes((62ull << 30) / 10, out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("6.2 GB", out);
+  formatBytes(1ull << 30, out, sizeof(out));
+  TEST_ASSERT_EQUAL_STRING("1.0 GB", out);
+  formatBytes(119ull << 30, out, sizeof(out));  // a "128 GB" card
+  TEST_ASSERT_EQUAL_STRING("119.0 GB", out);
+}
+
 // --- menu -------------------------------------------------------------------
 
 static void test_list_model_scrolls_and_wraps() {
@@ -833,6 +849,7 @@ int main() {
   RUN_TEST(test_ascii_fold);
   RUN_TEST(test_fit_text);
   RUN_TEST(test_format_progress);
+  RUN_TEST(test_format_bytes);
   RUN_TEST(test_list_model_scrolls_and_wraps);
   RUN_TEST(test_settings_options_keys_and_language);
   RUN_TEST(test_translations_complete);

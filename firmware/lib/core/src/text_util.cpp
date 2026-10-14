@@ -182,3 +182,14 @@ void formatProgress(uint32_t page, uint32_t pageCount, char *out, size_t outSize
   const unsigned pct = unsigned(uint64_t(page + 1) * 100 / pageCount);
   snprintf(out, outSize, "%u/%u  \xC2\xB7  %u%%", unsigned(page + 1), unsigned(pageCount), pct);
 }
+
+void formatBytes(uint64_t bytes, char *out, size_t outSize) {
+  if (bytes >= (uint64_t(1) << 30)) {
+    const uint64_t tenths = (bytes * 10 + (uint64_t(1) << 29)) >> 30;
+    snprintf(out, outSize, "%u.%u GB", unsigned(tenths / 10), unsigned(tenths % 10));
+  } else if (bytes >= (uint64_t(1) << 20)) {
+    snprintf(out, outSize, "%u MB", unsigned((bytes + (1u << 19)) >> 20));
+  } else {
+    snprintf(out, outSize, "%u KB", unsigned((bytes + 512) >> 10));
+  }
+}

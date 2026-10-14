@@ -124,20 +124,18 @@ def test_browser_settings_change_layout(tmp_path, sample_epub, font_path):
     assert big["pages"] >= 3
 
 
-@pytest.mark.parametrize(
-    ("screen", "size"), [("t5-213", (250, 122, 13)), ("4.7in", (540, 960, 28))]
-)
-def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, screen, size):
-    """The real page: open an EPUB, typeset it for the reader's screen (from
-    /api/info), upload book + original + settings to the dev server (same API as
-    the firmware)."""
+def upload_from_page(tmp_path: Path, epub: Path, name: str, **server) -> tuple[str, str]:
+    """The real page against the dev server: open `epub` under file name `name`,
+    typeset it and press "Upload to reader". Returns (body data-upload, the DOM)."""
+    from urllib.parse import quote
+
     from bookprep.devserver import make_server
 
-    srv = make_server(tmp_path, "1234", port=0, fonts=False, screen=screen)
-    shutil.copy(sample_epub, tmp_path / "www" / "testboek.epub")
+    srv = make_server(tmp_path, "1234", port=0, fonts=False, **server)
+    shutil.copy(epub, tmp_path / "www" / name)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
-        url = f"http://127.0.0.1:{srv.server_address[1]}/?k=1234#typeset=testboek.epub&upload"
+        url = f"http://127.0.0.1:{srv.server_address[1]}/?k=1234#typeset={quote(name)}&upload"
         dom = subprocess.run(
             [chromium(), "--headless=new", "--disable-gpu", "--no-first-run",
              "--virtual-time-budget=60000", "--dump-dom", url],
@@ -146,7 +144,19 @@ def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, scre
     finally:
         srv.shutdown()
     status = re.search(r'<body[^>]*data-upload="([^"]*)"', dom)
-    assert status and status.group(1) == "ok", status.group(1) if status else dom[-500:]
+    assert status, dom[-500:]
+    return html.unescape(status.group(1)), dom
+
+
+@pytest.mark.parametrize(
+    ("screen", "size"), [("t5-213", (250, 122, 13)), ("4.7in", (540, 960, 28))]
+)
+def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, screen, size):
+    """The real page: open an EPUB, typeset it for the reader's screen (from
+    /api/info), upload book + original + settings to the dev server (same API as
+    the firmware)."""
+    status, _ = upload_from_page(tmp_path, sample_epub, "testboek.epub", screen=screen)
+    assert status == "ok", status
     sd = tmp_path / "sd" / "books"
     book = T5BFile(sd / "testboek.t5b")
     assert book.header.title == "Testboek"
@@ -159,6 +169,26 @@ def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, scre
     box = (SCREENS[screen].cover_w, SCREENS[screen].cover_h)
     assert book.cover is not None
     assert book.cover.width <= box[0] and book.cover.height <= box[1]
+
+
+def test_page_shortens_long_file_names(tmp_path, sample_epub):
+    """The reader takes names of 64 bytes at most (the book, its original and its
+    settings); longer ones were refused as "file type not allowed here"."""
+    name = "Je hebt wel iets te verbergen - Maurits Martijn, Dimitri Tokmetzis.epub"
+    status, _ = upload_from_page(tmp_path, sample_epub, name)
+    assert status == "ok", status
+    sd = tmp_path / "sd" / "books"
+    stem = "Je_hebt_wel_iets_te_verbergen_-_Maurits_Martijn_Dimitri_Tok"
+    for path in (sd / f"{stem}.t5b", sd / ".src" / f"{stem}.epub", sd / ".src" / f"{stem}.json"):
+        assert path.exists() and len(path.name) <= 64, path
+
+
+def test_page_refuses_a_book_that_does_not_fit_before_sending(tmp_path, sample_epub):
+    """A full card: the page says so at once instead of after sending everything."""
+    status, dom = upload_from_page(tmp_path, sample_epub, "testboek.epub", card_mb=0.002)
+    assert status.startswith("error: Not enough space on the reader"), status
+    assert "2 KB free of 2 KB" in dom  # the storage line
+    assert not list((tmp_path / "sd").rglob("*.t5b"))
 
 
 def test_page_searches_a_book_on_the_reader(tmp_path, sample_epub, font_path):

@@ -39,7 +39,9 @@ struct BookEntry {
 // Mounts the card (tries 20, 10, 4 MHz). Safe to call again.
 bool mount();
 bool mounted();
-uint32_t cardSizeMb();
+// Free space on the card in bytes, or -1 if unknown. The first call after mounting
+// may scan the FAT (a second or two on a big card); FatFs keeps the count after that.
+int64_t freeBytes();
 
 // Reads and checks a book's header (and cover block, if any) for this screen.
 t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover = nullptr);

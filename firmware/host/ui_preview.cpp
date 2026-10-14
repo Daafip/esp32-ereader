@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
 
   const char *labels[] = {"Firmware", "Battery", "Book", "Position", "Memory", "Wake to page"};
   const char *values[] = {"0.7.0", "3.92 V" DOT "72%", title, "page 27/3596" DOT "ch. 3/25",
-                          "7580 MB card" DOT "214 KB free", "812 ms" DOT "1532 wakes"};
+                          "card 6.2 GB free" DOT "214 KB RAM", "812 ms" DOT "1532 wakes"};
   ui::details("About", labels, values, 6, {Button::None, nullptr, nullptr}, {Button::Menu, "back", nullptr},
               72);
   save("08-about");

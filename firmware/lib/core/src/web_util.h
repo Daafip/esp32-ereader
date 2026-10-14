@@ -8,8 +8,11 @@
 // control characters. Returns false if `out` was too small (output truncated).
 bool jsonEscape(const char *in, char *out, size_t outSize);
 
-// A plain file name we accept for upload/delete/download: 1-64 bytes, ends in one
-// of `exts` (any case, e.g. ".epub") with something before it, no path
+// Longest file name the reader accepts, in bytes.
+constexpr size_t kMaxFileName = 64;
+
+// A plain file name we accept for upload/delete/download: 1-kMaxFileName bytes, ends
+// in one of `exts` (any case, e.g. ".epub") with something before it, no path
 // separators, no leading dot, no control or shell-special characters.
 bool isSafeFileName(const char *name, const char *const *exts, size_t extCount);
 

@@ -99,6 +99,7 @@ class Handler(SimpleHTTPRequestHandler):
     root: Path
     code: str
     screen: Screen
+    card_bytes: int | None = None  # a fake card this small (--card-mb), else the real disk
 
     def log_message(self, fmt, *args):
         if not self.path.startswith(("/fonts/", "/hyph/")):
@@ -136,6 +137,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def card(self) -> Path:
         return self.root / "sd"
+
+    def card_space(self) -> tuple[int, int]:
+        """(total, free) bytes of the fake card."""
+        usage = shutil.disk_usage(self.root)
+        if not self.card_bytes:
+            return usage.total, usage.free
+        files = (p for p in self.card().rglob("*") if p.is_file())
+        used = sum(p.stat().st_size for p in files)
+        return self.card_bytes, max(0, min(usage.free, self.card_bytes - used))
 
     def sd(self, kind: str) -> Path:
         d = self.card() / KINDS[kind][0]
@@ -287,7 +297,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "source": source,
             })  # fmt: skip
         books.sort(key=lambda b: b["title"].lower())
-        usage = shutil.disk_usage(self.root)
+        total, free = self.card_space()
         font_files = sorted(self.sd("font").iterdir())
         fonts = [
             {"name": p.name, "size": p.stat().st_size}
@@ -306,7 +316,7 @@ class Handler(SimpleHTTPRequestHandler):
             "version": "dev", "board": BOARD_FOR_SCREEN.get(sc.id, sc.id),
             "lang": "nl" if state["settings"].get("language") == 1 else "en",
             "name": state["name"], "homeWifi": state["wifi"].get("ssid", ""), "locked": False,
-            "screen": screen, "battery": -1, "total": usage.total, "free": usage.free,
+            "screen": screen, "battery": -1, "total": total, "free": free,
             "stats": stats, "books": books, "fonts": fonts, "pictures": pictures,
         })  # fmt: skip
 
@@ -353,8 +363,14 @@ class Handler(SimpleHTTPRequestHandler):
             limit = max(limit, 4096 * page_bytes)
         if kind == "sleep":
             limit = page_bytes
+        if len(name.encode()) > 64:
+            return self.send_json(400, {"error": "file name too long (64 bytes at most)"})
         if not is_safe_name(name, exts):
             return self.send_json(400, {"error": f"only {'/'.join(exts)} files with a plain name"})
+        # as transfer.cpp: the whole request must fit next to a book it replaces
+        free = self.card_space()[1]
+        if int(self.headers.get("Content-Length", 0)) > free:
+            return self.send_json(507, {"error": "not enough space on the SD card", "free": free})
         if len(data) > limit:
             return self.send_json(413, {"error": "file too large"})
         if kind == "sleep" and len(data) != page_bytes:
@@ -380,7 +396,7 @@ class Handler(SimpleHTTPRequestHandler):
             if dest.exists():  # replacing a book (restyled): positions move along
                 self.remap_positions(dest, book.header.page_count)
         tmp.replace(dest)
-        return self.send_json(200, {"ok": 1, "title": title})
+        return self.send_json(200, {"ok": 1, "title": title, "free": self.card_space()[1]})
 
     def remap_positions(self, dest: Path, new: int) -> None:
         with contextlib.suppress(ValueError):
@@ -580,6 +596,7 @@ def make_server(
     port: int = 8000,
     fonts: bool = True,
     screen: str = DEFAULT_SCREEN,
+    card_mb: float | None = None,
 ) -> ThreadingHTTPServer:
     root.mkdir(parents=True, exist_ok=True)
     write_files(build_assets(Path("firmware/.pio/fontcache"), fonts=fonts), root / "www")
@@ -590,6 +607,7 @@ def make_server(
     Bound.root = root
     Bound.code = code
     Bound.screen = SCREENS[screen]
+    Bound.card_bytes = int(card_mb * 1048576) if card_mb else None
 
     def factory(*args, **kwargs):
         return Bound(*args, directory=str(root / "www"), **kwargs)
@@ -604,10 +622,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--lan", action="store_true", help="listen on all interfaces (phone access)")
     p.add_argument("--code", default=None, help="session code (default: random)")
     p.add_argument("--screen", choices=sorted(SCREENS), default=DEFAULT_SCREEN, help="reader")
+    p.add_argument("--card-mb", type=float, help="fake card size (try a full card)")
     args = p.parse_args(argv)
     code = args.code or f"{random.randrange(10000):04d}"
     bind = "0.0.0.0" if args.lan else "127.0.0.1"
-    server = make_server(args.root, code, bind, args.port, screen=args.screen)
+    server = make_server(args.root, code, bind, args.port, screen=args.screen, card_mb=args.card_mb)
     host = lan_address() if args.lan else "localhost"
     print(f"T5 reader dev server: http://{host}:{args.port}/?k={code}   (code {code})")
     print(f"screen: {SCREENS[args.screen].name}")

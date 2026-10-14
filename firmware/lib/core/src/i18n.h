@@ -65,7 +65,7 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(WakeToPage, "Wake to page", "Wekken tot pagina")                                       \
   X(UsbPower, "USB power", "USB-voeding")                                                  \
   X(PositionValue, "page %u/%u  \xC2\xB7  ch. %d/%d", "pagina %u/%u  \xC2\xB7  hfst. %d/%d") \
-  X(MemoryValue, "%u MB card  \xC2\xB7  %u KB free", "%u MB kaart  \xC2\xB7  %u KB vrij")  \
+  X(MemoryValue, "card %s free  \xC2\xB7  %u KB RAM", "kaart %s vrij  \xC2\xB7  %u KB RAM")  \
   X(WakeValue, "%u ms  \xC2\xB7  %u wakes", "%u ms  \xC2\xB7  %u keer gewekt")             \
   /* Wi-Fi transfer */                                                                     \
   X(JoinWifi, "Join the Wi-Fi", "Verbind met de wifi")                                     \

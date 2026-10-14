@@ -42,13 +42,17 @@ ul{list-style:none;margin:0;padding:0}
 .link:hover{color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent)}
 .link.del:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
 .empty{justify-content:center;color:var(--muted);font-size:14px;padding:22px}
+.storage .ends{font-size:14px}
+.storage .bar{margin-top:8px}
+.storage.low .ends span:last-child{color:var(--danger)}
+.storage.low .bar i{background:var(--danger)}
 .statline{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px}
 .statline b{font-size:17px}
 .statline span{color:var(--muted)}
 .pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
-.pic{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px}
+.pic{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px}
 .pic canvas{display:block;width:100%;image-rendering:auto;background:#fff;border-radius:3px}
-.pic button{position:absolute;top:2px;right:2px}
+.pic .link{display:block;margin:4px auto 0;padding:4px 9px;font-size:13px}
 .addpic{display:grid;place-items:center;min-height:80px;color:var(--muted);font-size:14px;cursor:pointer;border-style:dashed}
 .fw{cursor:pointer}
 .fw .bar{margin-top:9px}
@@ -147,6 +151,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <h2><span data-t="reading">Reading</span><span id="streak"></span></h2>
     <div class="card statline" id="statline"></div>
     <h2><span data-t="onReader">On the reader</span><span id="count"></span></h2>
+    <div class="card storage" id="storage" hidden>
+      <div class="grow">
+        <div class="ends"><span data-t="storage">Storage</span><span id="storagetext"></span></div>
+        <div class="bar"><i id="storagebar"></i></div>
+      </div>
+    </div>
     <div id="books"></div>
     <h2><span data-t="pictures">Sleep pictures</span><span id="piccount"></span></h2>
     <div class="pics" id="pics"></div>
@@ -336,6 +346,8 @@ const T = {
     savingOriginal: "Saving the original for restyling…", statsLine: "{0} lines × ~{1} characters · {2} pages · {3}",
     addFont: "Add a font…", systemSerif: "System serif", systemSans: "System sans-serif",
     uploadFailed: "Upload failed: {0}", fontFailed: "Could not add the font: {0}",
+    storage: "Storage", storageLine: "{0} free of {1}",
+    noSpace: "Not enough space on the reader: this needs {0} and {1} is free. Delete books or pictures to make room.",
     nl_NL: "Dutch", en_GB: "English (UK)", en_US: "English (US)", fr: "French",
     pageOf: "{0} / {1}", bookmarkHere: "Bookmark this page", removeBookmark: "Remove bookmark", bookmarks: "Bookmarks",
     noMarks: "No bookmarks yet.", search: "Search in the book", find: "Find",
@@ -385,6 +397,8 @@ const T = {
     savingOriginal: "Origineel bewaren voor latere opmaak…", statsLine: "{0} regels × ~{1} tekens · {2} pagina's · {3}",
     addFont: "Lettertype toevoegen…", systemSerif: "Systeem-serif", systemSans: "Systeem-schreefloos",
     uploadFailed: "Versturen mislukt: {0}", fontFailed: "Kan het lettertype niet toevoegen: {0}",
+    storage: "Opslag", storageLine: "{0} vrij van {1}",
+    noSpace: "Niet genoeg ruimte op de lezer: dit is {0} en er is {1} vrij. Verwijder boeken of afbeeldingen om ruimte te maken.",
     nl_NL: "Nederlands", en_GB: "Engels (VK)", en_US: "Engels (VS)", fr: "Frans",
     pageOf: "{0} / {1}", bookmarkHere: "Bladwijzer op deze pagina", removeBookmark: "Bladwijzer weghalen", bookmarks: "Bladwijzers",
     noMarks: "Nog geen bladwijzers.", search: "Zoeken in het boek", find: "Zoek",
@@ -435,6 +449,10 @@ const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x 
 const screen = () => B.screenFor(info.screen);
 const pageBytes = () => Math.ceil(screen().width / 8) * screen().height;
 const folders = () => [...new Set(info.books.map((b) => b.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+// The reader takes file names of up to 64 bytes (isSafeFileName in web_util.cpp).
+const kMaxName = 64;
+const fitName = (name) => new TextEncoder().encode(name).length <= kMaxName ? name
+  : B.slug(stem(name)).slice(0, kMaxName - ext(name).length) + ext(name);
 const form = (fields, method = "POST") => ({ method, headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(fields).toString() });
 
 // A page bitmap (1 bpp, .t5b layout) onto a canvas sized like the reader's screen.
@@ -486,7 +504,7 @@ function send(url, blob, name, onProgress) {
       let j = {};
       try { j = JSON.parse(xhr.responseText); } catch (e) { /* not JSON */ }
       if (xhr.status === 200) resolve(j);
-      else reject(new Error(j.error || t("failed", xhr.status)));
+      else reject(Object.assign(new Error(j.error || t("failed", xhr.status)), { status: xhr.status, free: j.free }));
     };
     xhr.onerror = () => reject(new Error(t("connectionLost")));
     const form = new FormData();
@@ -494,9 +512,27 @@ function send(url, blob, name, onProgress) {
     xhr.send(form);
   });
 }
+// The reader only answers once everything is sent, so what can't fit is refused here first.
+function checkSpace(bytes) {
+  if (info.total > 0 && bytes > info.free) throw new Error(t("noSpace", size(bytes), size(info.free)));
+}
+function noteFree(free) {
+  if (typeof free !== "number") return;
+  info.free = free;
+  renderStorage();
+}
 // folder: where a book goes (undefined: the reader keeps it where a book of that name is)
-const upload = (kind, blob, name, onProgress, folder) =>
-  send("/api/upload?kind=" + kind + (folder === undefined ? "" : "&folder=" + encodeURIComponent(folder)), blob, name, onProgress);
+async function upload(kind, blob, name, onProgress, folder) {
+  checkSpace(blob.size);
+  try {
+    const r = await send("/api/upload?kind=" + kind + (folder === undefined ? "" : "&folder=" + encodeURIComponent(folder)), blob, name, onProgress);
+    noteFree(r.free);
+    return r;
+  } catch (err) {
+    noteFree(err.free);
+    throw err.status === 507 ? new Error(t("noSpace", size(blob.size), size(info.free))) : err;
+  }
+}
 
 async function refresh() {
   try {
@@ -519,8 +555,7 @@ function syncClock() {
 function render() {
   $("#name").textContent = info.name || "T5 Reader";
   $("#open-settings").hidden = false;
-  const battery = info.battery >= 0 ? t("battery", info.battery) + " · " : "";
-  $("#meta").textContent = battery + t("free", size(info.free));
+  renderStorage();
   $("#fwver").textContent = info.version ? "v" + info.version : "";
   $("#count").textContent = info.books.length || "";
   renderStats();
@@ -529,6 +564,17 @@ function render() {
   if (!$("#fwsub").classList.contains("ok") && !$("#fwsub").classList.contains("err")) {
     $("#fwsub").textContent = t("otaHint", otaPrefix());
   }
+}
+
+function renderStorage() {
+  const battery = info.battery >= 0 ? t("battery", info.battery) : "";
+  const known = info.total > 0;
+  $("#meta").textContent = [battery, known ? t("free", size(info.free)) : ""].filter(Boolean).join(" · ");
+  $("#storage").hidden = !known;
+  if (!known) return;
+  $("#storagetext").textContent = t("storageLine", size(info.free), size(info.total));
+  $("#storagebar").style.width = Math.min(100, (info.total - info.free) / info.total * 100) + "%";
+  $("#storage").classList.toggle("low", info.free < info.total / 10);
 }
 
 function renderStats() {
@@ -621,7 +667,7 @@ async function addFiles(files) {
       const q = queueItem(f.name);
       if (demo) { q.done(t("demoNothing"), "ok"); continue; }
       try {
-        const r = await upload("book", f, f.name, (p) => q.progress(p, t("uploading", Math.round(p * 100), size(f.size))));
+        const r = await upload("book", f, fitName(f.name), (p) => q.progress(p, t("uploading", Math.round(p * 100), size(f.size))));
         q.done(t("added", r.title || f.name), "ok");
       } catch (err) { q.done(err.message, "err"); }
     } else queueItem(f.name).done(t("useTypes"), "err");
@@ -868,9 +914,10 @@ $("#fontfile").addEventListener("change", async (e) => {
   try {
     if (demo) { sessionFonts.set(f.name, await f.arrayBuffer()); current.settings.font = "session:" + f.name; }
     else {
-      await upload("font", f, f.name);
+      const name = fitName(f.name);
+      await upload("font", f, name);
       info = await api("/api/info");
-      current.settings.font = "user:" + f.name;
+      current.settings.font = "user:" + name;
     }
     syncControls();
     changed();
@@ -888,7 +935,8 @@ async function buildT5b() {
   return B.writeBook(current.book, current.layout, (n, total) => busy(t("typesettingN", n, total), n / total));
 }
 
-const fileNameFor = (source) => B.slug(stem(source.name)) + ".t5b";
+// leaves room for the .epub and .json kept beside it under the same name
+const fileNameFor = (source) => B.slug(stem(source.name)).slice(0, kMaxName - 5) + ".t5b";
 
 $("#s-download").addEventListener("click", async () => {
   try {
@@ -905,15 +953,20 @@ $("#s-upload").addEventListener("click", async () => {
   const c = current;
   const name = c.source.file ? c.source.file.replace(/^.*\//, "") : fileNameFor(c.source);
   const base = stem(name);
+  const original = c.source.onReader ? null : new Blob([c.source.bytes]);
+  const meta = new Blob([JSON.stringify(c.settings)], { type: "application/json" });
+  const extra = (original ? original.size : 0) + meta.size;
   try {
+    checkSpace((c.layout ? c.layout.pages.length * pageBytes() : 0) + extra);  // before typesetting, roughly
     busy(t("typesetting"), 0);
     const bytes = await buildT5b();
+    checkSpace(bytes.length + extra);
     await upload("book", new Blob([bytes]), name, (p) => busy(t("sending", Math.round(p * 100), size(bytes.length)), p), c.folder);
-    if (!c.source.onReader) {
+    if (original) {
       busy(t("savingOriginal"), 1);
-      await upload("source", new Blob([c.source.bytes]), base + ext(c.source.name));
+      await upload("source", original, base + ext(c.source.name));
     }
-    await upload("meta", new Blob([JSON.stringify(c.settings)], { type: "application/json" }), base + ".json");
+    await upload("meta", meta, base + ".json");
     $("#sheet").close();
     current = null;
     queueItem(name).done(t("added", c.book.title), "ok");
@@ -1127,7 +1180,7 @@ $("#reset").addEventListener("click", async () => {
 function renderPictures() {
   const pics = info.pictures || [];
   $("#piccount").textContent = pics.length || "";
-  $("#pics").innerHTML = pics.map((name) => `<div class="pic"><canvas data-pic="${esc(name)}"></canvas><button class="close" data-delpic="${esc(name)}" aria-label="${t("delete")}">×</button></div>`).join("")
+  $("#pics").innerHTML = pics.map((name) => `<div class="pic"><canvas data-pic="${esc(name)}"></canvas><button class="link del" data-delpic="${esc(name)}">${t("delete")}</button></div>`).join("")
     + `<label class="pic addpic" id="addpic">${t("noPictures")}</label>`;
   for (const c of document.querySelectorAll("[data-pic]")) {
     fitCanvas(c);
@@ -1263,7 +1316,10 @@ applyLang();
   if (hook) {
     const url = decodeURIComponent(hook[1]);
     await openSheet({ name: url.split("/").pop(), bytes: await (await fetch(url)).arrayBuffer(), onReader: false });
-    if (hook[2]) $("#s-upload").click();
+    if (hook[2]) {
+      window.alert = (m) => console.log(m);  // unattended: the result is in body data-upload
+      $("#s-upload").click();
+    }
   }
   const readerHook = location.hash.match(/^#reader=([^&]+)(?:&find=(.+))?$/);
   const book = readerHook && info.books.find((b) => b.file === decodeURIComponent(readerHook[1]));

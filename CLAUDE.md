@@ -38,7 +38,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Regenerate generated headers | `pixi run devpages` (test_pages.h), `pixi run ui-fonts` (fonts/), `pixi run web` (web_index.h from `firmware/web/index.html`) |
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
 | Browser converter tests | `pixi run web-test` (Node parity + headless Chromium) |
-| Web page without the reader | `pixi run web-dev` (`--lan` for a phone, `--screen 4.7in`) |
+| Web page without the reader | `pixi run web-dev` (`--lan` for a phone, `--screen 4.7in`, `--card-mb 5` for a full card) |
 
 ## Conventions
 

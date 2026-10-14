@@ -117,6 +117,27 @@ def test_uploads_are_validated(server, tmp_path):
     assert not list((root / "sd" / "books").glob("*.part"))
 
 
+def test_full_card_is_refused_with_the_free_space(tmp_path):
+    srv = make_server(tmp_path, CODE, port=0, fonts=False, card_mb=0.05)  # 52 KB card
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        data = info(base)
+        assert data["total"] == int(0.05 * 1048576) and data["free"] == data["total"]
+        status, body = upload(base, "book", "boek.t5b", t5b_bytes(tmp_path))
+        assert status == 200
+        free = json.loads(body)["free"]
+        assert free == info(base)["free"] < data["total"]
+        status, body = upload(base, "source", "boek.epub", bytes(free + 1))
+        assert status == 507
+        assert json.loads(body) == {"error": "not enough space on the SD card", "free": free}
+        assert not (tmp_path / "sd" / "books" / ".src" / "boek.epub").exists()
+        status, body = upload(base, "book", "x" * 61 + ".t5b", t5b_bytes(tmp_path))
+        assert status == 400 and b"too long" in body
+    finally:
+        srv.shutdown()
+
+
 def test_screen_is_reported_and_enforced(tmp_path):
     srv = make_server(tmp_path, CODE, port=0, fonts=False, screen="4.7in")
     threading.Thread(target=srv.serve_forever, daemon=True).start()

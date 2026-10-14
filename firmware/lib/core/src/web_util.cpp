@@ -40,7 +40,7 @@ bool jsonEscape(const char *in, char *out, size_t outSize) {
 
 bool isSafeFileName(const char *name, const char *const *exts, size_t extCount) {
   const size_t n = strlen(name);
-  if (n == 0 || n > 64 || name[0] == '.') return false;
+  if (n == 0 || n > kMaxFileName || name[0] == '.') return false;
   bool extOk = false;
   for (size_t i = 0; i < extCount && !extOk; i++) {
     const size_t e = strlen(exts[i]);

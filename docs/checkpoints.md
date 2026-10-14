@@ -91,6 +91,9 @@ the menus (Chapters, Go to %, Library, Settings, About).
    `pixi run fw-dist`; also try the merged `t5-reader-<version>.bin` (must be refused
    with "Magic byte is wrong").
 4. MENU on the reader: back to the library, new books listed.
+5. Full card (a small or nearly full card): "On the reader" shows the free space and
+   the bar; a book that doesn't fit is refused straight away with "Not enough space on
+   the reader" (nothing is sent). Settings → About shows the free card space too.
 
 **Send:** anything that didn't work, upload speed for a big book (serial log shows
 sizes), and whether the phone complained about "no internet".
