@@ -66,6 +66,13 @@ Refresh show(Refresh mode) {
 
 void setRotation(int degrees) { rotation = degrees; }
 
+void setFlipped(bool flipped) {
+  const int r = flipped ? (kEpdRotation == 90 ? 270 : 90) : kEpdRotation;
+  if (r == rotation) return;
+  rotation = r;
+  shown = false;  // the next partial update becomes a full one
+}
+
 void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
   canvas.setFont(FONT_6x8);
   canvas.setTextColor(color, bg);

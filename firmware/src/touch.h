@@ -16,4 +16,7 @@ bool read(int &x, int &y);
 bool pending();
 int interruptPin();  // the light-sleep wake source; -1 without touch
 
+// Settings -> Flip screen: coordinates turned 180 degrees with the image.
+void setFlipped(bool flipped);
+
 }  // namespace touch

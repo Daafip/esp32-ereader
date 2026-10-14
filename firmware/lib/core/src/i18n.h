@@ -102,6 +102,7 @@ enum class Lang : uint8_t { En, Nl, Count };
   /* settings */                                                                           \
   X(SetSleepScreen, "Sleep screen", "Slaapscherm")                                         \
   X(SetStatusBar, "Status bar", "Statusbalk")                                              \
+  X(SetFlip, "Flip screen", "Scherm omdraaien")                                            \
   X(SetHoldMenu, "Hold MENU", "MENU vasthouden")                                           \
   X(SetLongHold, "Long hold", "Lang vasthouden")                                           \
   X(SetLongPress, "Long press", "Lang drukken")                                            \

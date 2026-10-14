@@ -25,6 +25,7 @@ RTC_DATA_ATTR uint8_t rtcShown[kPageBytes];
 RTC_DATA_ATTR bool rtcShownValid = false;
 RTC_DATA_ATTR bool rtcKeptPowered = false;
 RTC_DATA_ATTR uint16_t rtcPartials = 0;
+RTC_DATA_ATTR int16_t rtcRotation = 0;  // rotation of the shown image; 0 = power-on
 
 bool panelRamValid = false;  // controller's "old" RAM equals rtcShown
 Timing timing;
@@ -162,7 +163,8 @@ void begin() {
   hardwareReset();                  // also leaves the controller's deep sleep
   panel.initIO(kEpdDc, kEpdRst, kEpdBusy, kEpdCs, kEpdMosi, kEpdSck, kEpdSpiHz);
   panel._bbep.x_offset = kEpdXOffsetBytes;  // used by every RAM window bb_epaper sets
-  panel.setRotation(kEpdRotation);
+  if (!rtcRotation) rtcRotation = kEpdRotation;
+  panel.setRotation(rtcRotation);
   panel.setBuffer(fb);
   panelRamValid = rtcKeptPowered && rtcShownValid;
   rtcKeptPowered = false;
@@ -240,6 +242,15 @@ Refresh show(Refresh mode) {
 }
 
 void setRotation(int degrees) { panel.setRotation(degrees); }
+
+void setFlipped(bool flipped) {
+  const int16_t r = flipped ? (kEpdRotation == 90 ? 270 : 90) : kEpdRotation;
+  if (r == rtcRotation) return;
+  rtcRotation = r;
+  panel.setRotation(r);
+  rtcShownValid = false;  // the glass shows the other orientation: next one is full
+  panelRamValid = false;
+}
 
 void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
   panel.setFont(FONT_6x8);

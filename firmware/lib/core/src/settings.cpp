@@ -37,6 +37,7 @@ int settingOptionCount(SettingId id) {
   switch (id) {
     case SettingId::SleepScreen: return 4;
     case SettingId::StatusBar: return 3;
+    case SettingId::Flip: return 2;
     case SettingId::HoldAction: return 4;
     case SettingId::LockOnSleep: return 2;
     case SettingId::Language: return int(Lang::Count);
@@ -55,6 +56,7 @@ int settingIndex(const Settings &s, SettingId id) {
   switch (id) {
     case SettingId::SleepScreen: i = int(s.sleepScreen); break;
     case SettingId::StatusBar: i = int(s.statusBar); break;
+    case SettingId::Flip: i = s.flip ? 1 : 0; break;
     case SettingId::HoldAction: i = int(s.holdAction); break;
     case SettingId::LockOnSleep: i = s.lockOnSleep ? 1 : 0; break;
     case SettingId::Language: i = int(s.language); break;
@@ -73,6 +75,7 @@ void setSettingIndex(Settings &s, SettingId id, int i) {
   switch (id) {
     case SettingId::SleepScreen: s.sleepScreen = SleepScreen(i); break;
     case SettingId::StatusBar: s.statusBar = StatusBarMode(i); break;
+    case SettingId::Flip: s.flip = i == 1; break;
     case SettingId::HoldAction: s.holdAction = HoldAction(i); break;
     case SettingId::LockOnSleep: s.lockOnSleep = i == 1; break;
     case SettingId::Language: s.language = Lang(i); break;
@@ -94,6 +97,7 @@ const char *settingKey(SettingId id) {
   switch (id) {
     case SettingId::SleepScreen: return "sleepScreen";
     case SettingId::StatusBar: return "statusBar";
+    case SettingId::Flip: return "flip";
     case SettingId::HoldAction: return "holdAction";
     case SettingId::LockOnSleep: return "lockOnSleep";
     case SettingId::Language: return "language";
@@ -121,6 +125,7 @@ const char *settingLabel(SettingId id, S holdLabel) {
   switch (id) {
     case SettingId::SleepScreen: return tr(S::SetSleepScreen);
     case SettingId::StatusBar: return tr(S::SetStatusBar);
+    case SettingId::Flip: return tr(S::SetFlip);
     case SettingId::HoldAction: return tr(holdLabel);
     case SettingId::LockOnSleep: return tr(S::SetLockOnSleep);
     case SettingId::Language: return tr(S::SetLanguage);
@@ -146,6 +151,7 @@ void settingOptionText(SettingId id, int i, char *out, size_t n) {
     case SettingId::SleepScreen: snprintf(out, n, "%s", tr(kScreens[i])); break;
     case SettingId::StatusBar: snprintf(out, n, "%s", tr(kBars[i])); break;
     case SettingId::HoldAction: snprintf(out, n, "%s", tr(kHolds[i])); break;
+    case SettingId::Flip:
     case SettingId::LockOnSleep:
     case SettingId::DeepSleep: snprintf(out, n, "%s", tr(i ? S::On : S::Off)); break;
     case SettingId::Language: snprintf(out, n, "%s", languageName(Lang(i))); break;

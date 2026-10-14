@@ -612,6 +612,16 @@ static void test_settings_options_keys_and_language() {
   TEST_ASSERT_EQUAL_STRING("600 ms", text);
   TEST_ASSERT_EQUAL_STRING("Long press", settingLabel(SettingId::HoldAction, S::SetLongPress));
 
+  TEST_ASSERT_FALSE(s.flip);  // the screen the right way up by default
+  cycleSetting(s, SettingId::Flip);
+  TEST_ASSERT_TRUE(s.flip);
+  settingValue(s, SettingId::Flip, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("on", text);
+  TEST_ASSERT_EQUAL_STRING("Flip screen", settingLabel(SettingId::Flip));
+  SettingId flipId;
+  TEST_ASSERT_TRUE(settingFromKey("flip", flipId));
+  TEST_ASSERT_EQUAL(int(SettingId::Flip), int(flipId));
+
   // every option round-trips through its index, every key back to its id
   for (int id = 0; id < kSettingCount; id++) {
     const SettingId sid = SettingId(id);

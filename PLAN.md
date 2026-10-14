@@ -209,6 +209,13 @@ checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.m
 - [x] Hold gesture remappable (sleep / bookmark / lock / menu); device name shown above the library
 - [ ] 🧑 Hardware check: see `docs/checkpoints.md` → "Phase 9 features"
 
+## After 1.0 (2026-10-14, release 1.1.0)
+
+- [x] Pictures: Atkinson dithering by default (also Floyd-Steinberg, ordered, threshold), sharpening, brightness/contrast in the picture editor; covers sharpened + Atkinson in both converters (parity-tested); contrast measured on the photo only in "Fit"
+- [x] Settings → Flip screen: image 180 degrees (rotation 90 <-> 270), the next refresh full; touch and the M5Paper's switch turn along
+- [x] Installer on esptool-js 0.7.0 (DTR/RTS set together; ESP Web Tools' 0.6 couldn't reset the T5-2.13 into its bootloader on Linux), "Erase everything" box, Linux section (Snap Chromium `raw-usb`, `dialout`); page-only updates from main (`installer.yml`)
+- [ ] 🧑 Flip screen on the T5-2.13 (expected fine: the 1-byte RAM offset is symmetric)
+
 ---
 
 ## Decisions

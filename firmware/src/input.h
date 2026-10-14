@@ -21,6 +21,7 @@ enum class Key : uint8_t { None, NextShort, NextLong, NextRepeat, MenuShort, Men
 void begin(uint16_t longPressMs);
 void setLongPress(uint16_t ms);
 void setRepeat(bool enable);  // NEXT held: repeat after the long press (lists; two buttons only)
+void setFlipped(bool on);     // Settings -> Flip screen: up/down keys swap (M5Paper switch)
 
 Key poll();  // non-blocking; at most one key per call
 

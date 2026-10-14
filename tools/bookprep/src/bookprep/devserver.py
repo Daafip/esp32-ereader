@@ -51,7 +51,8 @@ BOARD_FOR_SCREEN = {"t5-213": "t5-213", "4.7in": "t5-47"}
 SETTINGS = [
     ("sleepScreen", "Sleep screen", ["book", "cover", "pictures", "keep page"], 0),
     ("statusBar", "Status bar", ["full", "minimal", "hidden"], 0),
-    ("holdAction", "Hold MENU", ["sleep", "bookmark", "lock", "menu"], 0),
+    ("flip", "Flip screen", ["off", "on"], 0),
+    ("holdAction", "Long hold", ["sleep", "bookmark", "lock", "menu"], 0),
     ("lockOnSleep", "Lock when asleep", ["off", "on"], 0),
     ("language", "Language", ["English", "Nederlands"], 0),
     ("fullEvery", "Full refresh",

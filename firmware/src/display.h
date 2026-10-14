@@ -44,6 +44,10 @@ Refresh show(Refresh mode);
 
 void setRotation(int degrees);  // 90 or 270 (calibration)
 
+// Settings -> Flip screen: the image upside down (kEpdRotation 90 <-> 270). A
+// change makes the next show() a full refresh: the glass has the old orientation.
+void setFlipped(bool flipped);
+
 // ASCII text in bb_epaper's built-in 6x8 font, top-left at (x, y), drawn one
 // character at a time: in buffered mode bb_epaper's FONT_6x8 path draws every
 // character of a string at the same x (bug in 2.1.11 and upstream main).

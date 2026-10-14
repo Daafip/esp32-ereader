@@ -31,6 +31,7 @@
 #include "settings.h"
 #include "storage.h"
 #include "text_util.h"
+#include "touch.h"
 #include "transfer.h"
 #include "ui.h"
 #include "web_util.h"
@@ -112,6 +113,9 @@ Settings boardDefaults() {
 void applySettings() {
   setLanguage(settings.language);
   input::setLongPress(settings.longPressMs);
+  input::setFlipped(settings.flip);
+  touch::setFlipped(settings.flip);
+  display::setFlipped(settings.flip);  // a change makes the next refresh a full one
 }
 
 void setScreen(Screen s) {
@@ -975,6 +979,7 @@ void setup() {
                 int(shown), locked ? ", locked" : "");
 
   display::begin();
+  applySettings();  // after display::begin(): the screen orientation
   // Locked and woken by a press that doesn't unlock: back to sleep, screen untouched.
   const bool buttonWake = wake == power::Wake::NextButton || wake == power::Wake::MenuButton;
   if (locked && buttonWake && key != Key::MenuLong &&

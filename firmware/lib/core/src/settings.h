@@ -26,6 +26,7 @@ enum class HoldAction : uint8_t { Sleep, Bookmark, Lock, Menu };
 struct Settings {
   SleepScreen sleepScreen = SleepScreen::Book;
   StatusBarMode statusBar = StatusBarMode::Full;
+  bool flip = false;  // screen upside down (the reader held the other way round)
   HoldAction holdAction = HoldAction::Sleep;
   bool lockOnSleep = false;
   Lang language = Lang::En;
@@ -39,6 +40,7 @@ struct Settings {
 enum class SettingId : uint8_t {
   SleepScreen,
   StatusBar,
+  Flip,
   HoldAction,
   LockOnSleep,
   Language,

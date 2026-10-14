@@ -18,6 +18,7 @@ constexpr uint16_t kRegStatus = 0x814E;
 constexpr uint16_t kRegPoint1 = 0x814F;
 uint8_t address = 0;
 bool fingerDown = false;
+bool flipped = false;  // Settings -> Flip screen
 int lastX = 0, lastY = 0;
 
 bool readRegs(uint16_t reg, uint8_t *buf, size_t len) {
@@ -57,6 +58,7 @@ bool begin() {
 
 bool pending() { return address && digitalRead(kTouchInt) == LOW; }
 int interruptPin() { return address ? kTouchInt : -1; }
+void setFlipped(bool on) { flipped = on; }
 
 bool read(int &x, int &y) {
   if (!address) return false;
@@ -68,7 +70,7 @@ bool read(int &x, int &y) {
       if (points > 0 && points <= 5 && readRegs(kRegPoint1, p, sizeof(p))) {
         int rx = p[1] | (p[2] << 8);
         int ry = p[3] | (p[4] << 8);
-        if (kTouchFlip) {
+        if (kTouchFlip != flipped) {
           rx = kTouchRawW - 1 - rx;
           ry = kTouchRawH - 1 - ry;
         }
@@ -96,6 +98,7 @@ bool begin() { return false; }
 bool read(int &, int &) { return false; }
 bool pending() { return false; }
 int interruptPin() { return -1; }
+void setFlipped(bool) {}
 }  // namespace touch
 
 #endif

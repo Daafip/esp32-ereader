@@ -21,6 +21,12 @@ uint32_t activityMs = 0;
 
 bool down(int pin) { return pin >= 0 && digitalRead(pin) == LOW; }
 
+// Settings -> Flip screen on a board with up/down keys (M5Paper's switch): held
+// the other way round, "up" and "down" swap.
+bool flipped = false;
+int nextPin() { return flipped && kBtnPrev >= 0 ? kBtnPrev : kBtnNext; }
+int prevPin() { return flipped && kBtnPrev >= 0 ? kBtnNext : kBtnPrev; }
+
 void configure(uint16_t longMs, bool repeat) {
   next.setConfig({25, longMs, repeat ? 250u : 0u});
   prev.setConfig({25, longMs, repeat ? 250u : 0u});
@@ -69,6 +75,8 @@ void setLongPress(uint16_t ms) {
   configure(ms, next.config().repeatMs != 0);
 }
 
+void setFlipped(bool on) { flipped = on; }
+
 void setRepeat(bool enable) { configure(uint16_t(next.config().longMs), enable); }
 
 Key poll() {
@@ -79,10 +87,10 @@ Key poll() {
     k = translate(single.update(down(kBtnNext), now));
     busy = single.busy();
   } else {
-    k = translate(next.update(down(kBtnNext), now), true);
+    k = translate(next.update(down(nextPin()), now), true);
     if (k == Key::None) k = translate(menu.update(down(kBtnMenu), now), false);
     if (k == Key::None) {
-      switch (prev.update(down(kBtnPrev), now)) {
+      switch (prev.update(down(prevPin()), now)) {
         case ButtonEvent::Short:
         case ButtonEvent::Long: k = Key::NextLong; break;
         case ButtonEvent::Repeat: k = Key::NextRepeat; break;

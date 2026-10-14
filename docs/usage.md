@@ -215,6 +215,9 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
     dark photos (e-paper looks darker than a screen); *sharpen* keeps small details.
   - *Status bar*: **full** (progress line, chapter, page/total, percentage, battery),
     **minimal** (progress line and percentage) or **hidden**.
+  - *Flip screen*: turn the image upside down, to hold the reader the other way
+    round (T5-2.13: USB port at the bottom). Touch and the M5Paper's switch turn
+    along. The first screen after switching is a full refresh.
   - *Long hold* (touch: *Long press*): see "The hold gesture".
   - *Lock when asleep*: lock the reader every time the sleep screen appears.
   - *Language*: English or Nederlands (menus, messages and the page).
