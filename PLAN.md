@@ -195,7 +195,7 @@ David compared with [pala-one-firmware](https://github.com/PaulLagier/pala-one-f
 firmware updates from GitHub, apps, to-do list, Heltec hardware. Untested on hardware;
 checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.md`.
 
-- [x] Browser installer (ESP Web Tools 10.4.0): `pixi run installer` → `out/installer/`, one manifest per board with bootloader/partitions/boot_app0/app at their own offsets and `new_install_prompt_erase`, so NVS (settings, positions, statistics) survives; deployed to GitHub Pages by the release workflow
+- [x] Browser installer: `pixi run installer` → `out/installer/`, one manifest per board with bootloader/partitions/boot_app0/app at their own offsets, so NVS (settings, positions, statistics) survives; deployed to GitHub Pages by the release workflow, page-only changes by `installer.yml` (firmware of the latest release). First on ESP Web Tools 10.4.0; since 2026-10-14 its own page on esptool-js 0.7.0, whose reset sets DTR and RTS together (0.6, inside ESP Web Tools, couldn't reset David's T5-2.13 into its bootloader on Linux)
 - [x] Home Wi-Fi from the page (NVS; password write-only), comes before `secrets.h`
 - [x] Bookmarks: up to 100 per book in `/books/.marks/<stem>.txt` (`PageList`, lib/core, tested), Bookmarks screen, ribbon in the status bar, remapped with the position on restyle
 - [x] Search on the page: re-typesets the stored original with its stored options, page snippets, page view from `/api/page`, "Read from here" sets the position

@@ -5,10 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>T5 Reader installer</title>
-<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
 <style>
-:root{--bg:#f5f4f0;--card:#fff;--ink:#1c1c1e;--muted:#6e6e73;--line:#e3e1dc;--accent:#1c1c1e;--on-accent:#fff;--r:14px}
-@media (prefers-color-scheme:dark){:root{--bg:#111112;--card:#1c1c1e;--ink:#ececee;--muted:#9a9aa0;--line:#2e2e31;--accent:#ececee;--on-accent:#111112}}
+:root{--bg:#f5f4f0;--card:#fff;--ink:#1c1c1e;--muted:#6e6e73;--line:#e3e1dc;--accent:#1c1c1e;--on-accent:#fff;--ok:#1d7a3a;--err:#b3261e;--r:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#111112;--card:#1c1c1e;--ink:#ececee;--muted:#9a9aa0;--line:#2e2e31;--accent:#ececee;--on-accent:#111112;--ok:#5cc47a;--err:#ff8a80}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Ubuntu,Roboto,sans-serif}
 main{max-width:640px;margin:0 auto;padding:32px 16px 56px}
@@ -19,6 +18,16 @@ h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
 .title{font-weight:600}
 .sub{color:var(--muted);font-size:14px}
 button.install{border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:600 15px/1 inherit;padding:12px 18px;cursor:pointer}
+button.install:disabled{opacity:.4;cursor:default}
+.erase{display:flex;gap:10px;align-items:flex-start;color:var(--muted);font-size:14px;margin:14px 4px 0}
+.erase input{margin-top:3px}
+#status{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:14px}
+progress{width:100%;height:8px;accent-color:var(--accent);margin:8px 0 4px}
+#text.ok{color:var(--ok);font-weight:600}
+#text.err{color:var(--err);font-weight:600}
+details{margin-top:8px;color:var(--muted);font-size:13px}
+#log{max-height:200px;overflow:auto;white-space:pre-wrap;margin:6px 0 0}
+.warn{background:var(--card);border:1px solid var(--err);border-radius:var(--r);padding:12px 16px;margin-bottom:14px}
 .note{color:var(--muted);font-size:14px;margin:22px 4px 0}
 .note li{margin-bottom:6px}
 h2{font-size:18px;margin:30px 4px 8px}
@@ -36,22 +45,35 @@ a{color:inherit}
   <p class="lead">Install the e-reader firmware from this page: plug the reader into this
     computer with a USB cable and press Install. Needs Chrome, Edge or Opera on a computer.</p>
 
+  <div class="warn" id="nobrowser" hidden>This browser can't talk to USB devices (no Web
+    Serial). Open this page in Chrome, Edge or Opera on a computer.</div>
+
   <div class="card"><div class="grow"><div class="title">LilyGo T5-2.13</div><div class="sub">2.13" 250×122, one button. Take the SD card out while installing.</div></div>
-    <esp-web-install-button manifest="manifest-t5-213.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+    <button class="install" data-board="t5-213">Install</button></div>
   <div class="card"><div class="grow"><div class="title">LilyGo T5-4.7" S3</div><div class="sub">4.7" 960×540, one button</div></div>
-    <esp-web-install-button manifest="manifest-t5-47.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+    <button class="install" data-board="t5-47">Install</button></div>
   <div class="card"><div class="grow"><div class="title">M5Stack M5PaperS3</div><div class="sub">4.7" 960×540, touch</div></div>
-    <esp-web-install-button manifest="manifest-m5papers3.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+    <button class="install" data-board="m5papers3">Install</button></div>
   <div class="card"><div class="grow"><div class="title">M5Stack M5Paper</div><div class="sub">4.7" 960×540, touch and a 3-way switch</div></div>
-    <esp-web-install-button manifest="manifest-m5paper.json"><button class="install" slot="activate">Install</button></esp-web-install-button></div>
+    <button class="install" data-board="m5paper">Install</button></div>
+
+  <label class="erase"><input type="checkbox" id="erase"> <span>Erase everything on the
+    reader first: settings, reading positions, statistics and the saved Wi-Fi. Books on
+    the SD card stay either way.</span></label>
+
+  <div id="status" hidden>
+    <div class="title" id="st-title"></div>
+    <progress id="bar" max="1" value="0"></progress>
+    <div id="text"></div>
+    <details><summary>Log</summary><pre id="log"></pre></details>
+  </div>
 
   <ul class="note">
-    <li><b>Your settings and reading positions stay.</b> When the installer asks whether to
-      erase the device, leave it unticked. Books are on the SD card and are never touched.</li>
-    <li>No port in the list? Hold BOOT, press RST, release BOOT, then try again. On
-      Linux, see <a href="#linux">below</a> first.</li>
-    <li>Pick the right board: firmware for another board won't show anything.
-      Updates over Wi-Fi refuse the wrong board's file.</li>
+    <li><b>Your settings and reading positions stay</b> unless you tick "Erase everything".</li>
+    <li>No port in the list? Unplug and replug the cable and try again. On Linux, see
+      <a href="#linux">below</a> first.</li>
+    <li>Pick the right board: the page checks the chip, and updates over Wi-Fi refuse
+      another board's file.</li>
     <li>Only the LilyGo T5-2.13 has been tested on hardware so far; the other three
       boards are untested. See the
       <a href="https://github.com/Daafip/esp32-ereader">project page</a> and its docs.</li>
@@ -69,5 +91,105 @@ a{color:inherit}
       <pre><code>sudo usermod -aG dialout $USER</code></pre></li>
   </ul>
 </main>
+
+<script type="module">
+// The installer, on esptool-js directly: 0.7.0 sets DTR and RTS in one call when it
+// resets the chip into its bootloader. ESP Web Tools 10.4.0 bundles esptool-js 0.6,
+// which sets them one by one; on the T5-2.13's CH9102 (Linux) the state in between
+// started the firmware instead, and the T5-2.13 V2.3.1 has no BOOT button to help.
+// Each board's manifest-<board>.json lists the parts and their flash offsets
+// (tools/make_installer.py): bootloader, partition table, boot_app0 and the app,
+// never the NVS sector, so settings stay unless "Erase everything" is ticked.
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
+
+const $ = (s) => document.querySelector(s);
+const buttons = [...document.querySelectorAll("button.install")];
+const log = $("#log");
+const terminal = {
+  clean() { log.textContent = ""; },
+  writeLine(d) { log.textContent += d + "\n"; log.scrollTop = log.scrollHeight; },
+  write(d) { log.textContent += d; },
+};
+const say = (msg, kind = "") => { $("#text").textContent = msg; $("#text").className = kind; };
+
+// What to try when the chip doesn't answer, per board.
+const connectHelp = {
+  "t5-213": "The reader didn't switch to install mode. Take the SD card out, unplug and replug the USB cable, then try again.",
+  "t5-47": "The reader didn't switch to install mode. Hold BOOT, press RST, release BOOT, then try again.",
+  "m5papers3": "The reader didn't switch to install mode. Put it in download mode as M5Stack describes for the M5PaperS3, then try again.",
+  "m5paper": "The reader didn't switch to install mode. Unplug and replug the USB cable, then try again.",
+};
+
+if (!("serial" in navigator)) {
+  $("#nobrowser").hidden = false;
+  for (const b of buttons) b.disabled = true;
+}
+for (const b of buttons) {
+  b.addEventListener("click", () => install(b.dataset.board, b.closest(".card").querySelector(".title").textContent));
+}
+
+async function install(board, label) {
+  let port;
+  try {
+    port = await navigator.serial.requestPort();
+  } catch {
+    return;  // the port picker was closed
+  }
+  for (const b of buttons) b.disabled = true;
+  $("#status").hidden = false;
+  $("#st-title").textContent = `Installing on the ${label}`;
+  $("#bar").value = 0;
+  terminal.clean();
+  const transport = new Transport(port, false);
+  try {
+    const manifest = await (await fetch(`manifest-${board}.json`)).json();
+    const build = manifest.builds[0];
+    say("Connecting…");
+    const loader = new ESPLoader({ transport, baudrate: 921600, romBaudrate: 115200, terminal });
+    try {
+      await loader.main();
+    } catch (e) {
+      terminal.writeLine(String(e));
+      throw new Error(connectHelp[board]);
+    }
+    const chip = loader.chip.CHIP_NAME;
+    if (chip !== build.chipFamily) {
+      throw new Error(`This board has an ${chip}; the ${label} needs an ${build.chipFamily}. Pick the right board.`);
+    }
+    say("Downloading the firmware…");
+    const fileArray = [];
+    for (const part of build.parts) {
+      const data = new Uint8Array(await (await fetch(part.path)).arrayBuffer());
+      fileArray.push({ data, address: part.offset });
+    }
+    const total = fileArray.reduce((n, f) => n + f.data.length, 0);
+    const done = fileArray.map(() => 0);
+    const erase = $("#erase").checked;
+    say(erase ? "Erasing the reader… (this takes a while)" : "Installing…");
+    await loader.writeFlash({
+      fileArray,
+      flashMode: "keep",
+      flashFreq: "keep",
+      flashSize: "keep",
+      eraseAll: erase,
+      compress: true,
+      reportProgress: (i, written, size) => {
+        done[i] = size ? (written / size) * fileArray[i].data.length : 0;
+        const part = done.reduce((a, b) => a + b, 0) / total;
+        $("#bar").value = part;
+        say(`Installing… ${Math.round(part * 100)} %`);
+      },
+    });
+    await loader.after("hard_reset");
+    $("#bar").value = 1;
+    say(`Done: firmware ${manifest.version} is on the reader. It restarts by itself.`, "ok");
+  } catch (e) {
+    say(e.message || String(e), "err");
+  } finally {
+    try { await transport.disconnect(); } catch { /* already closed */ }
+    for (const b of buttons) b.disabled = false;
+  }
+}
+</script>
 </body>
 </html>

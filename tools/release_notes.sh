@@ -16,7 +16,7 @@ board yet (\`docs/checkpoints.md\` lists what to check; reports welcome).
 | M5Stack M5Paper | \`m5paper-reader-$v.bin\` | \`m5paper-reader-$v-ota.bin\` |
 
 **Install from a browser:** Chrome or Edge, <https://daafip.github.io/esp32-ereader/>,
-pick your board, Install. Leave "Erase device" unticked to keep settings, bookmarks
+pick your board, Install. Leave "Erase everything" unticked to keep settings, bookmarks
 and reading positions (books on the SD card are never touched).
 T5-2.13: remove the SD card first. T5-4.7" / M5PaperS3: if no port shows up, hold BOOT,
 press RST, release BOOT (M5PaperS3: see M5Stack's download-mode instructions).

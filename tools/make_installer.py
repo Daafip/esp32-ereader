@@ -1,14 +1,14 @@
-"""Builds the browser installer (ESP Web Tools) from the built firmware envs.
+"""Builds the browser installer (installer/index.html, on esptool-js) from the built firmware envs.
 
     pixi run installer          # after pixi run fw-build; -> out/installer/
     python tools/make_installer.py --release DIR
                                 # from a release's images instead (CI: page-only update)
 
-One manifest per board. It flashes the bootloader, the partition table,
-boot_app0 and the app separately, so the settings and reading positions in NVS
-(0x9000-0xDFFF) stay. ESP Web Tools erases the whole chip on a new install
-unless the manifest says new_install_prompt_erase: then it asks, with "erase"
-unticked. Serve out/installer/ over https or from localhost (Web Serial).
+One manifest per board (ESP Web Tools' format, read by the page). It flashes the
+bootloader, the partition table, boot_app0 and the app separately, so the
+settings and reading positions in NVS (0x9000-0xDFFF) stay unless the page's
+"Erase everything" box is ticked. Serve out/installer/ over https or from
+localhost (Web Serial).
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ Inspired by [Paul Lagier](https://www.youtube.com/watch?v=IL05zoHBGwA), but his 
 ## Supported models
 
 **Install from the browser:** <https://daafip.github.io/esp32-ereader/> (Chrome or Edge,
-reader on USB; leave "Erase device" unticked to keep your settings).
+reader on USB; leave "Erase everything" unticked to keep your settings).
 
 Firmware available at the [releases](https://github.com/Daafip/esp32-ereader/releases) or build yourself `pixi run fw-build`.
 Flash with platform io, esptools or `pixi run fw-flash`
@@ -50,7 +50,7 @@ Hardware and display drivers:
 Firmware build and flashing:
 
 - [pioarduino](https://github.com/pioarduino/platform-espressif32): PlatformIO platform for Arduino-ESP32 3.x
-- [ESP Web Tools](https://esphome.github.io/esp-web-tools/) (Apache-2.0) by ESPHome: the browser installer
+- [esptool-js](https://github.com/espressif/esptool-js) (Apache-2.0) by Espressif: the browser installer
 - [esptool-js](https://espressif.github.io/esptool-js/): flashing from the browser
 - [QR Code generator](https://github.com/nayuki/QR-Code-generator) (MIT) by Project Nayuki: the Wi-Fi QR codes
 

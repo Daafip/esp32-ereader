@@ -10,10 +10,13 @@ targets, untested on hardware; see
 
 **From a browser (recommended):** open <https://daafip.github.io/esp32-ereader/> in
 Chrome or Edge on a computer, plug the reader in over USB, pick your board and click
-Install. When it asks "Erase device?", **leave it unticked**: then your settings,
-bookmarks, reading positions and statistics stay. Books live on the SD card and are
+Install. Leave **"Erase everything"** unticked: then your settings, bookmarks,
+reading positions and statistics stay. Books live on the SD card and are
 never touched. T5-2.13: take the SD card out while installing. No port in the list?
 Hold BOOT, press RST, release BOOT and try again.
+On Linux with Chromium from the Snap Store, run `sudo snap connect chromium:raw-usb`
+once and restart Chromium (otherwise it can't open the USB port), or use Google
+Chrome. Firefox has no Web Serial, so it can't flash.
 
 The installer page is built by `pixi run installer` (→ `out/installer/`) and published
 by the release workflow.
