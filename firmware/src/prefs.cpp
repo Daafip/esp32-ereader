@@ -67,7 +67,7 @@ void setBookmark(uint32_t bookId, uint32_t page) {
 }
 
 ReadingStats loadStats() {
-  ReadingStats st;
+  ReadingStats st{};
   if (store.getBytesLength("stats") == sizeof(st)) store.getBytes("stats", &st, sizeof(st));
   return st;
 }

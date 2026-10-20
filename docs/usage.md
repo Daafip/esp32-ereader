@@ -232,7 +232,7 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
   - *Lock when asleep*: lock the reader every time the sleep screen appears.
   - *Language*: English or Nederlands (menus, messages and the page).
   - *Full refresh*: a full (flashing) refresh after this many page turns to clear
-    ghosting. Chapter changes always get one.
+    ghosting (default: every 20). Chapter changes always get one.
   - *Hold time*: threshold between short and long press.
   - *Idle sleep*: after this long without a button, the sleep screen appears.
   - *Sleep after page*: deep sleep between page turns (battery life). Turn off for

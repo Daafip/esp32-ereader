@@ -402,7 +402,7 @@ static void test_page_list() {
 
 static void test_reading_stats() {
   const uint32_t day0 = 1760000000u - 1760000000u % 86400;  // a UTC midnight
-  ReadingStats st;
+  ReadingStats st{};
   recordPage(st, day0 + 3600, 0);
   recordPage(st, day0 + 3660, 0);   // 60 s on the page
   recordPage(st, day0 + 9000, 0);   // a pause: no time
@@ -425,13 +425,28 @@ static void test_reading_stats() {
   // time zone: 23:30 UTC is already tomorrow at UTC+2
   TEST_ASSERT_EQUAL(localDay(day0 + 86400, 0), localDay(day0 + 84600, 7200));
   // no clock: pages and time count, days don't
-  ReadingStats nc;
+  ReadingStats nc{};
   recordPage(nc, 1000, 0);
   recordPage(nc, 1030, 0);
   TEST_ASSERT_EQUAL(2, nc.pages);
   TEST_ASSERT_EQUAL(30, nc.seconds);
   TEST_ASSERT_EQUAL(0, nc.daysRead);
   TEST_ASSERT_EQUAL(-1, localDay(1030, 0));
+
+  // all zero is "nothing read yet": the first day starts a streak of 1
+  ReadingStats z{};
+  TEST_ASSERT_EQUAL(0, currentStreak(z, day0, 0));
+  TEST_ASSERT_EQUAL(0, todayPages(z, day0, 0));
+  recordPage(z, day0 + 10, 0);
+  TEST_ASSERT_EQUAL(1, z.streak);
+  TEST_ASSERT_EQUAL(1, z.daysRead);
+  // saved by older firmware: lastDay -1 also means none
+  ReadingStats old{};
+  old.lastDay = -1;
+  old.streak = 4;
+  TEST_ASSERT_EQUAL(0, currentStreak(old, day0, 0));
+  recordPage(old, day0 + 10, 0);
+  TEST_ASSERT_EQUAL(1, old.streak);
 }
 
 // --- bitmap -------------------------------------------------------------------------
@@ -609,10 +624,10 @@ static void test_settings_options_keys_and_language() {
   char text[48];
   TEST_ASSERT_EQUAL_STRING("Full refresh", settingLabel(SettingId::FullEvery));
   settingValue(s, SettingId::FullEvery, text, sizeof(text));
-  TEST_ASSERT_EQUAL_STRING("every 10", text);
+  TEST_ASSERT_EQUAL_STRING("every 20", text);  // David's T5-2.13: no ghosting to speak of
   cycleSetting(s, SettingId::FullEvery);
-  TEST_ASSERT_EQUAL(15, s.fullEvery);
-  for (int i = 0; i < 3; i++) cycleSetting(s, SettingId::FullEvery);
+  TEST_ASSERT_EQUAL(30, s.fullEvery);
+  cycleSetting(s, SettingId::FullEvery);
   TEST_ASSERT_EQUAL(0, s.fullEvery);
   settingValue(s, SettingId::FullEvery, text, sizeof(text));
   TEST_ASSERT_EQUAL_STRING("chapters only", text);
@@ -668,7 +683,7 @@ static void test_settings_options_keys_and_language() {
   TEST_ASSERT_EQUAL_STRING("Volledig verversen", settingLabel(SettingId::FullEvery));
   s = Settings();
   settingValue(s, SettingId::FullEvery, text, sizeof(text));
-  TEST_ASSERT_EQUAL_STRING("elke 10", text);
+  TEST_ASSERT_EQUAL_STRING("elke 20", text);
   settingValue(s, SettingId::Language, text, sizeof(text));
   TEST_ASSERT_EQUAL_STRING("English", text);  // each language in its own name
   setLanguage(Lang::En);

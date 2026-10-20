@@ -30,7 +30,7 @@ struct Settings {
   HoldAction holdAction = HoldAction::Sleep;
   bool lockOnSleep = false;
   Lang language = Lang::En;
-  uint8_t fullEvery = 10;      // full refresh after this many partial ones; 0 = never
+  uint8_t fullEvery = 20;      // full refresh after this many partial ones; 0 = never
   uint16_t longPressMs = 600;  // short/long press threshold
   uint8_t idleMinutes = 10;    // awake/idle time before the sleep screen
   bool deepSleep = true;       // sleep after every page turn

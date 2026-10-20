@@ -61,7 +61,7 @@ SETTINGS = [
     ("lockOnSleep", "Lock when asleep", ["off", "on"], 0),
     ("language", "Language", ["English", "Nederlands"], 0),
     ("fullEvery", "Full refresh",
-     ["every 5", "every 10", "every 15", "every 20", "every 30", "chapters only"], 1),
+     ["every 5", "every 10", "every 15", "every 20", "every 30", "chapters only"], 3),
     ("longPress", "Hold time", ["400 ms", "500 ms", "600 ms", "800 ms", "1000 ms"], 2),
     ("idleMinutes", "Idle sleep", ["2 min", "5 min", "10 min", "20 min", "30 min", "60 min"], 2),
     ("deepSleep", "Sleep after page", ["off", "on"], 1),

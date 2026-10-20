@@ -197,7 +197,8 @@ Filled in from David's reports; see `docs/checkpoints.md` for what to run.
   stronger 1438 ms; none flashes.
 - Page turn after deep sleep: about 2.4 s from the button with the fast refresh,
   faster with the partial one (wake ~0.9 s + card + refresh).
-- Ghosting after N partial updates → `fullEvery`: not judged yet (default 10).
+- Ghosting after N partial updates → `fullEvery`: 20 partial updates are fine (David,
+  2026-10-20), so the default is every 20 (was 10).
 
 ### Checkpoint 3/4 (reading, power)
 

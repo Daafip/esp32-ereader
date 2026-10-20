@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 
+#include <type_traits>
 #include <vector>
 
 #include "board.h"
@@ -73,6 +74,10 @@ struct RtcState {
   uint16_t statsUnsaved;
 };
 RTC_DATA_ATTR RtcState rtc;
+// A constructor would run on every wake and reset what deep sleep kept (it did:
+// default values in ReadingStats zeroed the statistics at every page turn).
+static_assert(std::is_trivially_default_constructible<RtcState>::value,
+              "RTC_DATA_ATTR state must not have a constructor");
 constexpr uint16_t kStatsFlushPages = 20;
 
 constexpr uint32_t kNoBatteryMv = 2500;  // below this the ADC sees no battery (USB only)
