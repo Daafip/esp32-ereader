@@ -88,7 +88,8 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
   page builds its form from `/api/settings`, so it needs no change.
 - Card layout: books in `/books` and one folder level, originals in `/books/.src`,
   bookmarks in `/books/.marks/<stem>.txt`, sleep pictures in `/sleep/*.bin` (one
-  full-screen page each), fonts in `/fonts` (`storage.h`).
+  full-screen page each, or a square of the short side for "picture + book": told
+  apart by size), fonts in `/fonts` (`storage.h`).
 - The home Wi-Fi password and the AP password never go back to the page.
 - No secrets in the repo (`firmware/include/secrets.h` is gitignored).
 - Commit per phase; tick `PLAN.md` checkboxes as work lands.

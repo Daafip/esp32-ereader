@@ -38,7 +38,7 @@ KINDS = {
     "source": ("books/.src", (".epub", ".txt"), 64 << 20),
     "meta": ("books/.src", (".json",), 64 << 10),
     "font": ("fonts", (".ttf", ".otf", ".woff", ".woff2"), 8 << 20),
-    "sleep": ("sleep", (".bin",), 0),  # exactly one page
+    "sleep": ("sleep", (".bin",), 0),  # one page, or a square (picture_sizes)
 }
 MIME = {".epub": "application/epub+zip", ".txt": "text/plain", ".json": "application/json",
         ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2",
@@ -49,7 +49,8 @@ BOARD_FOR_SCREEN = {"t5-213": "t5-213", "4.7in": "t5-47"}
 # The firmware's settings (lib/core/src/settings.cpp): key, English label, options,
 # default option. The page shows whatever the reader sends.
 SETTINGS = [
-    ("sleepScreen", "Sleep screen", ["book", "cover", "pictures", "keep page"], 0),
+    ("sleepScreen", "Sleep screen",
+     ["book", "cover", "pictures", "keep page", "picture + book"], 0),
     ("statusBar", "Status bar", ["full", "minimal", "hidden"], 0),
     ("flip", "Flip screen", ["off", "on"], 0),
     ("holdAction", "Long hold", ["sleep", "bookmark", "lock", "menu"], 0),
@@ -62,6 +63,12 @@ SETTINGS = [
     ("deepSleep", "Sleep after page", ["off", "on"], 1),
     ("wakeRefresh", "Wake refresh", ["rewrite", "retain", "full"], 0),
 ]  # fmt: skip
+
+
+def picture_sizes(screen: Screen) -> tuple[int, int]:
+    """Bytes of a full-screen and of a square sleep picture (kPageBytes, kSquareBytes)."""
+    side = min(screen.width, screen.height)
+    return stride_for(screen.width) * screen.height, stride_for(side) * side
 
 
 def is_safe_name(name: str, exts: tuple[str, ...]) -> bool:
@@ -304,9 +311,9 @@ class Handler(SimpleHTTPRequestHandler):
             for p in font_files
             if p.suffix in KINDS["font"][1]
         ]
-        page_bytes = stride_for(self.screen.width) * self.screen.height
+        sizes = picture_sizes(self.screen)
         pictures = [p.name for p in sorted(self.sd("sleep").glob("*.bin"))
-                    if p.stat().st_size == page_bytes]  # fmt: skip
+                    if p.stat().st_size in sizes]  # fmt: skip
         sc = self.screen
         screen = {"id": sc.id, "width": sc.width, "height": sc.height, "statusBar": sc.status_bar,
                   "size": sc.font_size, "margin": sc.margin}  # fmt: skip
@@ -373,8 +380,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(507, {"error": "not enough space on the SD card", "free": free})
         if len(data) > limit:
             return self.send_json(413, {"error": "file too large"})
-        if kind == "sleep" and len(data) != page_bytes:
-            return self.send_json(400, {"error": f"a sleep picture is {page_bytes} bytes"})
+        sizes = picture_sizes(self.screen)
+        if kind == "sleep" and len(data) not in sizes:
+            sc, side = self.screen, min(self.screen.width, self.screen.height)
+            why = (f"a sleep picture is {sc.width}x{sc.height} ({sizes[0]} bytes) "
+                   f"or {side}x{side} ({sizes[1]} bytes)")  # fmt: skip
+            return self.send_json(400, {"error": why})
         folder = self.book_dir_for(name) if kind == "book" else self.sd(kind)
         if folder is None:
             return self.send_json(400, {"error": "bad folder name"})

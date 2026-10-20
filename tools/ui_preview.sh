@@ -18,7 +18,8 @@ cc -std=c99 -O1 -w -c firmware/lib/qrcodegen/src/qrcodegen.c -o "$build/qrcodege
 
 for spec in t5-213:t5-213: t5-47:4.7in:-DBOARD_T5_47_S3 m5paper:4.7in:-DBOARD_M5PAPER_S3; do
   IFS=: read -r board screen define <<<"$spec"
-  python -m bookprep.devpages --screen "$screen" --t5b "$build/sample-$screen.t5b" >/dev/null
+  python -m bookprep.devpages --screen "$screen" --t5b "$build/sample-$screen.t5b" \
+    --picture "$build/sample-$screen-picture.bin" >/dev/null
   c++ -std=gnu++17 -O1 -w $define \
     -I"$bb" -Ifirmware/include -Ifirmware/src -Ifirmware/lib/core/src -Ifirmware/lib/qrcodegen/src \
     firmware/host/host_bb_epaper.cpp firmware/host/display_host.cpp firmware/host/ui_preview.cpp \
@@ -26,7 +27,8 @@ for spec in t5-213:t5-213: t5-47:4.7in:-DBOARD_T5_47_S3 m5paper:4.7in:-DBOARD_M5
     -o "$build/ui_preview-$board"
   mkdir -p "$out/$board"
   rm -f "$out/$board"/*.pbm "$out/$board"/*.png
-  "$build/ui_preview-$board" "$out/$board" "$build/sample-$screen.t5b" >/dev/null
+  "$build/ui_preview-$board" "$out/$board" "$build/sample-$screen.t5b" \
+    "$build/sample-$screen-picture.bin" >/dev/null
 done
 
 python - "$out" <<'PY'

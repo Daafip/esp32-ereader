@@ -16,8 +16,8 @@ enum class WakeRefresh : uint8_t {
   Full,     // fast/full refresh on every wake
 };
 
-// What the reader shows while asleep.
-enum class SleepScreen : uint8_t { Book, Cover, Pictures, Page };
+// What the reader shows while asleep (new ones at the end: NVS stores the index).
+enum class SleepScreen : uint8_t { Book, Cover, Pictures, Page, PictureBook };
 enum class StatusBarMode : uint8_t { Full, Minimal, Hidden };
 // The second gesture of MENU while reading (two buttons: hold MENU; one button:
 // long hold; touch: long press).

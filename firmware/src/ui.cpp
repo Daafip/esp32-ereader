@@ -548,10 +548,40 @@ void sleepFooter(bool locked) {
   text(kSmall, hint, hx + 12 * S, kH - 6 * S, hw, kBlack);
 }
 
+// Picture + book: the square picture fills the screen's height (landscape, left)
+// or width (portrait, top); title, author and progress take the rest.
+void pictureSleepScreen(const SleepView &v) {
+  const Bitmap &p = v.picture;
+  if (kW > kH) {
+    blit(p, 0, (kH - p.h) / 2);
+    const int x = p.w + 6 * S, w = kW - kMargin - x;
+    // top row: moon (and padlock) left, battery right; no room for the wake hint
+    int mx = x + 4 * S;
+    if (v.locked) {
+      padlock(x, 4 * S);
+      mx += 13 * S;
+    }
+    moon(mx, 10 * S);
+    battery(kW - kMargin, 14 * S, v.batteryPct, kBlack);
+    const int top = 18 * S, h = titleBlock(v, x, 0, w, w, kTitle, 17 * S, 3, true);
+    const int y = top + (kH - 2 * S - top - h) / 2;
+    titleBlock(v, x, y < top ? top : y, w, w, kTitle, 17 * S, 3, false);
+  } else {
+    blit(p, (kW - p.w) / 2, 0);
+    battery(kW - kMargin, p.h + 20 * S, v.batteryPct, kBlack);
+    const int w = kW - 2 * kMargin, top = p.h + 26 * S;
+    const int h = titleBlock(v, kMargin, 0, w, w, kDisplay, 21 * S, 2, true);
+    const int y = top + (kH - 14 * S - top - h) / 2;
+    titleBlock(v, kMargin, y < top ? top : y, w, w, kDisplay, 21 * S, 2, false);
+    sleepFooter(v.locked);
+  }
+}
+
 }  // namespace
 
 void sleepScreen(const SleepView &v) {
   beginScreen();
+  if (v.picture.bits) return pictureSleepScreen(v);
   battery(kW - kMargin, 14 * S, v.batteryPct, kBlack);
   const Bitmap &c = v.cover;
   if (c.bits && kW > kH) {  // landscape: cover left, text right, below the battery

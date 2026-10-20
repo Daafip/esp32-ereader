@@ -197,12 +197,22 @@ bool writeMarks(const String &stem, const PageList &marks) {
 }
 
 namespace {
-void pictureNames(std::vector<String> &names) {
+bool hasShape(size_t size, PictureShape shape) {
+  const bool full = size == size_t(kPageBytes), square = size == size_t(kSquareBytes);
+  switch (shape) {
+    case PictureShape::Full: return full;
+    case PictureShape::Square: return square;
+    case PictureShape::Any: return full || square;
+  }
+  return false;
+}
+
+void pictureNames(PictureShape shape, std::vector<String> &names) {
   names.clear();
   fs::File d = SD.open(kPicturesDir);
   if (!d || !d.isDirectory()) return;
   for (fs::File f = d.openNextFile(); f && names.size() < 100; f = d.openNextFile()) {
-    if (!f.isDirectory() && endsWith(f.name(), ".bin") && f.size() == size_t(kPageBytes)) {
+    if (!f.isDirectory() && endsWith(f.name(), ".bin") && hasShape(f.size(), shape)) {
       names.push_back(f.name());
     }
   }
@@ -210,15 +220,15 @@ void pictureNames(std::vector<String> &names) {
 }
 }  // namespace
 
-int pictureCount() {
+int pictureCount(PictureShape shape) {
   std::vector<String> names;
-  pictureNames(names);
+  pictureNames(shape, names);
   return int(names.size());
 }
 
-String picturePath(int index) {
+String picturePath(PictureShape shape, int index) {
   std::vector<String> names;
-  pictureNames(names);
+  pictureNames(shape, names);
   if (index < 0 || index >= int(names.size())) return "";
   return String(kPicturesDir) + "/" + names[index];
 }

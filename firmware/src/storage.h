@@ -3,7 +3,8 @@
 //   /books/*.t5b, /books/<folder>/*.t5b   books (file stems unique across folders)
 //   /books/.src/<stem>.epub|.txt|.json    originals and converter settings (Restyle)
 //   /books/.marks/<stem>.txt              bookmarks, one page number per line
-//   /sleep/*.bin                          sleep pictures (one page each, kPageBytes)
+//   /sleep/*.bin                          sleep pictures: full screen (kPageBytes) or
+//                                         square beside the book (kSquareBytes)
 //   /fonts/                               reading fonts added from the browser
 #pragma once
 
@@ -58,9 +59,11 @@ String stemOf(const String &pathOrName);
 void readMarks(const String &stem, uint32_t pageCount, PageList &out);
 bool writeMarks(const String &stem, const PageList &marks);
 
-// Sleep pictures: number of valid files, and the path of the i-th (sorted).
-int pictureCount();
-String picturePath(int index);
+// Sleep pictures of one shape (told apart by size): number of valid files, and
+// the path of the i-th (sorted).
+enum class PictureShape : uint8_t { Full, Square, Any };
+int pictureCount(PictureShape shape);
+String picturePath(PictureShape shape, int index);
 
 // Deletes books, originals, bookmarks, pictures and fonts (factory reset).
 void eraseAll();

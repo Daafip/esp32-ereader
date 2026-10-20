@@ -145,22 +145,26 @@ int percentRead() {
 
 void showReading(Refresh requested);
 
+// The next sleep picture of a shape (in turn) into `out`; false: none.
+bool readNextPicture(storage::PictureShape shape, uint8_t *out, size_t size) {
+  const int n = storage::pictureCount(shape);
+  if (n <= 0) return false;
+  const uint32_t i = prefs::nextPicture() % uint32_t(n);
+  fs::File f = SD.open(storage::picturePath(shape, int(i)), FILE_READ);
+  const bool ok = f && f.read(out, size) == size;
+  if (f) f.close();
+  if (ok) prefs::setNextPicture(i + 1);
+  return ok;
+}
+
 // The sleep screen of the "Sleep screen" setting into the framebuffer: a picture
-// from /sleep, or title, author and progress (with the cover if asked for).
+// from /sleep, or title, author and progress (with the cover or a square picture
+// if asked for).
 void drawSleepScreen() {
-  if (settings.sleepScreen == SleepScreen::Pictures) {
-    const int n = storage::pictureCount();
-    if (n > 0) {
-      const uint32_t i = prefs::nextPicture() % uint32_t(n);
-      fs::File f = SD.open(storage::picturePath(int(i)), FILE_READ);
-      const bool ok = f && f.read(display::framebuffer(), kPageBytes) == size_t(kPageBytes);
-      if (f) f.close();
-      if (ok) {
-        prefs::setNextPicture(i + 1);
-        if (locked) ui::lockBadge();
-        return;
-      }
-    }
+  if (settings.sleepScreen == SleepScreen::Pictures &&
+      readNextPicture(storage::PictureShape::Full, display::framebuffer(), kPageBytes)) {
+    if (locked) ui::lockBadge();
+    return;
   }
   ui::SleepView v;
   v.title = book.isOpen() ? book.header().title : nullptr;
@@ -174,7 +178,16 @@ void drawSleepScreen() {
     coverBits = static_cast<uint8_t *>(malloc(size_t(c.stride) * c.h));
     if (coverBits && book.readCover(coverBits)) v.cover = {coverBits, c.w, c.h, c.stride};
   }
+  uint8_t *pictureBits = nullptr;
+  if (settings.sleepScreen == SleepScreen::PictureBook) {
+    pictureBits = static_cast<uint8_t *>(malloc(kSquareBytes));
+    if (pictureBits &&
+        readNextPicture(storage::PictureShape::Square, pictureBits, size_t(kSquareBytes))) {
+      v.picture = {pictureBits, kSquareSide, kSquareSide, kSquareStride};
+    }
+  }
   ui::sleepScreen(v);
+  free(pictureBits);
   free(coverBits);
 }
 

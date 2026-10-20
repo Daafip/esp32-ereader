@@ -104,13 +104,15 @@ struct Bitmap {
 };
 
 // Sleep screen "book": title, author, progress, with the cover if there is one
-// (left of the text on landscape screens, above it on portrait ones).
+// (left of the text on landscape screens, above it on portrait ones). "Picture +
+// book": a square picture instead, edge to edge at the left / top.
 struct SleepView {
   const char *title = nullptr;
   const char *author = nullptr;
   int percentRead = -1;  // < 0: no book
   int batteryPct = -1;
   Bitmap cover;          // bits == nullptr: none
+  Bitmap picture;        // square sleep picture at the left/top edge, info beside it
   bool locked = false;   // padlock top left
 };
 void sleepScreen(const SleepView &v);

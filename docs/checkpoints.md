@@ -171,7 +171,9 @@ Untested features from the Pala One ideas (`PLAN.md` Phase 9). Each is quick to 
    T5-2.13 a NEXT press while locked must not change the screen (it goes back to
    sleep straight away). Settings → Lock when asleep: on, then Menu → Sleep.
 4. **Sleep screens:** each of book / cover (a book added from the page with "Cover")
-   / pictures (add two on the page; they alternate) / keep page.
+   / pictures (add two on the page; they alternate) / keep page / picture + book
+   (add two square pictures, Shape: square; they alternate beside the title, and
+   "pictures" still shows only the full-screen ones).
 5. **Status bar:** full / minimal / hidden; legibility of the padlock and ribbon.
 6. **Language:** Nederlands. Any text cut off or missing accents?
 7. **Statistics:** open the Wi-Fi page (sets the clock), read, check Menu →

@@ -3,7 +3,8 @@
 Rendered and packed exactly like book pages, then written as a C header
 (``firmware/include/test_pages.h``, used by the calibration sketch) and as a small
 .t5b (to test the SD path). Run: ``pixi run devpages``. With ``--screen 4.7in`` only
-the sample text, as a .t5b for that screen (UI previews).
+the sample text, as a .t5b for that screen (UI previews). ``--picture`` also writes a
+made-up square sleep picture ("picture + book", UI previews).
 
 Calibration pattern (250x122): 1-px border with ticks every 10 px, four different
 corner markers (filled square TL, hollow square TR, triangle BL, cross BR), an arrow
@@ -17,7 +18,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .cli import default_font
 from .extract import Block, Chapter
@@ -32,7 +33,7 @@ from .layout import (
     line_height_for,
 )
 from .normalize import normalize_text
-from .render import RenderOptions, render_page
+from .render import RenderOptions, dither, render_page
 from .t5b import TocEntry, pack_page, stride_for, write_t5b
 
 W, H = 250, 122
@@ -131,6 +132,45 @@ def sample_cover(font_path: Path, screen: Screen = SCREENS[DEFAULT_SCREEN]) -> I
     return img.convert("1")
 
 
+def sample_picture(screen: Screen = SCREENS[DEFAULT_SCREEN]) -> Image.Image:
+    """A made-up square sleep picture, the screen's short side: a lighthouse on a dune,
+    dithered like the page's picture editor (UI previews of "picture + book")."""
+    n = min(screen.width, screen.height)
+    img = Image.new("L", (n, n), 255)
+    d = ImageDraw.Draw(img)
+    hz = int(n * 0.6)  # horizon
+    for y in range(hz):  # sky
+        d.line((0, y, n, y), fill=int(150 + 90 * y / hz))
+    d.ellipse((n * 0.08, n * 0.1, n * 0.3, n * 0.32), fill=250)  # sun
+    for y in range(hz, n):  # sea
+        d.line((0, y, n, y), fill=int(110 - 50 * (y - hz) / (n - hz)))
+    dune = [(0, n), (0, n * 0.72), (n * 0.3, n * 0.68), (n * 0.62, n * 0.74), (n, n * 0.8), (n, n)]
+    d.polygon(dune, fill=215)
+    for k in range(14):  # marram grass
+        x, base = n * (0.03 + 0.07 * k), n * (0.72 + 0.006 * k)
+        d.line((x, base, x - n * 0.02, base - n * 0.06), fill=40, width=max(1, n // 100))
+        d.line((x, base, x + n * 0.015, base - n * 0.05), fill=60, width=max(1, n // 100))
+    cx, top, bot, tw, bw = n * 0.66, n * 0.2, n * 0.76, n * 0.07, n * 0.12  # the tower
+    d.polygon(
+        [(cx - tw / 2, top), (cx + tw / 2, top), (cx + bw / 2, bot), (cx - bw / 2, bot)], fill=245
+    )
+    for a, b in ((0.35, 0.47), (0.58, 0.68)):  # two dark bands
+        y0, y1 = top + (bot - top) * a, top + (bot - top) * b
+        w0, w1 = tw + (bw - tw) * a, tw + (bw - tw) * b
+        d.polygon(
+            [(cx - w0 / 2, y0), (cx + w0 / 2, y0), (cx + w1 / 2, y1), (cx - w1 / 2, y1)], fill=50
+        )
+    d.rectangle((cx - tw * 0.6, top - n * 0.07, cx + tw * 0.6, top), fill=30)  # lantern
+    d.rectangle((cx - tw * 0.4, top - n * 0.06, cx + tw * 0.4, top - n * 0.015), fill=255)
+    d.polygon(
+        [(cx - tw * 0.7, top - n * 0.07), (cx + tw * 0.7, top - n * 0.07), (cx, top - n * 0.12)],
+        fill=20,
+    )
+    d.polygon([(cx, top - n * 0.04), (n, top - n * 0.13), (n, top + n * 0.03)], fill=245)  # beam
+    img = img.filter(ImageFilter.GaussianBlur(n / 400))
+    return dither([float(v) for v in img.tobytes()], n, n, "atkinson")
+
+
 def c_array(name: str, pages: list[bytes]) -> str:
     def rows(data: bytes) -> str:
         lines = [", ".join(f"0x{b:02x}" for b in data[i : i + 16]) for i in range(0, len(data), 16)]
@@ -163,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--header", type=Path, help="C header for the calibration sketch")
     p.add_argument("--t5b", type=Path, required=True)
     p.add_argument("--screen", choices=sorted(SCREENS), default=DEFAULT_SCREEN)
+    p.add_argument("--picture", type=Path, help="also write a square sleep picture (.bin)")
     args = p.parse_args(argv)
     screen = SCREENS[args.screen]
     if args.header and screen.id != DEFAULT_SCREEN:
@@ -195,6 +236,10 @@ def main(argv: list[str] | None = None) -> int:
         cover=sample_cover(font_path, screen),
     )
     print(f"wrote {args.t5b} ({len(pages)} pages, {screen.width}x{screen.height})")
+    if args.picture:
+        args.picture.parent.mkdir(parents=True, exist_ok=True)
+        args.picture.write_bytes(pack_page(sample_picture(screen)))
+        print(f"wrote {args.picture}")
     return 0
 
 

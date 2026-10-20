@@ -28,6 +28,10 @@ constexpr bool kHasTouch = false;
 // Pages: 1 bpp, MSB first, 1 = white, rows padded to whole bytes (.t5b layout).
 constexpr int kPageStride = (kPageW + 7) / 8;
 constexpr int kPageBytes = kPageStride * kPageH;
+// Square sleep pictures ("picture + book"): the screen's short side, same layout.
+constexpr int kSquareSide = kPageW < kPageH ? kPageW : kPageH;
+constexpr int kSquareStride = (kSquareSide + 7) / 8;
+constexpr int kSquareBytes = kSquareStride * kSquareSide;
 
 // One-button boards: a NEXT pin but no MENU pin. Taps, double taps and holds of
 // the NEXT pin stand in for the MENU button (input.cpp). Touch-only boards have

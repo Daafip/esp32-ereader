@@ -215,6 +215,8 @@ checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.m
 - [x] Settings → Flip screen: image 180 degrees (rotation 90 <-> 270), the next refresh full; touch and the M5Paper's switch turn along
 - [x] Installer on esptool-js 0.7.0 (DTR/RTS set together; ESP Web Tools' 0.6 couldn't reset the T5-2.13 into its bootloader on Linux), "Erase everything" box, Linux section (Snap Chromium `raw-usb`, `dialout`); page-only updates from main (`installer.yml`)
 - [ ] 🧑 Flip screen on the T5-2.13 (expected fine: the 1-byte RAM offset is symmetric)
+- [x] Sleep screen "picture + book": a square picture (the screen's short side, `kSquareBytes` in `/sleep`, told apart from full-screen ones by size) left / on top, title, author and progress beside it; the editor's *Shape* (full screen / square, starts on Fill); falls back to "book" without square pictures
+- [ ] 🧑 "Picture + book" on the T5-2.13: make a square picture on the page, check the layout and that "pictures" keeps showing only the full-screen ones
 
 ---
 

@@ -34,7 +34,7 @@ and [docs/hardware-m5paper.md](docs/hardware-m5paper.md).
 
 Also on board: chapters, bookmarks, search (on the phone, jumping the reader to a hit),
 library folders, reading statistics, a lock, sleep screens (book, cover, your own
-pictures, or the page itself), a status bar that can shrink or hide, OpenDyslexic and
+pictures, a square picture beside the book, or the page itself), a status bar that can shrink or hide, OpenDyslexic and
 bionic reading, English and Dutch menus, and settings, home Wi-Fi and factory reset
 from the phone.
 

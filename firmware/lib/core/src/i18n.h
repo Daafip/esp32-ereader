@@ -124,6 +124,7 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(ScreenCover, "cover", "omslag")                                                        \
   X(ScreenPictures, "pictures", "afbeeldingen")                                            \
   X(ScreenPage, "keep page", "pagina laten staan")                                         \
+  X(ScreenPictureBook, "picture + book", "afbeelding + boek")                              \
   X(BarFull, "full", "volledig")                                                           \
   X(BarMinimal, "minimal", "minimaal")                                                     \
   X(BarHidden, "hidden", "verborgen")                                                      \

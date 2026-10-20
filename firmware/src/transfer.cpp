@@ -68,7 +68,7 @@ const Kind kKinds[] = {
     {"source", kSourceDir, kSourceExts, 2, 64u << 20},
     {"meta", kSourceDir, kMetaExts, 1, 64u << 10},
     {"font", kFontDir, kFontExts, 4, 8u << 20},
-    {"sleep", storage::kPicturesDir, kPictureExts, 1, uint32_t(kPageBytes)},  // one page
+    {"sleep", storage::kPicturesDir, kPictureExts, 1, uint32_t(kPageBytes)},  // at most a page
 };
 const Kind &kBookKind = kKinds[0];
 const Kind &kPictureKind = kKinds[4];
@@ -332,10 +332,10 @@ void handleInfo() {
   out += ']';
   addKey(out, "pictures");
   out += '[';
-  for (int i = 0, n = storage::pictureCount(); i < n; i++) {
+  for (int i = 0, n = storage::pictureCount(storage::PictureShape::Any); i < n; i++) {
     if (out[out.length() - 1] != '[') out += ',';
     out += kQuote;
-    out += baseName(storage::picturePath(i).c_str());
+    out += baseName(storage::picturePath(storage::PictureShape::Any, i).c_str());
     out += kQuote;
   }
   out += "]}";
@@ -465,10 +465,12 @@ void handleUploadData() {
       }
       const bool isBook = upKind == &kBookKind;
       if (isBook && !validateUpload()) return;
-      if (upKind == &kPictureKind && up.totalSize != size_t(kPageBytes)) {
-        char why[64];
-        snprintf(why, sizeof(why), "a sleep picture is %ux%u, %u bytes", unsigned(kPageW),
-                 unsigned(kPageH), unsigned(kPageBytes));
+      if (upKind == &kPictureKind && up.totalSize != size_t(kPageBytes) &&
+          up.totalSize != size_t(kSquareBytes)) {
+        char why[80];
+        snprintf(why, sizeof(why), "a sleep picture is %ux%u (%u bytes) or %ux%u (%u bytes)",
+                 unsigned(kPageW), unsigned(kPageH), unsigned(kPageBytes), unsigned(kSquareSide),
+                 unsigned(kSquareSide), unsigned(kSquareBytes));
         return failUpload(400, why);
       }
       // Replacing a book (restyled): carry the reading position over in proportion.

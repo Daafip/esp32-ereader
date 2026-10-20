@@ -160,7 +160,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div id="books"></div>
     <h2><span data-t="pictures">Sleep pictures</span><span id="piccount"></span></h2>
     <div class="pics" id="pics"></div>
-    <p class="hint" data-t="pictureHint">Shown while the reader sleeps (Settings, Sleep screen: pictures).</p>
+    <p class="hint" data-t="pictureHint">Shown while the reader sleeps (Settings, Sleep screen: pictures; square ones: picture + book).</p>
     <h2><span data-t="firmware">Firmware</span><span id="fwver"></span></h2>
     <label class="card fw">
       <input type="file" id="fw" accept=".bin" hidden>
@@ -291,6 +291,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="sheet-body">
       <div class="device"><canvas id="e-canvas" width="250" height="122"></canvas></div>
       <div class="controls" style="margin-top:12px">
+        <label class="field select"><span data-t="shape">Shape</span><select id="e-shape"><option value="full" data-t="shapeFull">Full screen</option><option value="square" data-t="shapeSquare">Square, beside the book</option></select></label>
         <label class="field select"><span data-t="fitMode">Size</span><select id="e-fit"><option value="contain" data-t="fit">Fit</option><option value="cover" data-t="fill">Fill</option></select></label>
         <label class="field toggle"><span data-t="rotate">Rotate</span><input type="checkbox" class="switch" id="e-rotate"></label>
         <label class="field"><span data-t="zoom">Zoom</span><input type="range" id="e-zoom" min="100" max="300" value="100"></label>
@@ -363,8 +364,9 @@ const T = {
     factoryResetHint: "Erases all books, originals, bookmarks, pictures, fonts and settings on the reader.",
     eraseAll: "Erase everything", resetConfirm1: "Erase everything on the reader?", resetConfirm2: "Type ERASE to confirm.",
     resetWord: "ERASE", resetDone: "Erased. The reader restarts.",
-    addPicture: "Add a picture", pictureHint: "Shown while the reader sleeps (Settings, Sleep screen: pictures).",
+    addPicture: "Add a picture", pictureHint: "Shown while the reader sleeps (Settings, Sleep screen: pictures; square ones: picture + book).",
     noPictures: "Add a picture", deletePicture: "Delete this picture?", chooseImage: "Choose an image", fitMode: "Size",
+    shape: "Shape", shapeFull: "Full screen", shapeSquare: "Square, beside the book",
     fit: "Fit", fill: "Fill", zoom: "Zoom", moveX: "Left – right", moveY: "Up – down", rotate: "Rotate",
     method: "Method", atkinson: "Atkinson (clean)", floyd: "Floyd–Steinberg (detail)", ordered: "Pattern",
     threshold: "Threshold", brightness: "Brightness", contrast: "Contrast", sharpen: "Sharpen", invert: "Invert",
@@ -414,8 +416,9 @@ const T = {
     factoryResetHint: "Wist alle boeken, originelen, bladwijzers, afbeeldingen, lettertypes en instellingen op de lezer.",
     eraseAll: "Alles wissen", resetConfirm1: "Alles op de lezer wissen?", resetConfirm2: "Typ WISSEN om te bevestigen.",
     resetWord: "WISSEN", resetDone: "Gewist. De lezer start opnieuw.",
-    addPicture: "Afbeelding toevoegen", pictureHint: "Te zien als de lezer slaapt (Instellingen, Slaapscherm: afbeeldingen).",
+    addPicture: "Afbeelding toevoegen", pictureHint: "Te zien als de lezer slaapt (Instellingen, Slaapscherm: afbeeldingen; vierkante: afbeelding + boek).",
     noPictures: "Afbeelding toevoegen", deletePicture: "Deze afbeelding verwijderen?", chooseImage: "Kies een afbeelding", fitMode: "Formaat",
+    shape: "Vorm", shapeFull: "Volledig scherm", shapeSquare: "Vierkant, naast het boek",
     fit: "Passend", fill: "Vullend", zoom: "Zoom", moveX: "Links – rechts", moveY: "Boven – onder", rotate: "Draaien",
     method: "Methode", atkinson: "Atkinson (rustig)", floyd: "Floyd–Steinberg (detail)", ordered: "Patroon",
     threshold: "Drempel", brightness: "Helderheid", contrast: "Contrast", sharpen: "Verscherpen", invert: "Omkeren",
@@ -448,6 +451,9 @@ const withKey = (url) => url + (url.includes("?") ? "&" : "?") + "k=" + encodeUR
 const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x !== id; };
 const screen = () => B.screenFor(info.screen);
 const pageBytes = () => Math.ceil(screen().width / 8) * screen().height;
+// Square sleep pictures ("picture + book"): the screen's short side (kSquareSide).
+const squareSide = () => Math.min(screen().width, screen().height);
+const squareBytes = () => Math.ceil(squareSide() / 8) * squareSide();
 const folders = () => [...new Set(info.books.map((b) => b.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 // The reader takes file names of up to 64 bytes (isSafeFileName in web_util.cpp).
 const kMaxName = 64;
@@ -460,6 +466,26 @@ function drawBits(canvas, bits, w, h) {
   canvas.width = w;
   canvas.height = h;
   canvas.getContext("2d").putImageData(new ImageData(B.unpackToRgba(bits, w, h), w, h), 0, 0);
+}
+// A square picture as "picture + book" shows it: left (landscape) or on top (portrait),
+// grey bars where the reader puts title, author and progress.
+function drawSquare(canvas, bits) {
+  const W = screen().width, H = screen().height, n = squareSide(), s = Math.max(1, Math.round(n / 250));
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, H);
+  ctx.putImageData(new ImageData(B.unpackToRgba(bits, n, n), n, n), 0, 0);
+  const [x, y, w, h] = W > H ? [n, 0, W - n, H] : [0, n, W, H - n];
+  const lineH = (W > H ? 17 : 21) * s, top = y + (W > H ? 18 : 26) * s, cw = w - 14 * s;
+  let by = top + (y + h - top - (2 * lineH + 34 * s)) / 2;
+  ctx.fillStyle = "#c4c4c4";
+  const bar = (bw, bh, gap) => { ctx.fillRect(Math.round(x + (w - bw) / 2), Math.round(by), Math.round(bw), bh); by += gap; };
+  bar(cw * 0.85, 9 * s, lineH);
+  bar(cw * 0.6, 9 * s, lineH + 4 * s);
+  bar(cw * 0.5, 6 * s, 14 * s);
+  bar(Math.min(cw, 70 * s), 5 * s, 0);
 }
 function fitCanvas(canvas) {
   const sc = screen();
@@ -478,7 +504,7 @@ const demoData = {
     { file: "alice.t5b", folder: "", title: "Alice's Adventures in Wonderland", author: "Lewis Carroll", pages: 698, size: 2730000, position: 0, progress: 0, marks: 0, cover: false, source: null },
   ],
 };
-const demoSettings = [["sleepScreen", "Sleep screen", ["book", "cover", "pictures", "keep page"]], ["statusBar", "Status bar", ["full", "minimal", "hidden"]], ["language", "Language", ["English", "Nederlands"]]]
+const demoSettings = [["sleepScreen", "Sleep screen", ["book", "cover", "pictures", "keep page", "picture + book"]], ["statusBar", "Status bar", ["full", "minimal", "hidden"]], ["language", "Language", ["English", "Nederlands"]]]
   .map(([k, label, options]) => ({ key: k, label, value: 0, options }));
 
 async function api(path, opts = {}) {
@@ -1187,7 +1213,11 @@ function renderPictures() {
     c.parentElement.classList.remove("portrait");
     if (demo) continue;
     fetch(withKey("/file?kind=sleep&name=" + encodeURIComponent(c.dataset.pic))).then((r) => r.ok ? r.arrayBuffer() : null)
-      .then((buf) => { if (buf) drawBits(c, new Uint8Array(buf), screen().width, screen().height); });
+      .then((buf) => {
+        if (!buf) return;
+        if (buf.byteLength === squareBytes()) drawSquare(c, new Uint8Array(buf));
+        else drawBits(c, new Uint8Array(buf), screen().width, screen().height);
+      });
   }
 }
 
@@ -1216,10 +1246,12 @@ function openEditor() {
   $("#e-file").click();
 }
 
-// The picture as the reader will show it: placed, scaled, then 1-bit.
+// The picture as the reader will show it: placed, scaled, then 1-bit. Square: the
+// screen's short side, shown beside grey stand-ins for the book's title and progress.
 function renderEditor() {
   if (!editorImage) return;
-  const W = screen().width, H = screen().height;
+  const square = $("#e-shape").value === "square";
+  const W = square ? squareSide() : screen().width, H = square ? squareSide() : screen().height;
   const work = Object.assign(document.createElement("canvas"), { width: W, height: H });
   const ctx = work.getContext("2d", { willReadFrequently: true });
   ctx.fillStyle = "#fff";
@@ -1247,7 +1279,8 @@ function renderEditor() {
   gray = B.adjust(gray, +$("#e-bright").value, +$("#e-contrast").value);
   if ($("#e-sharpen").checked) gray = B.sharpen(gray, W, H);
   editorBits = B.dither(gray, W, H, { method: $("#e-method").value });
-  drawBits($("#e-canvas"), editorBits, W, H);
+  if (square) drawSquare($("#e-canvas"), editorBits);
+  else drawBits($("#e-canvas"), editorBits, W, H);
   $("#e-upload").disabled = demo;
 }
 
@@ -1256,6 +1289,10 @@ $("#e-file").addEventListener("change", async (e) => {
   e.target.value = "";
   if (!f) return;
   try { editorImage = await createImageBitmap(f); renderEditor(); } catch (err) { alert(t("cannotRead", err.message)); }
+});
+$("#e-shape").addEventListener("input", () => {
+  $("#e-fit").value = $("#e-shape").value === "square" ? "cover" : "contain";  // square: crop to it
+  renderEditor();
 });
 for (const id of ["#e-fit", "#e-rotate", "#e-zoom", "#e-x", "#e-y", "#e-method", "#e-bright", "#e-contrast", "#e-sharpen", "#e-invert"]) {
   $(id).addEventListener("input", renderEditor);

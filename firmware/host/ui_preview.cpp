@@ -1,5 +1,5 @@
 // Renders every UI screen with the real ui.cpp into PBM files:
-//   ui_preview <out_dir> <sample.t5b>
+//   ui_preview <out_dir> <sample.t5b> <square-picture.bin>
 // The last two pages of the .t5b (made for this board's screen) are the book
 // pages behind the status bar. Built once per board by `pixi run ui-preview`,
 // which also converts the PBMs to PNG.
@@ -81,6 +81,25 @@ ui::Bitmap loadCover(const char *path) {
   return b;
 }
 
+// A square sleep picture (bookprep devpages --picture), kSquareBytes.
+std::vector<uint8_t> pictureBits;
+ui::Bitmap loadPicture(const char *path) {
+  FILE *f = fopen(path, "rb");
+  ui::Bitmap b;
+  if (!f) {
+    perror(path);
+    return b;
+  }
+  pictureBits.resize(kSquareBytes);
+  if (fread(pictureBits.data(), 1, pictureBits.size(), f) == pictureBits.size()) {
+    b = {pictureBits.data(), kSquareSide, kSquareSide, kSquareStride};
+  } else {
+    fprintf(stderr, "%s: no %dx%d picture\n", path, kSquareSide, kSquareSide);
+  }
+  fclose(f);
+  return b;
+}
+
 void status(const char *chapter, uint32_t page, uint32_t count, int battery,
             StatusBarMode mode = StatusBarMode::Full, bool bookmarked = false, bool locked = false) {
   ui::StatusView v;
@@ -95,8 +114,9 @@ void status(const char *chapter, uint32_t page, uint32_t count, int battery,
 }
 
 void sleep(const char *title, const char *author, int pct, int battery, ui::Bitmap cover = {},
-           bool locked = false) {
+           bool locked = false, ui::Bitmap picture = {}) {
   ui::SleepView v;
+  v.picture = picture;
   v.title = title;
   v.author = author;
   v.percentRead = pct;
@@ -162,12 +182,13 @@ void settingItem(int i, ui::Item &it, void *) {
 }  // namespace
 
 int main(int argc, char **argv) {
-  if (argc < 3) {
-    fprintf(stderr, "usage: ui_preview <out_dir> <sample.t5b>\n");
+  if (argc < 4) {
+    fprintf(stderr, "usage: ui_preview <out_dir> <sample.t5b> <square-picture.bin>\n");
     return 2;
   }
   outDir = argv[1];
   const char *sample = argv[2];
+  const char *picture = argv[3];
   display::begin();
   ListModel list;
   const char *title = "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy";
@@ -271,6 +292,15 @@ int main(int argc, char **argv) {
 
   sleep(title, "Multatuli", 37, 72, loadCover(sample), true);
   save("21-sleep-cover-locked");
+
+  const ui::Bitmap pic = loadPicture(picture);
+  if (!pic.bits) return 1;
+  sleep(title, "Multatuli", 37, 72, {}, false, pic);
+  save("25-sleep-picture-book");
+  sleep("De Kleine Johannes", "Frederik van Eeden", 64, 15, {}, true, pic);
+  save("26-sleep-picture-short-locked");
+  sleep(nullptr, nullptr, -1, 72, {}, false, pic);
+  save("27-sleep-picture-no-book");
 
   const Row kShelf[] = {
       {"Engels", "4 books", true, false},

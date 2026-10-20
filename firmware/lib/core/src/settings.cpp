@@ -35,7 +35,7 @@ const char *wakeRefreshName(WakeRefresh w) {
 
 int settingOptionCount(SettingId id) {
   switch (id) {
-    case SettingId::SleepScreen: return 4;
+    case SettingId::SleepScreen: return 5;
     case SettingId::StatusBar: return 3;
     case SettingId::Flip: return 2;
     case SettingId::HoldAction: return 4;
@@ -143,7 +143,8 @@ void settingOptionText(SettingId id, int i, char *out, size_t n) {
   if (!n) return;
   out[0] = '\0';
   if (i < 0 || i >= settingOptionCount(id)) return;
-  static const S kScreens[] = {S::ScreenBook, S::ScreenCover, S::ScreenPictures, S::ScreenPage};
+  static const S kScreens[] = {S::ScreenBook, S::ScreenCover, S::ScreenPictures, S::ScreenPage,
+                               S::ScreenPictureBook};
   static const S kBars[] = {S::BarFull, S::BarMinimal, S::BarHidden};
   static const S kHolds[] = {S::HoldSleep, S::HoldBookmark, S::HoldLock, S::HoldOpenMenu};
   static const S kWakes[] = {S::WakeRewrite, S::WakeRetain, S::WakeFull};

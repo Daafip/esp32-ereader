@@ -7,7 +7,9 @@ from bookprep.devpages import (
     calibration_image,
     main,
     sample_pages,
+    sample_picture,
 )
+from bookprep.layout import SCREENS
 from bookprep.t5b import T5BFile, pack_page
 
 
@@ -45,6 +47,16 @@ def test_main_writes_header_and_t5b(tmp_path, font_path):
     book = T5BFile(t5b)
     assert book.header.page_count == 3
     assert [e.title for e in book.toc] == ["Calibration", "Sample text"]
+
+
+def test_sample_picture_is_square(tmp_path, font_path):
+    for screen_id, side in (("t5-213", 122), ("4.7in", 540)):
+        img = sample_picture(SCREENS[screen_id])
+        assert img.mode == "1" and img.size == (side, side)
+        assert 0.1 < img.histogram()[0] / side**2 < 0.9  # a picture, not a blank
+    pic = tmp_path / "pic.bin"
+    assert main(["--t5b", str(tmp_path / "dev.t5b"), "--picture", str(pic)]) == 0
+    assert pic.stat().st_size == 16 * 122  # kSquareBytes on the T5-2.13
 
 
 def test_font_sheet(sample_epub, tmp_path, font_path):

@@ -228,8 +228,10 @@ def test_settings_name_wifi_time_pictures_reset(server, tmp_path):
 
     assert upload(base, "sleep", "a.bin", bytes(32 * 122))[0] == 200
     assert upload(base, "sleep", "b.bin", bytes(100))[0] == 400
-    assert info(base)["pictures"] == ["a.bin"]
-    assert call(f"{base}/api/picture?name=a.bin&k={CODE}", "DELETE")[0] == 200
+    assert upload(base, "sleep", "c.bin", bytes(16 * 122))[0] == 200  # square, beside the book
+    assert info(base)["pictures"] == ["a.bin", "c.bin"]
+    for name in ("a.bin", "c.bin"):
+        assert call(f"{base}/api/picture?name={name}&k={CODE}", "DELETE")[0] == 200
 
     assert upload(base, "book", "boek.t5b", t5b_bytes(tmp_path))[0] == 200
     assert post(base, "/api/reset")[0] == 400

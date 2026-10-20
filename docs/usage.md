@@ -208,8 +208,14 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
   - *Sleep screen*: what shows while the reader sleeps: **book** (title, author,
     progress), **cover** (the same with the book's cover; books without one fall back
     to "book"), **pictures** (your own pictures in turn, made on the page under "Sleep
-    pictures") or **keep page** (the page stays; the next press turns it).
-    The picture editor shows exactly what the reader will show. *Method*: Atkinson
+    pictures"), **keep page** (the page stays; the next press turns it) or **picture +
+    book** (one of your square pictures at the side, left on the T5-2.13 and on top
+    on the 4.7" boards, with title, author and progress next to it; without square
+    pictures it falls back to "book").
+    The picture editor shows exactly what the reader will show. *Shape*: **full
+    screen** (for "pictures") or **square, beside the book** (for "picture + book":
+    the screen's height on the T5-2.13, its width on the 4.7"; it starts on *Fill*,
+    which crops the photo to a square). *Method*: Atkinson
     (default: clean whites and blacks), Floyd–Steinberg (more detail, more noise),
     pattern, or threshold (drawings, text). *Brightness* and *contrast* help with
     dark photos (e-paper looks darker than a screen); *sharpen* keeps small details.
