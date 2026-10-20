@@ -2,7 +2,7 @@
 //
 // Joins your home network (entered on the page, or include/secrets.h's WIFI_SSID /
 // WIFI_PASSWORD), or starts the reader's own network (WPA2, password kept in NVS).
-// Serves the page from include/web_index.h and a small JSON API; every API call
+// Serves the page from include/web_assets.h and a small JSON API; every API call
 // needs the 4-digit session code shown on the e-ink screen. Wi-Fi is off
 // whenever this mode isn't running.
 #pragma once

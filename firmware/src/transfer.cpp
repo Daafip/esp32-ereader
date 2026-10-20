@@ -216,12 +216,18 @@ String bookDirFor(const String &name) {
 // --- handlers ---------------------------------------------------------------------
 
 // The page, the converter script, fonts and hyphenation data (web_assets.h).
+// Browsers keep them but ask each time (ETag): after an update they get the new ones.
 bool serveAsset(const String &uri) {
   for (const WebAsset &a : kWebAssets) {
     if (uri != a.path) continue;
     touch();
+    server.sendHeader("Cache-Control", "no-cache");
+    server.sendHeader("ETag", a.etag);
+    if (server.header("If-None-Match") == a.etag) {
+      server.send(304);
+      return true;
+    }
     if (a.gzip) server.sendHeader("Content-Encoding", "gzip");
-    server.sendHeader("Cache-Control", uri == "/" ? "no-cache" : "max-age=86400");
     server.send_P(200, a.mime, reinterpret_cast<const char *>(a.data), a.len);
     return true;
   }
@@ -848,6 +854,8 @@ void handleNotFound() {
 
 void addRoutes() {
   if (routesAdded) return;
+  static const char *kHeaders[] = {"If-None-Match"};
+  server.collectHeaders(kHeaders, 1);
   server.on("/", HTTP_GET, handleIndex);
   server.on("/api/info", HTTP_GET, handleInfo);
   server.on("/api/upload", HTTP_POST, handleUploadDone, handleUploadData);

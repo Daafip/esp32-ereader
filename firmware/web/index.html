@@ -135,7 +135,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   <form class="keybox" id="keybox" hidden>
     <b data-t="enterCode">Enter the code</b>
     <p data-t="codeHint">It is shown on the reader's screen.</p>
-    <input id="key" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" required>
+    <input id="key" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" required>
     <button class="btn" data-t="continue">Continue</button>
   </form>
 
@@ -574,7 +574,7 @@ async function refresh() {
     render();
     show("app");
   } catch (e) {
-    if (e.status === 403) { sessionStorage.removeItem("k"); $("#meta").textContent = ""; show("keybox"); $("#key").focus(); }
+    if (e.status === 403) { sessionStorage.removeItem("k"); $("#meta").textContent = ""; $("#key").value = ""; show("keybox"); $("#key").focus(); }
     else $("#meta").textContent = t("notReachable");
   }
 }

@@ -209,7 +209,7 @@ checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.m
 - [x] Hold gesture remappable (sleep / bookmark / lock / menu); device name shown above the library
 - [ ] 🧑 Hardware check: see `docs/checkpoints.md` → "Phase 9 features"
 
-## After 1.0 (releases 1.1.0 on 2026-10-14, 1.2.0 and 1.3.0 on 2026-10-20)
+## After 1.0 (releases 1.1.0 on 2026-10-14, 1.2.0, 1.3.0 and 1.3.1 on 2026-10-20)
 
 - [x] Pictures: Atkinson dithering by default (also Floyd-Steinberg, ordered, threshold), sharpening, brightness/contrast in the picture editor; covers sharpened + Atkinson in both converters (parity-tested); contrast measured on the photo only in "Fit"
 - [x] Settings → Flip screen: image 180 degrees (rotation 90 <-> 270), the next refresh full; touch and the M5Paper's switch turn along

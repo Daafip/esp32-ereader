@@ -254,7 +254,9 @@ def write_header(assets: list[Asset], header: Path) -> int:
         "// The reader's web page, the in-browser converter and its fonts/hyphenation data.\n"
         "#pragma once\n\n#include <stddef.h>\n#include <stdint.h>\n\n"
         "struct WebAsset {\n  const char *path;\n  const char *mime;\n  const uint8_t *data;\n"
-        "  size_t len;\n  bool gzip;  // send with Content-Encoding: gzip\n};\n\n"
+        "  size_t len;\n  bool gzip;  // send with Content-Encoding: gzip\n"
+        "  const char *etag;  // quoted hash of the data: browsers ask again after an update\n"
+        "};\n\n"
     ]
     total = 0
     table = []
@@ -265,7 +267,10 @@ def write_header(assets: list[Asset], header: Path) -> int:
         parts.append(f"// {a.path}: {len(a.data)} bytes{', gzipped' if a.gzip else ''}\n")
         parts.append(f"static const uint8_t kWebAsset{i}[{len(data)}] = {{{rows}\n}};\n\n")
         gz = "true" if a.gzip else "false"
-        table.append(f'  {{"{a.path}", "{a.mime}", kWebAsset{i}, {len(data)}, {gz}}},')
+        etag = hashlib.sha256(data).hexdigest()[:16]
+        table.append(
+            f'  {{"{a.path}", "{a.mime}", kWebAsset{i}, {len(data)}, {gz}, "\\"{etag}\\""}},'
+        )
     parts.append("static const WebAsset kWebAssets[] = {\n" + "\n".join(table) + "\n};\n")
     parts.append(f"constexpr size_t kWebAssetCount = {len(assets)};  // {total} bytes in flash\n")
     header.write_text("".join(parts), encoding="ascii")
