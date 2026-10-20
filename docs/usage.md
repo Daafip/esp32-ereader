@@ -127,8 +127,12 @@ page comes first.)
 **Settings from the page:** ⚙ Settings has the reader's settings (the same as on the
 reader, below) and a **Name** for the reader, shown above its library.
 
-**Firmware updates over Wi-Fi:** the same page has "Update firmware". Upload
-the `-ota.bin` for your board from a release or `pixi run fw-dist`: `t5-reader-…`,
+**Firmware updates over Wi-Fi:** the same page has "Update firmware". When the
+phone has internet (the reader on your home Wi-Fi, not in its own network), the page
+asks GitHub for the latest release: "Install v…" downloads it for your board and
+sends it to the reader in one go (the button stands out when the release is newer,
+and is gone when the reader runs it already). Otherwise upload the `-ota.bin` for
+your board from a release or `pixi run fw-dist` with "Choose": `t5-reader-…`,
 `t5-47-reader-…`, `m5papers3-reader-…` or `m5paper-reader-…` (the page names the
 right one; another board's file is refused). The reader checks the image, restarts
 into it and leaves Wi-Fi mode. If anything goes wrong, install over USB as above.

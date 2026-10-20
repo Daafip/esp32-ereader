@@ -131,7 +131,7 @@ def upload_from_page(tmp_path: Path, epub: Path, name: str, **server) -> tuple[s
 
     from bookprep.devserver import make_server
 
-    srv = make_server(tmp_path, "1234", port=0, fonts=False, **server)
+    srv = make_server(tmp_path, "1234", port=0, fonts=False, update_site="/updates/", **server)
     shutil.copy(epub, tmp_path / "www" / name)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
@@ -196,7 +196,7 @@ def test_page_searches_a_book_on_the_reader(tmp_path, sample_epub, font_path):
     from bookprep.cli import main as prep
     from bookprep.devserver import make_server
 
-    srv = make_server(tmp_path, "1234", port=0, fonts=True)
+    srv = make_server(tmp_path, "1234", port=0, fonts=True, update_site="/updates/")
     sd = tmp_path / "sd" / "books"
     (sd / ".src").mkdir(parents=True)
     assert prep([str(sample_epub), "--out", str(sd)]) == 0
@@ -215,3 +215,34 @@ def test_page_searches_a_book_on_the_reader(tmp_path, sample_epub, font_path):
     hits = re.search(r'<body[^>]*data-hits="(\d+)"', dom)
     assert hits and int(hits.group(1)) >= 1, dom[-800:]
     assert "<mark>alinea</mark>" in dom
+
+
+def test_page_installs_the_latest_release(tmp_path):
+    """Update firmware -> Install: the page reads manifest-<board>.json from the update
+    site (GitHub Pages; here a folder on the dev server), downloads the app image and
+    sends it to /api/firmware under the release's file name."""
+    from bookprep.devserver import make_server
+
+    srv = make_server(tmp_path, "1234", port=0, fonts=False, update_site="/updates/")
+    site = tmp_path / "www" / "updates"
+    (site / "t5-213").mkdir(parents=True)
+    app = bytes(range(256)) * 700  # 175 KB, a few download chunks
+    (site / "t5-213" / "firmware.bin").write_bytes(app)
+    parts = [{"path": "t5-213/bootloader.bin", "offset": 0x1000},
+             {"path": "t5-213/firmware.bin", "offset": 0x10000}]  # fmt: skip
+    manifest = {"version": "9.9.0", "builds": [{"chipFamily": "ESP32", "parts": parts}]}
+    (site / "manifest-t5-213.json").write_text(json.dumps(manifest))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{srv.server_address[1]}/?k=1234#update"
+        dom = subprocess.run(
+            [chromium(), "--headless=new", "--disable-gpu", "--no-first-run",
+             "--virtual-time-budget=60000", "--dump-dom", url],
+            capture_output=True, text=True, timeout=300, check=True,
+        ).stdout  # fmt: skip
+    finally:
+        srv.shutdown()
+    status = re.search(r'<body[^>]*data-update="([^"]*)"', dom)
+    assert status, dom[-800:]
+    assert html.unescape(status.group(1)).startswith("sub ok: Updated."), status.group(1)
+    assert (tmp_path / "firmware" / "t5-reader-9.9.0-ota.bin").read_bytes() == app

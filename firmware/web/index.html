@@ -54,7 +54,6 @@ ul{list-style:none;margin:0;padding:0}
 .pic canvas{display:block;width:100%;image-rendering:auto;background:#fff;border-radius:3px}
 .pic .link{display:block;margin:4px auto 0;padding:4px 9px;font-size:13px}
 .addpic{display:grid;place-items:center;min-height:80px;color:var(--muted);font-size:14px;cursor:pointer;border-style:dashed}
-.fw{cursor:pointer}
 .fw .bar{margin-top:9px}
 .note{color:var(--muted);font-size:13px;margin:26px 4px 0}
 .keybox{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:26px 20px;text-align:center}
@@ -162,15 +161,15 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="pics" id="pics"></div>
     <p class="hint" data-t="pictureHint">Shown while the reader sleeps (Settings, Sleep screen: pictures; square ones: picture + book).</p>
     <h2><span data-t="firmware">Firmware</span><span id="fwver"></span></h2>
-    <label class="card fw">
-      <input type="file" id="fw" accept=".bin" hidden>
+    <div class="card fw">
       <div class="grow">
         <div class="title" data-t="updateFirmware">Update firmware</div>
         <div class="sub" id="fwsub"></div>
         <div class="bar"><i id="fwbar"></i></div>
       </div>
-      <span class="link" data-t="choose">Choose</span>
-    </label>
+      <button class="link" id="fwgh"></button>
+      <label class="link"><input type="file" id="fw" accept=".bin" hidden><span data-t="choose">Choose</span></label>
+    </div>
     <p class="note"><span data-t="note">Books are typeset in this browser, then only the result goes to the reader.
       The reader keeps the original, so “Restyle” works from any phone later.</span>
       <a href="licenses.txt" style="color:inherit" data-t="licences">Font and hyphenation licences</a>.</p>
@@ -372,6 +371,10 @@ const T = {
     threshold: "Threshold", brightness: "Brightness", contrast: "Contrast", sharpen: "Sharpen", invert: "Invert",
     updateFirmware: "Update firmware", otaHint: "The {0}…-ota.bin from a release or pixi run fw-dist", choose: "Choose",
     notOta: "This doesn't look like a {0}…-ota.bin file for this reader. Send it anyway?", sendingPct: "Sending · {0}%",
+    ghCheck: "From GitHub", ghInstall: "Install {0}", ghChecking: "Asking GitHub for the latest release…",
+    ghNewer: "Version {0} is out.", ghOther: "Latest release: {0}.", ghCurrent: "Up to date: {0}.", ghConfirm: "Install version {0} from GitHub? The reader restarts with it.",
+    ghOffline: "Can't reach GitHub: this phone needs internet. Put the reader on your home Wi-Fi (⚙ Settings), or choose a downloaded file.",
+    downloadingPct: "Downloading · {0}%",
     updated: "Updated. The reader restarts and leaves Wi-Fi mode.",
     note: "Books are typeset in this browser, then only the result goes to the reader. The reader keeps the original, so “Restyle” works from any phone later.",
     licences: "Font and hyphenation licences", connectionLost: "connection lost: is the reader still in Wi-Fi mode?",
@@ -424,6 +427,10 @@ const T = {
     threshold: "Drempel", brightness: "Helderheid", contrast: "Contrast", sharpen: "Verscherpen", invert: "Omkeren",
     updateFirmware: "Firmware bijwerken", otaHint: "De {0}…-ota.bin uit een release of pixi run fw-dist", choose: "Kiezen",
     notOta: "Dit lijkt geen {0}…-ota.bin voor deze lezer. Toch versturen?", sendingPct: "Versturen · {0}%",
+    ghCheck: "Van GitHub", ghInstall: "{0} installeren", ghChecking: "GitHub vragen naar de nieuwste release…",
+    ghNewer: "Versie {0} is uit.", ghOther: "Nieuwste release: {0}.", ghCurrent: "Bijgewerkt: {0}.", ghConfirm: "Versie {0} van GitHub installeren? De lezer start ermee opnieuw.",
+    ghOffline: "GitHub is niet bereikbaar: deze telefoon heeft internet nodig. Zet de lezer op de wifi thuis (⚙ Instellingen), of kies een gedownload bestand.",
+    downloadingPct: "Downloaden · {0}%",
     updated: "Bijgewerkt. De lezer start opnieuw en stopt de wifi-modus.",
     note: "Boeken worden in deze browser opgemaakt; alleen het resultaat gaat naar de lezer. De lezer bewaart het origineel, zodat ‘Opmaak’ later vanaf elke telefoon werkt.",
     licences: "Licenties van lettertypes en afbreekpatronen", connectionLost: "verbinding verbroken: staat de lezer nog in wifi-modus?",
@@ -588,8 +595,9 @@ function render() {
   renderBooks();
   renderPictures();
   if (!$("#fwsub").classList.contains("ok") && !$("#fwsub").classList.contains("err")) {
-    $("#fwsub").textContent = t("otaHint", otaPrefix());
+    $("#fwsub").textContent = fwHint();
   }
+  renderLatest();
 }
 
 function renderStorage() {
@@ -1314,21 +1322,112 @@ $("#e-upload").addEventListener("click", async () => {
 // Release file names start with the board (older firmware doesn't say: the T5-2.13).
 const otaPrefix = () => (!info.board || info.board === "t5-213" ? "t5" : info.board) + "-reader-";
 
+const fwSay = (text, cls = "") => { $("#fwsub").textContent = text; $("#fwsub").className = "sub " + cls; };
+const fwBar = (p) => { $("#fwbar").style.width = p * 100 + "%"; };
+
+// An OTA image to the reader, which checks it (chip, board tag) and restarts with it.
+async function sendFirmware(blob, name) {
+  if (demo) return fwSay(t("demoNothing"), "ok");
+  try {
+    await send("/api/firmware", blob, name, (p) => { fwBar(p); fwSay(t("sendingPct", Math.round(p * 100))); });
+    fwBar(1);
+    fwSay(t("updated"), "ok");
+  } catch (err) { fwSay(err.message, "err"); }
+}
+
 $("#fw").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  const sub = $("#fwsub");
-  const bar = $("#fwbar");
-  const say = (text, cls = "") => { sub.textContent = text; sub.className = "sub " + cls; };
   const looksRight = file.name.startsWith(otaPrefix()) && /-ota[.]bin$/i.test(file.name);
   if (!looksRight && !confirm(t("notOta", otaPrefix()))) return;
-  if (demo) return say(t("demoNothing"), "ok");
+  await sendFirmware(file, file.name);
+});
+
+// Releases straight from GitHub: the browser installer on GitHub Pages always has the
+// latest one (release.yml). Its manifest-<board>.json gives the version and the app
+// image (<board>/firmware.bin, the same bytes as the release's -ota.bin). The release
+// downloads on github.com can't be fetched by a page (no CORS headers); Pages can. The
+// phone needs internet for it: the reader on the home Wi-Fi, not in its own network.
+const kUpdateSite = "https://daafip.github.io/esp32-ereader/";
+const kAppOffset = 0x10000;  // APP_AT in tools/make_installer.py
+let latest = null;  // { version, url } of the latest release for this board, once asked
+
+// -1, 0, 1 for plain versions ("1.10.0" > "1.9.2"); null otherwise (dev builds).
+function compareVersions(a, b) {
+  const parse = (v) => /^\d+(\.\d+)*$/.test(v || "") ? v.split(".").map(Number) : null;
+  const pa = parse(a), pb = parse(b);
+  if (!pa || !pb) return null;
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return Math.sign(d);
+  }
+  return 0;
+}
+
+async function checkLatest() {
+  const site = new URL(info.updateSite || kUpdateSite, location.href);  // the dev server: its own
+  const r = await fetch(new URL(`manifest-${info.board || "t5-213"}.json`, site), { cache: "no-cache", signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error(t("failed", r.status));
+  const m = await r.json();
+  const app = (m.builds?.[0]?.parts || []).find((p) => p.offset === kAppOffset);
+  if (!m.version || !app) throw new Error("no app image in the manifest");
+  latest = { version: m.version, url: new URL(app.path, site).href };
+  if (!$("#fwsub").classList.contains("ok") && !$("#fwsub").classList.contains("err")) fwSay(fwHint());
+  renderLatest();
+}
+
+function fwHint() {
+  if (!latest) return t("otaHint", otaPrefix());
+  const cmp = compareVersions(latest.version, info.version), v = "v" + latest.version;
+  return t(cmp === 0 ? "ghCurrent" : cmp === 1 ? "ghNewer" : "ghOther", v);
+}
+
+// The GitHub button: "From GitHub" until the latest release is known, then "Install vX"
+// (prominent when newer), hidden when the reader runs it already.
+function renderLatest() {
+  const b = $("#fwgh");
+  const cmp = latest && compareVersions(latest.version, info.version);
+  b.hidden = cmp === 0;
+  b.className = cmp === 1 ? "btn small" : "link";
+  b.textContent = latest ? t("ghInstall", "v" + latest.version) : t("ghCheck");
+}
+
+async function download(url, onProgress) {
+  const r = await fetch(url, { cache: "no-cache" });
+  if (!r.ok) throw new Error(t("failed", r.status));
+  const total = +r.headers.get("Content-Length") || 0;
+  const reader = r.body.getReader(), chunks = [];
+  for (let got = 0; ;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    got += value.length;
+    if (total) onProgress(got / total);
+  }
+  return new Blob(chunks);
+}
+
+async function installLatest() {
+  if (!latest) {
+    fwSay(t("ghChecking"));
+    try { await checkLatest(); } catch (err) { return fwSay(t("ghOffline"), "err"); }
+    if (compareVersions(latest.version, info.version) === 0) return;
+  }
+  if (!confirm(t("ghConfirm", "v" + latest.version))) return;
+  if (demo) return fwSay(t("demoNothing"), "ok");
+  let blob;
   try {
-    await send("/api/firmware", file, file.name, (p) => { bar.style.width = p * 100 + "%"; say(t("sendingPct", Math.round(p * 100))); });
-    bar.style.width = "100%";
-    say(t("updated"), "ok");
-  } catch (err) { say(err.message, "err"); }
+    blob = await download(latest.url, (p) => { fwBar(p); fwSay(t("downloadingPct", Math.round(p * 100))); });
+  } catch (err) { return fwSay(t("ghOffline"), "err"); }
+  fwBar(0);
+  await sendFirmware(blob, `${otaPrefix()}${latest.version}-ota.bin`);
+}
+$("#fwgh").addEventListener("click", async () => {
+  const b = $("#fwgh");
+  if (b.disabled) return;  // one install at a time
+  b.disabled = true;
+  try { await installLatest(); } finally { b.disabled = false; }
 });
 
 $("#keybox").addEventListener("submit", (e) => {
@@ -1344,11 +1443,13 @@ applyLang();
   await loadAssets();
   await refresh();
   syncClock();
+  checkLatest().catch(() => {});  // no internet (the reader's own network): the button asks again
   // development hooks (used by the tests):
   //   #typeset=<url>[&upload]   the typeset sheet for a file on this server [and upload it]
   //   #reader=<book>[&find=<q>] a book's sheet [and search it: body data-hits = count]
   //   #settings                 the settings sheet
   //   #editor=<url>             the picture editor with an image from this server
+  //   #update                   install the latest release (body data-update = the result)
   const hook = location.hash.match(/^#typeset=([^&]+)(&upload)?$/);
   if (hook) {
     const url = decodeURIComponent(hook[1]);
@@ -1371,6 +1472,11 @@ applyLang();
     }
   }
   if (location.hash === "#settings") await openSettings();
+  if (location.hash === "#update") {
+    window.confirm = () => true;  // unattended
+    await installLatest();
+    document.body.dataset.update = $("#fwsub").className + ": " + $("#fwsub").textContent;
+  }
   const editorHook = location.hash.match(/^#editor=(.+)$/);
   if (editorHook) {
     openEditor();

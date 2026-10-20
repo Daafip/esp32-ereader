@@ -91,6 +91,10 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
   full-screen page each, or a square of the short side for "picture + book": told
   apart by size), fonts in `/fonts` (`storage.h`).
 - The home Wi-Fi password and the AP password never go back to the page.
+- The page's "Install vX" takes releases from GitHub Pages (`kUpdateSite` in
+  `index.html`: `manifest-<board>.json` + the app image at 0x10000, kept on the latest
+  release by `release.yml`); github.com release downloads have no CORS headers. The
+  dev server's `--update-site` (tests: a folder under `<root>/www`) stands in for it.
 - No secrets in the repo (`firmware/include/secrets.h` is gitignored).
 - Commit per phase; tick `PLAN.md` checkboxes as work lands.
 

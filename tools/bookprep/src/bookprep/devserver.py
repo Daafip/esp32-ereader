@@ -11,7 +11,11 @@ reader:
 
 The card layout matches the reader's (firmware/src/storage.h): /books (one folder
 level), /books/.src, /books/.marks, /sleep, /fonts. Reader settings, the device
-name, home Wi-Fi, positions and the clock live in <root>/state.json.
+name, home Wi-Fi, positions and the clock live in <root>/state.json. A firmware
+update is kept in <root>/firmware/<name>.
+
+Unlike the reader, /api/info can name the page's update site (--update-site, e.g.
+a local folder under <root>/www for the tests); without it the page asks GitHub.
 """
 
 from __future__ import annotations
@@ -107,6 +111,7 @@ class Handler(SimpleHTTPRequestHandler):
     code: str
     screen: Screen
     card_bytes: int | None = None  # a fake card this small (--card-mb), else the real disk
+    update_site: str | None = None  # the page's releases (--update-site), else GitHub
 
     def log_message(self, fmt, *args):
         if not self.path.startswith(("/fonts/", "/hyph/")):
@@ -232,7 +237,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self.upload()
         if path == "/api/firmware":
             if self.authorized():
-                self.read_upload()
+                got = self.read_upload()
+                if not got:
+                    return self.send_json(400, {"error": "no file"})
+                name, data = got
+                name = name.rsplit("/", 1)[-1]
+                if not is_safe_name(name, (".bin",)):
+                    name = "firmware.bin"
+                (self.root / "firmware").mkdir(exist_ok=True)
+                (self.root / "firmware" / name).write_bytes(data)
                 self.send_json(200, {})
             return None
         self.read_form()
@@ -325,6 +338,7 @@ class Handler(SimpleHTTPRequestHandler):
             "name": state["name"], "homeWifi": state["wifi"].get("ssid", ""), "locked": False,
             "screen": screen, "battery": -1, "total": total, "free": free,
             "stats": stats, "books": books, "fonts": fonts, "pictures": pictures,
+            **({"updateSite": self.update_site} if self.update_site else {}),
         })  # fmt: skip
 
     def read_upload(self) -> tuple[str, bytes] | None:
@@ -608,6 +622,7 @@ def make_server(
     fonts: bool = True,
     screen: str = DEFAULT_SCREEN,
     card_mb: float | None = None,
+    update_site: str | None = None,
 ) -> ThreadingHTTPServer:
     root.mkdir(parents=True, exist_ok=True)
     write_files(build_assets(Path("firmware/.pio/fontcache"), fonts=fonts), root / "www")
@@ -619,6 +634,7 @@ def make_server(
     Bound.code = code
     Bound.screen = SCREENS[screen]
     Bound.card_bytes = int(card_mb * 1048576) if card_mb else None
+    Bound.update_site = update_site
 
     def factory(*args, **kwargs):
         return Bound(*args, directory=str(root / "www"), **kwargs)
@@ -634,10 +650,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--code", default=None, help="session code (default: random)")
     p.add_argument("--screen", choices=sorted(SCREENS), default=DEFAULT_SCREEN, help="reader")
     p.add_argument("--card-mb", type=float, help="fake card size (try a full card)")
+    p.add_argument("--update-site", help="where the page looks for releases (default: GitHub)")
     args = p.parse_args(argv)
     code = args.code or f"{random.randrange(10000):04d}"
     bind = "0.0.0.0" if args.lan else "127.0.0.1"
-    server = make_server(args.root, code, bind, args.port, screen=args.screen, card_mb=args.card_mb)
+    server = make_server(
+        args.root, code, bind, args.port, screen=args.screen, card_mb=args.card_mb,
+        update_site=args.update_site,
+    )  # fmt: skip
     host = lan_address() if args.lan else "localhost"
     print(f"T5 reader dev server: http://{host}:{args.port}/?k={code}   (code {code})")
     print(f"screen: {SCREENS[args.screen].name}")

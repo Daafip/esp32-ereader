@@ -216,6 +216,8 @@ checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.m
 - [x] Installer on esptool-js 0.7.0 (DTR/RTS set together; ESP Web Tools' 0.6 couldn't reset the T5-2.13 into its bootloader on Linux), "Erase everything" box, Linux section (Snap Chromium `raw-usb`, `dialout`); page-only updates from main (`installer.yml`)
 - [ ] 🧑 Flip screen on the T5-2.13 (expected fine: the 1-byte RAM offset is symmetric)
 - [x] Sleep screen "picture + book": a square picture (the screen's short side, `kSquareBytes` in `/sleep`, told apart from full-screen ones by size) left / on top, title, author and progress beside it; the editor's *Shape* (full screen / square, starts on Fill); falls back to "book" without square pictures
+- [x] Firmware from GitHub on the page: "Install vX" reads `manifest-<board>.json` on GitHub Pages (CORS-open, unlike release downloads), downloads the app image and sends it to `/api/firmware`; checked on load (10 s timeout: no internet in the reader's own network), prominent when newer, hidden when current; e2e test against a fake update site on the dev server, tried against the real Pages (byte-identical to the release's -ota.bin)
+- [ ] 🧑 "Install vX" from the page with the T5-2.13 on the home Wi-Fi (needs a release after the one that brings it)
 - [ ] 🧑 "Picture + book" on the T5-2.13: make a square picture on the page, check the layout and that "pictures" keeps showing only the full-screen ones
 
 ---
