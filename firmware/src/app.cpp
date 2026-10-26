@@ -101,6 +101,7 @@ const S kMainItems[] = {S::Resume,  S::Chapters,   S::Bookmarks,    S::GoTo,
                         S::About,   S::Lock,       S::Sleep};
 constexpr int kMainCount = sizeof(kMainItems) / sizeof(kMainItems[0]);
 bool messageOffersWifi = false;  // "No books yet": MENU starts Wi-Fi transfer
+bool messageToLibrary = false;   // "Made for landscape": any key goes back to the library
 int wifiStep = 0;                // QR shown: 0 = automatic, 1 = join Wi-Fi, 2 = open page
 
 // Footer hints: button role, short-press action, long-press action.
@@ -118,9 +119,9 @@ Settings boardDefaults() {
 void applySettings() {
   setLanguage(settings.language);
   input::setLongPress(settings.longPressMs);
-  input::setFlipped(settings.flip);
-  touch::setFlipped(settings.flip);
-  display::setFlipped(settings.flip);  // a change makes the next refresh a full one
+  input::setFlipped(settings.orientation & 1);
+  touch::setFlipped(settings.orientation & 1);
+  display::setOrientation(settings.orientation);  // a change makes the next refresh full
 }
 
 void setScreen(Screen s) {
@@ -230,6 +231,7 @@ void drawSleepScreen() {
 
 void showMessage(ui::Icon icon, const char *title, const char *line1, const char *line2) {
   messageOffersWifi = false;
+  messageToLibrary = false;
   ui::message(icon, title, line1, line2, ui::retryHint());
   display::show(Refresh::Full);
   setScreen(Screen::Message);
@@ -248,6 +250,12 @@ bool openBook(const char *path, bool quiet = false) {
   if (!book.open(path)) {
     Serial.printf("cannot open %s: %s\n", path, book.error());
     if (!quiet) showMessage(ui::Icon::Warning, tr(S::CannotOpenBook), baseName(path), book.error());
+    rtc.bookPath[0] = '\0';
+    return false;
+  }
+  if (book.screen() != display::screenIndex()) {  // made for the other orientation (7.5")
+    Serial.printf("cannot open %s: made for %s\n", path, kScreens[book.screen()].id);
+    book.close();
     rtc.bookPath[0] = '\0';
     return false;
   }
@@ -461,6 +469,18 @@ void openGoTo() {
   renderGoTo();
 }
 
+bool isLandscape(int screen) { return kScreens[screen].w > kScreens[screen].h; }
+
+// A book made for the board's other screen (7.5": portrait vs landscape).
+void showOtherScreen(int screen) {
+  ui::message(ui::Icon::Book, tr(isLandscape(screen) ? S::MadeForLandscape : S::MadeForPortrait),
+              tr(S::OtherScreenLine1), tr(S::OtherScreenLine2), tr(S::BackAnyButton));
+  display::show(menuRefresh());
+  setScreen(Screen::Message);
+  messageOffersWifi = false;
+  messageToLibrary = true;
+}
+
 // The open book lives in this library entry (the book itself or its folder).
 bool holdsOpenBook(const storage::BookEntry &e) {
   if (!book.isOpen()) return false;
@@ -476,6 +496,11 @@ void libraryItem(int i, ui::Item &it, void *) {
   if (e.isFolder) {
     it.chevron = true;
     snprintf(it.detail, sizeof(it.detail), tr(S::BooksN), unsigned(e.pages));
+    return;
+  }
+  if (e.screen != display::screenIndex()) {  // made for the other orientation
+    strlcpy(it.detail, tr(isLandscape(e.screen) ? S::OrientLandscape : S::OrientPortrait),
+            sizeof(it.detail));
     return;
   }
   const uint32_t mark = it.current ? page : prefs::bookmark(e.id);
@@ -824,6 +849,8 @@ void libraryKey(Key k) {
       const storage::BookEntry e = library[list.selected()];
       if (e.isFolder) {
         openLibrary(e.title);
+      } else if (e.screen != display::screenIndex()) {
+        showOtherScreen(e.screen);
       } else if (book.isOpen() && e.path == book.path()) {
         resume();
       } else if (openBook(e.path.c_str())) {
@@ -843,6 +870,13 @@ void settingsKey(Key k) {
       cycleSetting(settings, SettingId(list.selected()));
       prefs::saveSettings(settings);
       applySettings();
+      if (book.isOpen() && book.screen() != display::screenIndex()) {
+        // Turned to the other screen: the open book was made for this one.
+        book.close();
+        rtc.bookPath[0] = '\0';
+        openLibrary(libraryFolder);
+        break;
+      }
       renderSettings();
       break;
     case ListAction::None: break;
@@ -877,7 +911,7 @@ Key touchKey(const TouchEvent &t) {
       case TouchKind::SwipeRight: return Key::NextLong;
       case TouchKind::LongPress: return Key::MenuLong;
       case TouchKind::Tap:
-        switch (readingTap(t.x, t.y, kPageW, kPageH)) {
+        switch (readingTap(t.x, t.y, display::screen().w, display::screen().h)) {
           case ReadingTap::Next: return Key::NextShort;
           case ReadingTap::Prev: return Key::NextLong;
           case ReadingTap::Menu: return Key::MenuShort;
@@ -937,6 +971,8 @@ void handle(Key k) {
     case Screen::Message:
       if (messageOffersWifi) {  // "No books yet"
         startTransfer();
+      } else if (messageToLibrary) {
+        openLibrary(libraryFolder);
       } else {
         ESP.restart();  // retry from the start (card inserted, book copied)
       }
@@ -976,14 +1012,17 @@ void setup() {
   Serial.begin(115200);
   const power::Wake wake = power::wakeReason();
   prefs::begin();
+  setOrientationCount(kScreenCount > 1 ? 4 : 2);  // before loading: the 7.5" turns
   settings = prefs::loadSettings(boardDefaults());
   setLanguage(settings.language);
   locked = prefs::locked();
   input::begin(settings.longPressMs);
+  input::setFlipped(settings.orientation & 1);  // which button the wake press was
   rtcclock::restore();  // M5 boards: the clock after switching off
   Key key = Key::None;
   if (wake == power::Wake::NextButton) key = input::wakePress(kBtnNext);
   if (wake == power::Wake::MenuButton) key = input::wakePress(kBtnMenu);
+  if (wake == power::Wake::PrevButton) key = input::wakePress(kBtnPrev);
 
   if (rtc.magic != kRtcMagic) {
     memset(&rtc, 0, sizeof(rtc));
@@ -1001,7 +1040,8 @@ void setup() {
   display::begin();
   applySettings();  // after display::begin(): the screen orientation
   // Locked and woken by a press that doesn't unlock: back to sleep, screen untouched.
-  const bool buttonWake = wake == power::Wake::NextButton || wake == power::Wake::MenuButton;
+  const bool buttonWake = wake == power::Wake::NextButton || wake == power::Wake::MenuButton ||
+                          wake == power::Wake::PrevButton;
   if (locked && buttonWake && key != Key::MenuLong &&
       (shown == Screen::Reading || shown == Screen::Sleeping)) {
     sleepAgain();

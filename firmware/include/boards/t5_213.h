@@ -23,6 +23,7 @@ constexpr int kEpdRst = 16;           // SCHEMATIC
 constexpr int kEpdBusy = 4;           // SCHEMATIC
 constexpr int kEpdPowerEn = 12;       // V2.4 only (NC on V2.3.1). Strapping pin: drive only after boot.
 constexpr uint32_t kEpdSpiHz = 8000000;
+constexpr int kEpdResetMs = 20;       // reset pulse (low)
 
 // Panel (Checkpoint 0, 2026-10-13, panel tester): SSD1680. EP213Z_122x250's init
 // gives real partial updates (~150 ms; with EP213_122x250 every partial update ran
@@ -43,6 +44,8 @@ constexpr bool kEpdCustomPartialLut = true;
 // sendFastInit): bb_epaper's order lost the image unless the previous refresh
 // was a full one (refresh_test, 2026-10-13).
 constexpr bool kEpdFastInitFirst = true;
+constexpr int kEpdNativeW = 122;      // bb_epaper's buffer: 16 bytes x 250 rows
+constexpr int kEpdNativeH = 250;
 // Landscape 250x122. 90 vs 270 (which edge is "up") is fixed in Phase 1.
 constexpr int kEpdRotation = 90;          // VERIFY
 

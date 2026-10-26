@@ -223,6 +223,19 @@ checks in `docs/checkpoints.md` → "Phase 9 features", user guide `docs/usage.m
 - [ ] 🧑 "Install vX" from the page with the T5-2.13 on the home Wi-Fi (needs a release after the one that brings it)
 - [ ] 🧑 "Picture + book" on the T5-2.13: make a square picture on the page, check the layout and that "pictures" keeps showing only the full-screen ones
 
+## Phase 10 — FireBeetle 2 ESP32-C6 + Waveshare 7.5" (2026-10-26)
+
+David: "add support for the 7.5 inch e-paper display powered by a firebeetle 2
+esp32-c6", then "start with just a test script i run here". Hardware and wiring:
+`epaper-display-wiring-case-specs.md` (written for ESPHome; three buttons, no SD card).
+
+- [x] Board header `boards/firebeetle_75.h` (`-DBOARD_FIREBEETLE_75`): the spec's pins, bb_epaper `EP75_800x480_GEN2`, portrait 480×800, active-high buttons (`kBtnActiveHigh` in `board.h`), plus a microSD breakout on the panel's SPI bus (GPIO6 MISO, GPIO1 CS: the C6 has one SPI bus, the flash holds no books)
+- [x] Hardware test `diag/fb75_test` (env `fb75_test`, `dfrobot_firebeetle2_esp32c6`): battery, button idle levels, bb_epaper buffer = `.t5b` layout, SD page reads, UC81xx probe, full / fast / partial refresh, button log; BUSY trace (`b`: line driven or floating, raw bring-up with bb_epaper's and Waveshare's init) and blind refresh (`w`: fixed waits). Its deep-sleep step hung on David's board and was removed on his request (2026-10-26)
+- [x] 🧑 Run `fb75_test` (`docs/checkpoints.md` → "FireBeetle 2 ESP32-C6 + 7.5""), 2026-10-26: `EP75_800x480_GEN2` at 10 MHz, rotation 90 upright, "all looked good"; full refresh 2568 ms, fast 1495 ms, partial 986 ms (+ 228 ms data, both planes); battery 4230 mV; buttons idle low; bb_epaper buffer = `.t5b` layout. BUSY floated at first (a blind refresh changed nothing): a loose connection. Not yet: SD card (none fitted), button log (no presses recorded)
+- [x] Reader port (`reader_firebeetle75`, `docs/hardware-firebeetle-75.md`): `display_bbep.cpp` for a page too big for RTC memory (`BOARD_SHOWN_IN_RAM`: the shown image in RAM, the app redraws it after deep sleep as on the 4.7"), no panel power pin (RST/CS held high in deep sleep; the C6 holds single pins), the card on the panel's SPI bus (MISO attached first, the panel's clock set before each write), C6 deep-sleep wake on ext1 "any high" for the three buttons with a PREV wake (`Wake::PrevButton`), active-high buttons in `input.cpp`; screens in `SCREENS` / `screens` / devserver; `fw-dist`, installer (a board missing from the latest release is left off the page-only update), release notes, README, docs. T5-2.13 and 4.7" UI pixel-identical (ui-preview compared)
+- [x] Four orientations (David: "allow for rotating any one direction", then "All four, incl. landscape", 2026-10-26): boards that turn (`BOARD_TURNS`) have a second screen a quarter turn away (`kScreens`, `rotationFor()` in `board.h`; `7.5in` 480×800 and `7.5in-landscape` 800×480, both 48,000 bytes a page). Settings "flip" has four options there (*Orientation*; `setOrientationCount()`, tested), the display, UI (`W()`/`H()` in `ui.cpp`), `/api/info` and the converters follow the current screen; books for either are accepted and listed with their screen (device library and page mark the other one, opening it explains; Restyle typesets for the current one, dropping the other shape's size/margin); full-screen sleep pictures per orientation (`/sleep`, `/sleep/7.5in-landscape`). ui-preview renders both (`firebeetle-75`, `firebeetle-75-landscape`); devserver tests and a browser test for a landscape book on a portrait reader
+- [ ] 🧑 The reader on the 7.5" (`docs/checkpoints.md` → "FireBeetle 2 ESP32-C6 + 7.5"" → "The reader"): SD card, page turns and ghosting, deep sleep and the ext1 button wake (the test's first sleep step hung while BUSY was broken), wake-to-image, which landscape way is upright, sleep current
+
 ---
 
 ## Decisions

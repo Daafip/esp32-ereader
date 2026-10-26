@@ -1,10 +1,12 @@
 # Using the reader
 
-Four boards: the LilyGo **T5-2.13** (the original, tested on a V2.3.1 board), the
+Five boards: the LilyGo **T5-2.13** (the original, tested on a V2.3.1 board), the
 LilyGo **T5-4.7" S3**, and M5Stack's **M5PaperS3** and **M5Paper** (later build
 targets, untested on hardware; see
-`docs/hardware-t5-47.md` and `docs/hardware-m5paper.md`). The last three share a 4.7"
-960×540 screen. Everything below applies to all of them unless it says otherwise.
+`docs/hardware-t5-47.md` and `docs/hardware-m5paper.md`), which share a 4.7"
+960×540 screen, and a home-built **FireBeetle 2 ESP32-C6 + Waveshare 7.5"** (800×480,
+portrait or landscape, three buttons; `docs/hardware-firebeetle-75.md`). Everything
+below applies to all of them unless it says otherwise.
 
 ## Installing the firmware
 
@@ -25,14 +27,15 @@ Other ways:
 
 - **From this PC:** `pixi run fw-flash reader` (SD card out while flashing).
   T5-4.7": `pixi run fw-flash reader_t547` (if no port shows up: hold BOOT, press
-  RST, release BOOT). M5PaperS3: `reader_m5papers3`, M5Paper: `reader_m5paper`.
-  This keeps settings too.
+  RST, release BOOT). M5PaperS3: `reader_m5papers3`, M5Paper: `reader_m5paper`,
+  FireBeetle 7.5": `reader_firebeetle75`. This keeps settings too.
 - **Ready-made images:** every release on
   <https://github.com/Daafip/esp32-ereader/releases> has the images attached (built
   by GitHub Actions from the version tag).
 - **esptool-js:** <https://espressif.github.io/esptool-js/>, Flash Address `0x0`, the
   `.bin` *without* `-ota` (`t5-reader-…`, `t5-47-reader-…`, `m5papers3-reader-…`,
-  `m5paper-reader-…`). This image contains bootloader, partition table and app and
+  `m5paper-reader-…`, `firebeetle-75-reader-…`). This image contains bootloader,
+  partition table and app and
   **erases the settings** (books on the card stay).
 - **Over Wi-Fi:** see "Firmware updates over Wi-Fi" below (after the first install).
   Keeps everything.
@@ -61,8 +64,11 @@ change the font or size later from any phone; your reading position and bookmark
 along proportionally. "Download .t5b" saves the result instead (e.g. for the SD card).
 
 The page asks the reader for its screen size and typesets for it: 250×122 at 13 px
-on the T5-2.13, 540×960 at 28 px on the 4.7" readers. A `.t5b` only opens on the
-screen it was made for (books for one 4.7" reader open on the others).
+on the T5-2.13, 540×960 at 28 px on the 4.7" readers, 480×800 at 18 px (portrait) or
+800×480 at 22 px (landscape) on the 7.5". A `.t5b` only opens on the screen it was
+made for (books for one 4.7" reader open on the others). The 7.5" has two: books
+for the other orientation show in its library marked "portrait" or "landscape",
+and on the page too, where **Restyle** typesets them for the current one.
 
 Large books take a moment: Max Havelaar is 3600 pages, ~14 MB to send to the T5-2.13
 (about 55 MB to the T5-4.7", whose pages are 17× bigger). Keep the phone's screen on
@@ -70,13 +76,13 @@ while it uploads.
 
 **On the PC:** `pixi run prep book.epub --out out/ --preview` (`--font`, `--size`, `--mono`,
 `--lang`, `--bionic`, `--no-cover`, ...: `pixi run prep --help`; add `--screen 4.7in` for
-the 4.7" readers), then copy `out/<book>.t5b` to `/books/` (or a folder in it) on the
+the 4.7" readers, `--screen 7.5in` or `7.5in-landscape` for the 7.5"), then copy `out/<book>.t5b` to `/books/` (or a folder in it) on the
 card (FAT32). Page breaks differ slightly from the browser: the two use different font
 engines.
 
 **Try the page without the reader:** `pixi run web-dev --lan` runs it on your PC with a
 folder as fake SD card (`out/web-dev/sd`) and prints an address for your phone
-(`--screen 4.7in` to pretend to be a 4.7" reader).
+(`--screen 4.7in` to pretend to be a 4.7" reader, `--screen 7.5in` for the 7.5").
 
 The reader reopens the last book at the last page. Each book remembers its own page.
 
@@ -144,9 +150,8 @@ settings, positions, statistics and the home Wi-Fi from the reader, then restart
 ## Buttons
 
 The footer of each menu shows the keys. On the T5 boards the chips name the
-gestures: TAP and "2×", HOLD and "long". (The firmware also knows a two-button
-layout, NEXT and MENU, with an outlined "hold" chip for the long press; no supported
-board uses it at the moment.)
+gestures: TAP and "2×", HOLD and "long". With separate buttons (the 7.5") they
+read NEXT and MENU, with an outlined "hold" chip for the long press.
 
 ### T5-2.13 and T5-4.7": one button
 
@@ -164,6 +169,20 @@ A tap waits 300 ms for a possible second tap, so a page turn starts that much la
 Hold time follows Settings → Hold time (long hold = that + 1 s). A hold fires when
 you let go; a long hold fires while you keep holding. On the T5-4.7" the BOOT button
 is wired to the display, so the reader can't use it.
+
+### FireBeetle 7.5": three buttons
+
+Button 1 is PREV, button 2 NEXT, button 3 HOME (the MENU key).
+
+| | NEXT short | NEXT long | PREV | HOME short | HOME long |
+|---|---|---|---|---|---|
+| Reading | next page | previous page | previous page | menu | Settings → *Hold MENU* (default: sleep screen) |
+| Lists | next item | previous item (repeats) | previous item | select / change | back |
+| Go to position | +1 % | +10 % | +10 % | go | back |
+
+Any of the three wakes the reader from sleep; the press that woke it counts (NEXT
+turns the page, PREV turns back, HOME opens the menu). With Settings → Orientation on
+a 180° setting, NEXT and PREV swap.
 
 ### M5PaperS3 and M5Paper: touch
 
@@ -213,10 +232,11 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
     progress), **cover** (the same with the book's cover; books without one fall back
     to "book"), **pictures** (your own pictures in turn, made on the page under "Sleep
     pictures"), **keep page** (the page stays; the next press turns it) or **picture +
-    book** (one of your square pictures at the side, left on the T5-2.13 and on top
-    on the 4.7" boards, with title, author and progress next to it; without square
-    pictures it falls back to "book").
-    The picture editor shows exactly what the reader will show. *Shape*: **full
+    book** (one of your square pictures at the side, left on the T5-2.13 and in
+    landscape, on top on the 4.7" boards and in portrait, with title, author and
+    progress next to it; without square pictures it falls back to "book").
+    The picture editor shows exactly what the reader will show. The 7.5" keeps
+    pictures per orientation: the page shows and makes those of the current one. *Shape*: **full
     screen** (for "pictures") or **square, beside the book** (for "picture + book":
     the screen's height on the T5-2.13, its width on the 4.7"; it starts on *Fill*,
     which crops the photo to a square). *Method*: Atkinson
@@ -227,7 +247,9 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
     **minimal** (progress line and percentage) or **hidden**.
   - *Flip screen*: turn the image upside down, to hold the reader the other way
     round (T5-2.13: USB port at the bottom). Touch and the M5Paper's switch turn
-    along. The first screen after switching is a full refresh.
+    along. The first screen after switching is a full refresh. On the 7.5" this is
+    *Orientation*: portrait, portrait 180°, landscape or landscape 180°. A book made
+    for the other shape can't follow: the library opens instead.
   - *Long hold* (touch: *Long press*): see "The hold gesture".
   - *Lock when asleep*: lock the reader every time the sleep screen appears.
   - *Language*: English or Nederlands (menus, messages and the page).
@@ -238,8 +260,9 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
   - *Sleep after page*: deep sleep between page turns (battery life). Turn off for
     debugging over USB.
   - *Wake refresh*: how a page turn after deep sleep refreshes (`rewrite`, `retain`,
-    `full`; see `docs/hardware.md`). On the T5-2.13 and the T5-4.7" "retain" behaves
-    like "rewrite": every partial update sends the previous page again.
+    `full`; see `docs/hardware.md`). On the T5-2.13, the T5-4.7" and the 7.5"
+    "retain" behaves like "rewrite": every partial update sends the previous page
+    again.
 - **About**: firmware, battery, book, position, card, wake timing.
 - **Lock**: lock the reader (below).
 - **Sleep**: show the sleep screen now.

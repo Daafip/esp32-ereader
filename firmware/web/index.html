@@ -334,7 +334,7 @@ const T = {
     daysRead: "days read", total: "{0} pages · {1} h in total", clockNote: "The reader's clock is set from this page.",
     unknownAuthor: "Unknown author", pagesN: "{0} pages", new: "new", open: "Open", restyle: "Restyle",
     move: "Move", delete: "Delete", noBooks: "No books yet. Add one above.", deleteConfirm: "Delete this book from the reader?",
-    moveTo: "Move to folder (leave empty for none):", noFolder: "No folder", marksN: "{0} bookmarks",
+    moveTo: "Move to folder (leave empty for none):", noFolder: "No folder", marksN: "{0} bookmarks", forLandscape: "made for landscape", forPortrait: "made for portrait",
     waiting: "Waiting…", uploading: "Uploading · {0}% of {1}", added: "Added · {0}", demoNothing: "Demo mode: nothing was sent.",
     useTypes: "Use .epub, .txt or .t5b files.", cannotRead: "Could not read this file: {0}",
     font: "Font", size: "Size", margins: "Margins", spacing: "Line spacing", tight: "Tight", snug: "Snug", normal: "Normal",
@@ -390,7 +390,7 @@ const T = {
     unknownAuthor: "Onbekende auteur", pagesN: "{0} pagina's", new: "nieuw", open: "Openen", restyle: "Opmaak",
     move: "Verplaatsen", delete: "Verwijderen", noBooks: "Nog geen boeken. Voeg er hierboven een toe.",
     deleteConfirm: "Dit boek van de lezer verwijderen?", moveTo: "Verplaats naar map (leeg laten voor geen):",
-    noFolder: "Geen map", marksN: "{0} bladwijzers",
+    noFolder: "Geen map", marksN: "{0} bladwijzers", forLandscape: "opgemaakt voor liggend", forPortrait: "opgemaakt voor staand",
     waiting: "Wachten…", uploading: "Versturen · {0}% van {1}", added: "Toegevoegd · {0}", demoNothing: "Demomodus: er is niets verstuurd.",
     useTypes: "Gebruik .epub-, .txt- of .t5b-bestanden.", cannotRead: "Kan dit bestand niet lezen: {0}",
     font: "Lettertype", size: "Grootte", margins: "Marges", spacing: "Regelafstand", tight: "Krap", snug: "Smal", normal: "Normaal",
@@ -458,6 +458,8 @@ const withKey = (url) => url + (url.includes("?") ? "&" : "?") + "k=" + encodeUR
 const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x !== id; };
 const screen = () => B.screenFor(info.screen);
 const pageBytes = () => Math.ceil(screen().width / 8) * screen().height;
+// The screen a book was made for: the reader's own, or (7.5") its other orientation.
+const bookScreen = (b) => (b && b.screen && b.screen !== screen().id ? B.screenFor(b.screen) : screen());
 // Square sleep pictures ("picture + book"): the screen's short side (kSquareSide).
 const squareSide = () => Math.min(screen().width, screen().height);
 const squareBytes = () => Math.ceil(squareSide() / 8) * squareSide();
@@ -494,8 +496,7 @@ function drawSquare(canvas, bits) {
   bar(cw * 0.5, 6 * s, 14 * s);
   bar(Math.min(cw, 70 * s), 5 * s, 0);
 }
-function fitCanvas(canvas) {
-  const sc = screen();
+function fitCanvas(canvas, sc = screen()) {
   canvas.style.aspectRatio = sc.width + "/" + sc.height;
   canvas.parentElement.classList.toggle("portrait", sc.height > sc.width);
 }
@@ -624,6 +625,8 @@ function renderStats() {
 function bookCard(b) {
   const sub = [b.author || t("unknownAuthor"), t("pagesN", b.pages), size(b.size)];
   if (b.marks) sub.push(t("marksN", b.marks));
+  const sc = bookScreen(b);
+  if (sc.id !== screen().id) sub.push(t(sc.width > sc.height ? "forLandscape" : "forPortrait")); // Restyle turns it
   return `
     <li class="card">
       <div class="grow">
@@ -759,12 +762,12 @@ async function hyphenator(name) {
   return hyphenators.get(name);
 }
 
-// The layout bookprep.js makes of a book with these settings (also for search).
-async function layoutFor(book, s) {
+// The layout bookprep.js makes of a book with these settings for a screen (also for search).
+async function layoutFor(book, s, sc = screen()) {
   const family = await fontFamily(s.font);
   const lang = s.lang === "auto" ? B.languageFallback(book.language || "nl", hyphIndex.aliases) : s.lang;
   const hyph = s.hyphenate ? await hyphenator(lang) : null;
-  return B.typeset(book, { ...s, screen: screen() }, family, hyph);
+  return B.typeset(book, { ...s, screen: sc }, family, hyph);
 }
 
 // --- typeset sheet ------------------------------------------------------------------
@@ -787,7 +790,9 @@ async function openSheet(source) {
   catch (err) { queueItem(source.name).done(t("cannotRead", err.message), "err"); return; }
   const book = B.cleanBook(raw);
   const sc = screen();
-  const settings = { ...B.defaults, size: sc.size, margin: sc.margin, ...savedSettings(), ...(source.settings || {}) };
+  const stored = { ...(source.settings || {}) };
+  if (stored.screen && stored.screen !== sc.id) { delete stored.size; delete stored.margin; } // restyled for the other orientation
+  const settings = { ...B.defaults, size: sc.size, margin: sc.margin, ...savedSettings(), ...stored };
   settings.screen = sc.id;
   const canvas = $("#preview");
   canvas.width = sc.width;
@@ -1027,7 +1032,7 @@ async function openReader(book) {
   $("#r-searchinfo").textContent = book.source ? "" : t("noSource");
   $("#r-search").hidden = !book.source;
   $("#r-status").textContent = t("position", (book.position || 0) + 1);
-  fitCanvas($("#r-page"));
+  fitCanvas($("#r-page"), bookScreen(book));
   $("#reader").showModal();
   try { reading.marks = (await api("/api/marks?file=" + encodeURIComponent(book.file))).pages || []; } catch (e) { reading.marks = []; }
   showReaderPage(reading.page);
@@ -1037,7 +1042,8 @@ async function pageBits(n) {
   const r = reading;
   if (r.pages.has(n)) return r.pages.get(n);
   const res = demo ? null : await fetch(withKey(`/api/page?file=${encodeURIComponent(r.book.file)}&n=${n}`));
-  const bits = res && res.ok ? new Uint8Array(await res.arrayBuffer()) : new Uint8Array(pageBytes()).fill(0xff);
+  const sc = bookScreen(r.book);
+  const bits = res && res.ok ? new Uint8Array(await res.arrayBuffer()) : new Uint8Array(Math.ceil(sc.width / 8) * sc.height).fill(0xff);
   r.pages.set(n, bits);
   return bits;
 }
@@ -1050,7 +1056,8 @@ async function showReaderPage(n) {
   renderMarks();
   const want = r.page;
   const bits = await pageBits(want);
-  if (reading === r && r.page === want) drawBits($("#r-page"), bits, screen().width, screen().height);
+  const sc = bookScreen(r.book);
+  if (reading === r && r.page === want) drawBits($("#r-page"), bits, sc.width, sc.height);
 }
 
 function renderMarks() {
@@ -1103,9 +1110,10 @@ async function searchIndex() {
   let settings = {};
   const meta = await fetch(withKey("/file?kind=meta&name=" + encodeURIComponent(stem(book.source) + ".json")));
   if (meta.ok) settings = await meta.json().catch(() => ({}));
-  const s = { ...B.defaults, size: screen().size, margin: screen().margin, ...settings };
+  const sc = bookScreen(book);
+  const s = { ...B.defaults, size: sc.size, margin: sc.margin, ...settings };
   const parsed = B.cleanBook(await B.extract(await src.arrayBuffer(), book.source));
-  const layout = await layoutFor(parsed, s);
+  const layout = await layoutFor(parsed, s, sc);
   const texts = layout.pages.map((page) => {
     let out = "";
     for (const { line } of page) {

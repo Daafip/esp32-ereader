@@ -34,6 +34,14 @@ BOARDS = [
         "m5papers3",
     ),
     ("m5paper", "reader_m5paper", "ESP32", 0x1000, "M5Stack M5Paper", "m5paper"),
+    (
+        "firebeetle-75",
+        "reader_firebeetle75",
+        "ESP32-C6",
+        0x0,
+        'FireBeetle 2 ESP32-C6 + 7.5"',
+        "firebeetle-75",
+    ),
 ]
 PARTITIONS_AT, BOOT_APP0_AT, APP_AT = 0x8000, 0xE000, 0x10000
 
@@ -101,11 +109,28 @@ def build(out: Path, version: str, source=built_parts) -> list[str]:
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
+    page = (
+        (ROOT / "installer" / "index.html").read_text().replace("{{VERSION}}", version)
+    )
     rows = []
     for board, env, chip, boot_at, label, prefix in BOARDS:
+        try:
+            parts = source(board, env, boot_at, prefix)
+        except FileNotFoundError:
+            if source is built_parts:
+                raise
+            # A board newer than this release (installer.yml): no button until a
+            # release has its images.
+            print(f"{board}: not in this release, left off the page")
+            page = re.sub(
+                r'  <div class="card">[^\n]*\n\s*<button class="install" '
+                rf'data-board="{board}">Install</button></div>\n',
+                "",
+                page,
+            )
+            continue
         d = out / board
         d.mkdir()
-        parts = source(board, env, boot_at, prefix)
         for name in ("bootloader.bin", "partitions.bin", "firmware.bin"):
             (d / name).write_bytes(parts[name])
         (out / "boot_app0.bin").write_bytes(parts["boot_app0.bin"])  # the same for all
@@ -125,9 +150,6 @@ def build(out: Path, version: str, source=built_parts) -> list[str]:
         }  # fmt: skip
         (out / f"manifest-{board}.json").write_text(json.dumps(manifest, indent=1))
         rows.append(board)
-    page = (
-        (ROOT / "installer" / "index.html").read_text().replace("{{VERSION}}", version)
-    )
     (out / "index.html").write_text(page)
     return rows
 

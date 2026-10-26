@@ -122,6 +122,10 @@ SCREENS = {
     for s in (
         Screen("t5-213", "LilyGo T5-2.13", 250, 122, 14, 13, 4, 4, 72, 104),
         Screen("4.7in", 'LilyGo T5-4.7" S3, M5PaperS3, M5Paper', 540, 960, 28, 28, 24, 8, 420, 640),
+        # FireBeetle 2 ESP32-C6 + Waveshare 7.5": one board, two screens (Settings ->
+        # Orientation), a book is made for one of them
+        Screen("7.5in", 'FireBeetle 7.5" (portrait)', 480, 800, 28, 18, 20, 8, 340, 520),
+        Screen("7.5in-landscape", 'FireBeetle 7.5" (landscape)', 800, 480, 28, 22, 32, 8, 288, 416),
     )
 }
 DEFAULT_SCREEN = "t5-213"

@@ -8,6 +8,7 @@ reader:
     pixi run web-dev                    # http://localhost:8000
     pixi run web-dev --lan              # reachable from your phone on the same network
     pixi run web-dev --screen 4.7in     # pretend to be a 4.7" reader (T5-4.7", M5Paper)
+    pixi run web-dev --screen 7.5in     # the 7.5" (7.5in-landscape: turned to landscape)
 
 The card layout matches the reader's (firmware/src/storage.h): /books (one folder
 level), /books/.src, /books/.marks, /sleep, /fonts. Reader settings, the device
@@ -47,8 +48,10 @@ KINDS = {
 MIME = {".epub": "application/epub+zip", ".txt": "text/plain", ".json": "application/json",
         ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2",
         ".t5b": "application/octet-stream", ".bin": "application/octet-stream"}  # fmt: skip
-# /api/info "board" (firmware: BOARD_NAME), one per screen size for the dev server
-BOARD_FOR_SCREEN = {"t5-213": "t5-213", "4.7in": "t5-47"}
+# /api/info "board" (firmware: BOARD_NAME), one per screen size for the dev server.
+# The 7.5" board has two screens (Settings -> Orientation; firmware: kScreens).
+BOARD_FOR_SCREEN = {"t5-213": "t5-213", "4.7in": "t5-47", "7.5in": "firebeetle-75",
+                    "7.5in-landscape": "firebeetle-75"}  # fmt: skip
 
 # The firmware's settings (lib/core/src/settings.cpp): key, English label, options,
 # default option. The page shows whatever the reader sends.
@@ -67,6 +70,25 @@ SETTINGS = [
     ("deepSleep", "Sleep after page", ["off", "on"], 1),
     ("wakeRefresh", "Wake refresh", ["rewrite", "retain", "full"], 0),
 ]  # fmt: skip
+# "flip" on boards that turn (setOrientationCount(4) in settings.cpp)
+ORIENTATION = ("flip", "Orientation", ["portrait", "portrait 180\N{DEGREE SIGN}", "landscape",
+               "landscape 180\N{DEGREE SIGN}"], 0)  # fmt: skip
+
+
+def board_screens(screen: Screen) -> list[Screen]:
+    """The screens of the board this one belongs to, its first screen first (kScreens)."""
+    board = BOARD_FOR_SCREEN.get(screen.id, screen.id)
+    return [s for s in SCREENS.values() if BOARD_FOR_SCREEN.get(s.id, s.id) == board]
+
+
+def settings_for(screen: Screen) -> list[tuple]:
+    """SETTINGS as the reader with this screen has them: a board that turns has four
+    orientations under "flip", the turned screen (index 2) by default here."""
+    screens = board_screens(screen)
+    if len(screens) < 2:
+        return SETTINGS
+    turn = (*ORIENTATION[:3], 2 if screen.id != screens[0].id else 0)
+    return [turn if s[0] == "flip" else s for s in SETTINGS]
 
 
 def picture_sizes(screen: Screen) -> tuple[int, int]:
@@ -161,6 +183,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def sd(self, kind: str) -> Path:
         d = self.card() / KINDS[kind][0]
+        if kind == "sleep" and self.screen.id != board_screens(self.screen)[0].id:
+            d = d / self.screen.id  # storage::picturesDir(): a turned screen's own folder
         d.mkdir(parents=True, exist_ok=True)
         return d
 
@@ -170,7 +194,7 @@ class Handler(SimpleHTTPRequestHandler):
     def state(self) -> dict:
         path = self.root / "state.json"
         state = json.loads(path.read_text()) if path.exists() else {}
-        state.setdefault("settings", {k: d for k, _, _, d in SETTINGS})
+        state.setdefault("settings", {k: d for k, _, _, d in settings_for(self.screen)})
         state.setdefault("positions", {})
         state.setdefault("name", "")
         state.setdefault("wifi", {})
@@ -178,6 +202,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def save_state(self, state: dict) -> None:
         (self.root / "state.json").write_text(json.dumps(state, indent=1))
+
+    def book_screen(self, book: T5BFile) -> Screen | None:
+        """The board screen a book was made for (storage::checkHeader), if any."""
+        size = (book.header.page_w, book.header.page_h)
+        return next((s for s in board_screens(self.screen) if (s.width, s.height) == size), None)
 
     def books(self) -> list[tuple[str, Path, T5BFile]]:
         """(relative path, file, book) for every valid book, folders one level deep."""
@@ -188,8 +217,7 @@ class Handler(SimpleHTTPRequestHandler):
                 continue
             with contextlib.suppress(ValueError):
                 book = T5BFile(path)
-                size = (book.header.page_w, book.header.page_h)
-                if size == (self.screen.width, self.screen.height):
+                if self.book_screen(book):
                     out.append((path.relative_to(root).as_posix(), path, book))
         return out
 
@@ -310,6 +338,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "author": book.header.author,
                 "pages": pages,
                 "size": path.stat().st_size,
+                "screen": self.book_screen(book).id,
                 "position": pos,
                 "progress": pos * 100 // (pages - 1) if pages > 1 else 0,
                 "cover": book.cover is not None,
@@ -411,8 +440,7 @@ class Handler(SimpleHTTPRequestHandler):
         if kind == "book":
             try:
                 book = T5BFile(tmp)
-                size = (book.header.page_w, book.header.page_h)
-                if size != (self.screen.width, self.screen.height):
+                if not self.book_screen(book):
                     raise ValueError("made for another screen size")
                 title = book.header.title or name
             except ValueError as e:
@@ -524,7 +552,7 @@ class Handler(SimpleHTTPRequestHandler):
         state = self.state()
         if self.command == "POST":
             q = self.query()
-            options = {k: len(o) for k, _, o, _ in SETTINGS}
+            options = {k: len(o) for k, _, o, _ in settings_for(self.screen)}
             key, value = q.get("key", ""), q.get("value", "")
             if key not in options or not value.isdigit() or int(value) >= options[key]:
                 return self.send_json(400, {"error": "bad setting"})
@@ -532,7 +560,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.save_state(state)
         return self.send_json(200, {"settings": [
             {"key": k, "label": label, "value": state["settings"].get(k, d), "options": opts}
-            for k, label, opts, d in SETTINGS
+            for k, label, opts, d in settings_for(self.screen)
         ]})  # fmt: skip
 
     def name(self):

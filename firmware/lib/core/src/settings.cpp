@@ -8,6 +8,7 @@ namespace {
 const uint8_t kFullEvery[] = {5, 10, 15, 20, 30, 0};
 const uint16_t kLongPress[] = {400, 500, 600, 800, 1000};
 const uint8_t kIdle[] = {2, 5, 10, 20, 30, 60};
+int orientations = 2;  // setOrientationCount()
 
 template <typename T, size_t N>
 int indexOf(const T (&values)[N], T v) {
@@ -33,11 +34,13 @@ const char *wakeRefreshName(WakeRefresh w) {
   return "?";
 }
 
+void setOrientationCount(int count) { orientations = count > 2 ? 4 : 2; }
+
 int settingOptionCount(SettingId id) {
   switch (id) {
     case SettingId::SleepScreen: return 5;
     case SettingId::StatusBar: return 3;
-    case SettingId::Flip: return 2;
+    case SettingId::Flip: return orientations;
     case SettingId::HoldAction: return 4;
     case SettingId::LockOnSleep: return 2;
     case SettingId::Language: return int(Lang::Count);
@@ -56,7 +59,7 @@ int settingIndex(const Settings &s, SettingId id) {
   switch (id) {
     case SettingId::SleepScreen: i = int(s.sleepScreen); break;
     case SettingId::StatusBar: i = int(s.statusBar); break;
-    case SettingId::Flip: i = s.flip ? 1 : 0; break;
+    case SettingId::Flip: i = s.orientation; break;
     case SettingId::HoldAction: i = int(s.holdAction); break;
     case SettingId::LockOnSleep: i = s.lockOnSleep ? 1 : 0; break;
     case SettingId::Language: i = int(s.language); break;
@@ -75,7 +78,7 @@ void setSettingIndex(Settings &s, SettingId id, int i) {
   switch (id) {
     case SettingId::SleepScreen: s.sleepScreen = SleepScreen(i); break;
     case SettingId::StatusBar: s.statusBar = StatusBarMode(i); break;
-    case SettingId::Flip: s.flip = i == 1; break;
+    case SettingId::Flip: s.orientation = uint8_t(i); break;
     case SettingId::HoldAction: s.holdAction = HoldAction(i); break;
     case SettingId::LockOnSleep: s.lockOnSleep = i == 1; break;
     case SettingId::Language: s.language = Lang(i); break;
@@ -125,7 +128,7 @@ const char *settingLabel(SettingId id, S holdLabel) {
   switch (id) {
     case SettingId::SleepScreen: return tr(S::SetSleepScreen);
     case SettingId::StatusBar: return tr(S::SetStatusBar);
-    case SettingId::Flip: return tr(S::SetFlip);
+    case SettingId::Flip: return tr(orientations > 2 ? S::SetOrientation : S::SetFlip);
     case SettingId::HoldAction: return tr(holdLabel);
     case SettingId::LockOnSleep: return tr(S::SetLockOnSleep);
     case SettingId::Language: return tr(S::SetLanguage);
@@ -148,11 +151,15 @@ void settingOptionText(SettingId id, int i, char *out, size_t n) {
   static const S kBars[] = {S::BarFull, S::BarMinimal, S::BarHidden};
   static const S kHolds[] = {S::HoldSleep, S::HoldBookmark, S::HoldLock, S::HoldOpenMenu};
   static const S kWakes[] = {S::WakeRewrite, S::WakeRetain, S::WakeFull};
+  static const S kTurns[] = {S::OrientPortrait, S::OrientPortraitFlip, S::OrientLandscape,
+                             S::OrientLandscapeFlip};
   switch (id) {
     case SettingId::SleepScreen: snprintf(out, n, "%s", tr(kScreens[i])); break;
     case SettingId::StatusBar: snprintf(out, n, "%s", tr(kBars[i])); break;
     case SettingId::HoldAction: snprintf(out, n, "%s", tr(kHolds[i])); break;
     case SettingId::Flip:
+      snprintf(out, n, "%s", tr(orientations > 2 ? kTurns[i] : i ? S::On : S::Off));
+      break;
     case SettingId::LockOnSleep:
     case SettingId::DeepSleep: snprintf(out, n, "%s", tr(i ? S::On : S::Off)); break;
     case SettingId::Language: snprintf(out, n, "%s", languageName(Lang(i))); break;

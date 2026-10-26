@@ -5,6 +5,7 @@
 //   /books/.marks/<stem>.txt              bookmarks, one page number per line
 //   /sleep/*.bin                          sleep pictures: full screen (kPageBytes) or
 //                                         square beside the book (kSquareBytes)
+//   /sleep/<screen id>/*.bin              the same for a turned screen (7.5" landscape)
 //   /fonts/                               reading fonts added from the browser
 #pragma once
 
@@ -32,6 +33,7 @@ struct BookEntry {
   String author;
   uint32_t pages = 0;  // folders: number of books in it
   uint32_t id = 0;     // t5b::bookId, for the reading position
+  int screen = 0;      // the screen it was made for (index into kScreens)
   uint32_t size = 0;
   bool isFolder = false;
   bool hasCover = false;
@@ -44,11 +46,16 @@ bool mounted();
 // may scan the FAT (a second or two on a big card); FatFs keeps the count after that.
 int64_t freeBytes();
 
-// Reads and checks a book's header (and cover block, if any) for this screen.
-t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover = nullptr);
+// Checks a header against the board's screens (two on boards that turn); `screen`
+// gets the index of the one the book was made for.
+t5b::Error checkHeader(const t5b::Header &h, uint32_t fileSize, int *screen = nullptr);
+// Reads and checks a book's header (and cover block, if any) for the board's screens.
+t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover = nullptr,
+                     int *screen = nullptr);
 
 // One library level: folder "" = /books (its folders first, then its books),
-// otherwise the books in /books/<folder>. Sorted by title. Invalid files are skipped.
+// otherwise the books in /books/<folder>. Sorted by title. Invalid files are skipped;
+// books for the board's other screen are listed (BookEntry::screen).
 Status listLibrary(const char *folder, std::vector<BookEntry> &out, size_t max = 200);
 // Every book in every folder (web page).
 Status listAllBooks(std::vector<BookEntry> &out, size_t max = 400);
@@ -59,8 +66,11 @@ String stemOf(const String &pathOrName);
 void readMarks(const String &stem, uint32_t pageCount, PageList &out);
 bool writeMarks(const String &stem, const PageList &marks);
 
-// Sleep pictures of one shape (told apart by size): number of valid files, and
-// the path of the i-th (sorted).
+// The sleep pictures of the screen shown now: /sleep, or /sleep/<screen id> on a
+// turned screen (a page of the same size, the other shape).
+String picturesDir();
+// Sleep pictures of one shape (told apart by size) in picturesDir(): number of
+// valid files, and the path of the i-th (sorted).
 enum class PictureShape : uint8_t { Full, Square, Any };
 int pictureCount(PictureShape shape);
 String picturePath(PictureShape shape, int index);

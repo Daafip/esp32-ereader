@@ -38,6 +38,8 @@
   const screens = {
     "t5-213": { id: "t5-213", name: "LilyGo T5-2.13", width: 250, height: 122, statusBar: 14, size: 13, margin: 4, marginBottom: 4, coverW: 72, coverH: 104 },
     "4.7in": { id: "4.7in", name: "LilyGo T5-4.7\" S3, M5PaperS3, M5Paper", width: 540, height: 960, statusBar: 28, size: 28, margin: 24, marginBottom: 8, coverW: 420, coverH: 640 },
+    "7.5in": { id: "7.5in", name: "FireBeetle 7.5\" (portrait)", width: 480, height: 800, statusBar: 28, size: 18, margin: 20, marginBottom: 8, coverW: 340, coverH: 520 },
+    "7.5in-landscape": { id: "7.5in-landscape", name: "FireBeetle 7.5\" (landscape)", width: 800, height: 480, statusBar: 28, size: 22, margin: 32, marginBottom: 8, coverW: 288, coverH: 416 },
   };
 
   // A screen from /api/info (or an id): known fields filled in from the table.

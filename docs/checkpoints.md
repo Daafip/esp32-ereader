@@ -156,6 +156,51 @@ The reader itself is the test here too. Results go in `docs/hardware-m5paper.md`
    Menu → Statistics should still show "Today" (the clock chip kept the time; the log
    shows `clock: ... from the RTC`). **Send:** what it shows.
 
+## FireBeetle 2 ESP32-C6 + 7.5"
+
+Home-built board (`docs/hardware-firebeetle-75.md`): FireBeetle 2 ESP32-C6, Waveshare
+7.5" HAT V2, three Gravity buttons, a microSD breakout. Results go in that file →
+"Checkpoint results".
+
+**SD card (not in the spec).** The reader keeps books on a card: a 7.5" page is 48 KB,
+a book 10-20 MB, and the 4 MB of flash holds none. A 3.3 V microSD breakout (no 5 V
+regulator or level shifter) on the panel's SPI bus, as the C6 has only one:
+CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), CS → **GPIO1** (D6),
+VCC → 3V3 bus, GND. The rest of the spec's wiring stays.
+
+### Hardware test (done 2026-10-26, except the card and the button log)
+
+1. `pixi run fw-flash fb75_test` (no port? hold BOOT, press RST, release BOOT), then
+   `pixi run fw-monitor`. If the start-up lines are missing, type `s`.
+2. Start-up lines: `BATTERY` (compare with a multimeter on the cell), `BUTTON ...
+   idle LOW  ok` for all three, `LAYOUT ... matches`, `SD: ...`, `CONTROLLER-ID:
+   UC81xx`. Step 1 starts by itself. If BUSY stays low (`not a UC81xx?`, or `TIMEOUT`):
+   type `b` for the BUSY trace and `w` for a blind refresh, and check the connections
+   (on David's build: a loose one).
+3. Steps, one per NEXT press: 1 full refresh, 2 fast, 3 five partial refreshes, 4 a
+   log of every press with its duration (short, long, rapid).
+4. With the card fitted: the `SD:` line shows its size and the average 48 KB page read.
+
+### The reader
+
+1. `pixi run fw-flash reader_firebeetle75`, then `pixi run fw-monitor`. Books: Wi-Fi
+   transfer (the page typesets for the orientation the reader is in), or
+   `pixi run prep book.epub --screen 7.5in` and copy the `.t5b` to `/books`.
+   **Send:** the start-up lines (`card: ... MB`), or what the screen says.
+2. Turn pages with NEXT (short: next, long: previous) and PREV; HOME opens the menu.
+   **Send:** the `page ... refresh` lines, and ghosting after how many partial turns
+   (Settings → Full refresh, default every 20).
+3. "Sleep after page: on" (default): each press wakes the chip. **Send:** whether every
+   button wakes it, the `page ... at N ms` lines (wake to image), and whether the first
+   turn after waking is partial and clean (the old page comes from the card).
+4. Settings → Orientation → landscape: the menus turn. The open book (portrait) can't
+   follow: the library opens, the book is marked "portrait". Make a landscape book
+   (the page's Restyle, or `--screen 7.5in-landscape`) and read it. **Send:** which
+   landscape way is upright (landscape or landscape 180°), and how it reads.
+5. Leave it asleep with a page shown and measure the current in series with the cell
+   (FireBeetle alone: 36 µA; the HAT and the card add to it). About → Battery should
+   read about the cell voltage.
+
 ## Phase 9 features (any board, after Checkpoint 3)
 
 Untested features from the Pala One ideas (`PLAN.md` Phase 9). Each is quick to try;

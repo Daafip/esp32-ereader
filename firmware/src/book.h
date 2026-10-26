@@ -20,6 +20,8 @@ class Book {
   const t5b::Header &header() const { return header_; }
   uint32_t pageCount() const { return header_.pageCount; }
   uint32_t id() const { return id_; }
+  // The screen it was made for (index into kScreens; the 7.5" has two).
+  int screen() const { return screen_; }
 
   // Reads page n (kPageBytes) into dst.
   bool readPage(uint32_t n, uint8_t *dst);
@@ -47,5 +49,6 @@ class Book {
   char stem_[72] = {};
   const char *error_ = "";
   uint32_t id_ = 0;
+  int screen_ = 0;
   bool open_ = false;
 };

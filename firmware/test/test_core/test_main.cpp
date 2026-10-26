@@ -643,15 +643,33 @@ static void test_settings_options_keys_and_language() {
   TEST_ASSERT_EQUAL_STRING("600 ms", text);
   TEST_ASSERT_EQUAL_STRING("Long press", settingLabel(SettingId::HoldAction, S::SetLongPress));
 
-  TEST_ASSERT_FALSE(s.flip);  // the screen the right way up by default
+  TEST_ASSERT_EQUAL(0, s.orientation);  // the screen the right way up by default
   cycleSetting(s, SettingId::Flip);
-  TEST_ASSERT_TRUE(s.flip);
+  TEST_ASSERT_EQUAL(1, s.orientation);
   settingValue(s, SettingId::Flip, text, sizeof(text));
   TEST_ASSERT_EQUAL_STRING("on", text);
   TEST_ASSERT_EQUAL_STRING("Flip screen", settingLabel(SettingId::Flip));
+  cycleSetting(s, SettingId::Flip);
+  TEST_ASSERT_EQUAL(0, s.orientation);  // two ways only
   SettingId flipId;
   TEST_ASSERT_TRUE(settingFromKey("flip", flipId));
   TEST_ASSERT_EQUAL(int(SettingId::Flip), int(flipId));
+
+  // Boards that turn (7.5"): the same key, four orientations.
+  setOrientationCount(4);
+  TEST_ASSERT_EQUAL(4, settingOptionCount(SettingId::Flip));
+  TEST_ASSERT_EQUAL_STRING("Orientation", settingLabel(SettingId::Flip));
+  setSettingIndex(s, SettingId::Flip, 2);
+  settingValue(s, SettingId::Flip, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("landscape", text);
+  cycleSetting(s, SettingId::Flip);
+  settingValue(s, SettingId::Flip, text, sizeof(text));
+  TEST_ASSERT_EQUAL_STRING("landscape 180\xC2\xB0", text);
+  cycleSetting(s, SettingId::Flip);
+  TEST_ASSERT_EQUAL(0, s.orientation);
+  setSettingIndex(s, SettingId::Flip, 3);
+  setOrientationCount(2);  // back to two: a stored 3 reads as 0
+  TEST_ASSERT_EQUAL(0, settingIndex(s, SettingId::Flip));
 
   // every option round-trips through its index, every key back to its id
   for (int id = 0; id < kSettingCount; id++) {

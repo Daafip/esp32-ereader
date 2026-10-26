@@ -22,8 +22,6 @@ namespace {
 // Every length below is in pixels of the 250x122 design, times S.
 constexpr int S = kUiScale;
 static_assert(S == 1 || S == 2, "UI fonts exist for scale 1 and 2 (tools/make_ui_fonts.sh)");
-constexpr int kW = kPageW;
-constexpr int kH = kPageH;
 constexpr int kMargin = 8 * S;
 constexpr int kHeaderBaseline = 14 * S;
 constexpr int kHeaderRule = 19 * S;
@@ -33,12 +31,10 @@ constexpr bool T = kHasTouch;
 constexpr int kRowH = (T ? 28 : 17) * S;
 constexpr int kRowBaseline = (T ? 19 : 12) * S;
 constexpr int kRowMid = (T ? 14 : 8) * S;  // centre line for dot and chevron
-constexpr int kFooterTop = kH - (T ? 30 : 13) * S;
 constexpr int kChipH = (T ? 26 : 12) * S;
 // Full-screen layouts (messages, sleep, Wi-Fi, value editor) are laid out in a
 // band of the design's 122 rows, centred on taller screens.
 constexpr int kBandH = 122 * S;
-constexpr int kBandTop = (kH - kBandH) / 2;  // 0 on the T5-2.13
 const char *const kEllipsis = "\xE2\x80\xA6";
 constexpr int kBlack = BBEP_BLACK;
 constexpr int kWhite = BBEP_WHITE;
@@ -51,6 +47,13 @@ const uint8_t *const kDisplay = S == 2 ? ui_display_2x : ui_display;
 enum class Align { Left, Center, Right };
 
 BBEPAPER &epd() { return display::epd(); }
+
+// The screen's size: the board's, or a quarter turn away on boards that turn
+// (Settings -> Orientation).
+int W() { return display::screen().w; }
+int H() { return display::screen().h; }
+int footerTop() { return H() - (T ? 30 : 13) * S; }
+int bandTop() { return (H() - kBandH) / 2; }  // 0 on the T5-2.13
 
 // --- touch targets: what was drawn where, for hit() ------------------------------
 
@@ -203,14 +206,14 @@ void icon(Icon which, int cx, int top) {  // about 28 x 26
 // --- chrome -------------------------------------------------------------------------
 
 void header(const char *title, int batteryPct) {
-  const int left = battery(kW - kMargin, kHeaderBaseline - S, batteryPct, kBlack);
+  const int left = battery(W() - kMargin, kHeaderBaseline - S, batteryPct, kBlack);
   text(kTitle, title, kMargin, kHeaderBaseline, left - kMargin - 10 * S, kBlack);
-  hline(kMargin, kW - kMargin - S, kHeaderRule, kBlack);
+  hline(kMargin, W() - kMargin - S, kHeaderRule, kBlack);
 }
 
 // Footer arrow (7 x 4), vertically centred on the chips.
 void arrow(int x, bool up, int color = kBlack) {
-  const int cy = kFooterTop + kChipH / 2;
+  const int cy = footerTop() + kChipH / 2;
   for (int i = 0; i < 4; i++) {
     const int y = up ? cy - 2 * S + i * S : cy + S - i * S;
     epd().fillRect(x + 3 * S - i * S, y, (2 * i + 1) * S, S, color);
@@ -226,20 +229,20 @@ int touchChip(const char *label, bool filled, int x, bool draw, Button role, boo
   if (w < 44 * S) w = 44 * S;
   if (draw) {
     if (filled) {
-      epd().fillRoundRect(x, kFooterTop, w, kChipH, kChipH / 2, kBlack);
+      epd().fillRoundRect(x, footerTop(), w, kChipH, kChipH / 2, kBlack);
     } else {
-      outline(x, kFooterTop, w, kChipH, kChipH / 2, kBlack);
+      outline(x, footerTop(), w, kChipH, kChipH / 2, kBlack);
     }
     if (isArrow) {
       arrow(x + (w - 7 * S) / 2, label == kArrowUp, filled ? kWhite : kBlack);
     } else {
-      text(kBody, label, x, kFooterTop + 17 * S, w, filled ? kWhite : kBlack, Align::Center);
+      text(kBody, label, x, footerTop() + 17 * S, w, filled ? kWhite : kBlack, Align::Center);
     }
     Hit h;
     h.kind = Hit::Chip;
     h.button = role;
     h.second = second;
-    addTarget(x, kFooterTop - 4 * S, w, kH - kFooterTop + 4 * S, h);
+    addTarget(x, footerTop() - 4 * S, w, H() - footerTop() + 4 * S, h);
   }
   return w;
 }
@@ -252,15 +255,15 @@ int chip(const char *key, const char *label, bool filled, int x, bool draw) {
   const int lw = isArrow ? 7 * S : (label ? width(kSmall, label) : 0);
   if (draw) {
     if (filled) {
-      epd().fillRoundRect(x, kFooterTop, kw + 10 * S, kChipH, 5 * S, kBlack);
+      epd().fillRoundRect(x, footerTop(), kw + 10 * S, kChipH, 5 * S, kBlack);
     } else {
-      outline(x, kFooterTop, kw + 10 * S, kChipH, 5 * S, kBlack);
+      outline(x, footerTop(), kw + 10 * S, kChipH, 5 * S, kBlack);
     }
-    text(kSmall, key, x + 5 * S, kFooterTop + 9 * S, kw, filled ? kWhite : kBlack);
+    text(kSmall, key, x + 5 * S, footerTop() + 9 * S, kw, filled ? kWhite : kBlack);
     if (isArrow) {
       arrow(x + kw + 14 * S, label == kArrowUp);
     } else if (label) {
-      text(kSmall, label, x + kw + 14 * S, kFooterTop + 9 * S, lw, kBlack);
+      text(kSmall, label, x + kw + 14 * S, footerTop() + 9 * S, lw, kBlack);
     }
   }
   return kw + 10 * S + (lw ? 4 * S + lw : 0);
@@ -292,17 +295,17 @@ int hintGroup(const Hint &h, int x, bool draw) {
 
 void footer(Hint left, Hint right) {
   // Too wide for one row? Drop the second-gesture chips, right group first.
-  const int room = kW - 2 * kMargin - 8 * S;
+  const int room = W() - 2 * kMargin - 8 * S;
   if (hintGroup(left, 0, false) + hintGroup(right, 0, false) > room) right.holdAction = nullptr;
   if (hintGroup(left, 0, false) + hintGroup(right, 0, false) > room) left.holdAction = nullptr;
   hintGroup(left, kMargin, true);
   const int w = hintGroup(right, 0, false);
-  if (w) hintGroup(right, kW - kMargin - w, true);
+  if (w) hintGroup(right, W() - kMargin - w, true);
 }
 
 void scrollbar(const ListModel &m) {
   if (m.count() <= m.visibleRows()) return;
-  const int x = kW - 4 * S;
+  const int x = W() - 4 * S;
   const int trackH = m.visibleRows() * kRowH;
   for (int y = kRowsTop; y < kRowsTop + trackH; y += 2 * S) dot(x, y, kBlack);
   int thumbH = trackH * m.visibleRows() / m.count();
@@ -314,7 +317,7 @@ void scrollbar(const ListModel &m) {
 
 }  // namespace
 
-int menuRows() { return (kFooterTop - kRowsTop) / kRowH; }
+int menuRows() { return (footerTop() - kRowsTop) / kRowH; }
 
 Hit hit(int x, int y) {
   for (int i = 0; i < targetCount; i++) {
@@ -342,10 +345,10 @@ const char *unlockHint() {
 
 void statusBar(const StatusView &v) {
   targetCount = 0;  // the reading screen: tap zones, no targets
-  const int top = kH - kStatusBarH;
-  const int baseline = kH - 3 * S;
-  epd().fillRect(0, top, kW, kStatusBarH, kWhite);
-  const int x0 = 4 * S, x1 = kW - 5 * S;
+  const int top = H() - kStatusBarH;
+  const int baseline = H() - 3 * S;
+  epd().fillRect(0, top, W(), kStatusBarH, kWhite);
+  const int x0 = 4 * S, x1 = W() - 5 * S;
   if (v.mode == StatusBarMode::Hidden) {  // only what would otherwise be a mystery
     if (v.locked) padlock(x1 + S - 9 * S, baseline - 9 * S);
     return;
@@ -400,14 +403,14 @@ void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hin
     Item it;
     item(i, it, ctx);
     if (selected) {
-      epd().fillRoundRect(4 * S, top + S, kW - 14 * S, kRowH - 2 * S, (T ? 10 : 7) * S, kBlack);
+      epd().fillRoundRect(4 * S, top + S, W() - 14 * S, kRowH - 2 * S, (T ? 10 : 7) * S, kBlack);
     }
     Hit row;
     row.kind = Hit::Row;
     row.row = i;
-    addTarget(0, top, kW, kRowH, row);
+    addTarget(0, top, W(), kRowH, row);
     int x = kMargin + 4 * S;
-    int end = kW - 16 * S;
+    int end = W() - 16 * S;
     if (it.current) {
       epd().fillCircle(x + S, top + kRowMid, 2 * S, color);
       x += 8 * S;
@@ -424,7 +427,7 @@ void menu(const char *title, const ListModel &model, ItemFn item, void *ctx, Hin
     text(kBody, it.label, x, top + kRowBaseline, end - x, color);
   }
   if (model.count() == 0) {
-    text(kBody, tr(S::NothingHere), 0, kRowsTop + 2 * kRowH, kW, kBlack, Align::Center);
+    text(kBody, tr(S::NothingHere), 0, kRowsTop + 2 * kRowH, W(), kBlack, Align::Center);
   }
   scrollbar(model);
   footer(left, right);
@@ -435,11 +438,11 @@ void details(const char *title, const char *const *labels, const char *const *va
   beginScreen();
   header(title, batteryPct);
   constexpr int kDetailRowH = 14 * S;
-  for (int i = 0; i < count && kRowsTop + (i + 1) * kDetailRowH <= kFooterTop; i++) {
+  for (int i = 0; i < count && kRowsTop + (i + 1) * kDetailRowH <= footerTop(); i++) {
     const int baseline = kRowsTop + i * kDetailRowH + 10 * S;
     const int lw = text(kSmall, labels[i], kMargin, baseline, 90 * S, kBlack);
-    const int maxW = kW - 2 * kMargin - lw - 10 * S;
-    text(kBody, values[i], kW - kMargin - maxW, baseline, maxW, kBlack, Align::Right);
+    const int maxW = W() - 2 * kMargin - lw - 10 * S;
+    text(kBody, values[i], W() - kMargin - maxW, baseline, maxW, kBlack, Align::Right);
   }
   footer(left, right);
 }
@@ -448,8 +451,8 @@ void valueEditor(const char *title, const char *value, const char *caption, int 
                  Hint right, int batteryPct) {
   beginScreen();
   header(title, batteryPct);
-  text(kDisplay, value, 0, kBandTop + 52 * S, kW, kBlack, Align::Center);
-  const int x = 24 * S, w = kW - 48 * S, y = kBandTop + 62 * S;
+  text(kDisplay, value, 0, bandTop() + 52 * S, W(), kBlack, Align::Center);
+  const int x = 24 * S, w = W() - 48 * S, y = bandTop() + 62 * S;
   outline(x, y, w, 9 * S, 4 * S, kBlack);
   Hit bar;
   bar.kind = Hit::Bar;
@@ -457,24 +460,24 @@ void valueEditor(const char *title, const char *value, const char *caption, int 
   const int pct = percent < 0 ? 0 : (percent > 100 ? 100 : percent);
   const int fill = (w - 4 * S) * pct / 100;
   if (fill >= 4 * S) epd().fillRoundRect(x + 2 * S, y + 2 * S, fill, 5 * S, 2 * S, kBlack);
-  text(kSmall, caption, 0, kBandTop + 88 * S, kW, kBlack, Align::Center);
+  text(kSmall, caption, 0, bandTop() + 88 * S, W(), kBlack, Align::Center);
   footer(left, right);
 }
 
 namespace {
 void messageBody(Icon which, const char *headline, const char *line1, const char *line2) {
   beginScreen();
-  icon(which, kW / 2, kBandTop + 8 * S);
-  text(kTitle, headline, kMargin, kBandTop + 52 * S, kW - 2 * kMargin, kBlack, Align::Center);
-  text(kBody, line1, kMargin, kBandTop + 70 * S, kW - 2 * kMargin, kBlack, Align::Center);
-  text(kBody, line2, kMargin, kBandTop + 85 * S, kW - 2 * kMargin, kBlack, Align::Center);
+  icon(which, W() / 2, bandTop() + 8 * S);
+  text(kTitle, headline, kMargin, bandTop() + 52 * S, W() - 2 * kMargin, kBlack, Align::Center);
+  text(kBody, line1, kMargin, bandTop() + 70 * S, W() - 2 * kMargin, kBlack, Align::Center);
+  text(kBody, line2, kMargin, bandTop() + 85 * S, W() - 2 * kMargin, kBlack, Align::Center);
 }
 }  // namespace
 
 void message(Icon which, const char *headline, const char *line1, const char *line2,
              const char *hint) {
   messageBody(which, headline, line1, line2);
-  text(kSmall, hint, kMargin, kH - 6 * S, kW - 2 * kMargin, kBlack, Align::Center);
+  text(kSmall, hint, kMargin, H() - 6 * S, W() - 2 * kMargin, kBlack, Align::Center);
 }
 
 void message(Icon which, const char *headline, const char *line1, const char *line2, Hint left,
@@ -542,19 +545,19 @@ void sleepFooter(bool locked) {
   const char *hint = wakeHint();
   const int hw = width(kSmall, hint);
   const int lockW = locked ? 14 * S : 0;
-  const int hx = (kW - hw - 12 * S - lockW) / 2 + lockW;
-  if (locked) padlock(hx - lockW, kH - 15 * S);
-  moon(hx + 4 * S, kH - 10 * S);
-  text(kSmall, hint, hx + 12 * S, kH - 6 * S, hw, kBlack);
+  const int hx = (W() - hw - 12 * S - lockW) / 2 + lockW;
+  if (locked) padlock(hx - lockW, H() - 15 * S);
+  moon(hx + 4 * S, H() - 10 * S);
+  text(kSmall, hint, hx + 12 * S, H() - 6 * S, hw, kBlack);
 }
 
 // Picture + book: the square picture fills the screen's height (landscape, left)
 // or width (portrait, top); title, author and progress take the rest.
 void pictureSleepScreen(const SleepView &v) {
   const Bitmap &p = v.picture;
-  if (kW > kH) {
-    blit(p, 0, (kH - p.h) / 2);
-    const int x = p.w + 6 * S, w = kW - kMargin - x;
+  if (W() > H()) {
+    blit(p, 0, (H() - p.h) / 2);
+    const int x = p.w + 6 * S, w = W() - kMargin - x;
     // top row: moon (and padlock) left, battery right; no room for the wake hint
     int mx = x + 4 * S;
     if (v.locked) {
@@ -562,16 +565,16 @@ void pictureSleepScreen(const SleepView &v) {
       mx += 13 * S;
     }
     moon(mx, 10 * S);
-    battery(kW - kMargin, 14 * S, v.batteryPct, kBlack);
+    battery(W() - kMargin, 14 * S, v.batteryPct, kBlack);
     const int top = 18 * S, h = titleBlock(v, x, 0, w, w, kTitle, 17 * S, 3, true);
-    const int y = top + (kH - 2 * S - top - h) / 2;
+    const int y = top + (H() - 2 * S - top - h) / 2;
     titleBlock(v, x, y < top ? top : y, w, w, kTitle, 17 * S, 3, false);
   } else {
-    blit(p, (kW - p.w) / 2, 0);
-    battery(kW - kMargin, p.h + 20 * S, v.batteryPct, kBlack);
-    const int w = kW - 2 * kMargin, top = p.h + 26 * S;
+    blit(p, (W() - p.w) / 2, 0);
+    battery(W() - kMargin, p.h + 20 * S, v.batteryPct, kBlack);
+    const int w = W() - 2 * kMargin, top = p.h + 26 * S;
     const int h = titleBlock(v, kMargin, 0, w, w, kDisplay, 21 * S, 2, true);
-    const int y = top + (kH - 14 * S - top - h) / 2;
+    const int y = top + (H() - 14 * S - top - h) / 2;
     titleBlock(v, kMargin, y < top ? top : y, w, w, kDisplay, 21 * S, 2, false);
     sleepFooter(v.locked);
   }
@@ -582,27 +585,27 @@ void pictureSleepScreen(const SleepView &v) {
 void sleepScreen(const SleepView &v) {
   beginScreen();
   if (v.picture.bits) return pictureSleepScreen(v);
-  battery(kW - kMargin, 14 * S, v.batteryPct, kBlack);
+  battery(W() - kMargin, 14 * S, v.batteryPct, kBlack);
   const Bitmap &c = v.cover;
-  if (c.bits && kW > kH) {  // landscape: cover left, text right, below the battery
-    const int cy = (kH - 14 * S - c.h) / 2;
+  if (c.bits && W() > H()) {  // landscape: cover left, text right, below the battery
+    const int cy = (H() - 14 * S - c.h) / 2;
     blit(c, kMargin, cy < 2 * S ? 2 * S : cy);
-    const int x = kMargin + c.w + 8 * S, w = kW - kMargin - x;
+    const int x = kMargin + c.w + 8 * S, w = W() - kMargin - x;
     const int top = 18 * S, h = titleBlock(v, x, 0, w, w, kTitle, 17 * S, 3, true);
-    const int y = top + (kH - 14 * S - top - h) / 2;
+    const int y = top + (H() - 14 * S - top - h) / 2;
     titleBlock(v, x, y < top ? top : y, w, w, kTitle, 17 * S, 3, false);
   } else if (c.bits) {  // portrait: cover on top, text below
-    const int w = kW - 2 * kMargin;
+    const int w = W() - 2 * kMargin;
     const int h = titleBlock(v, kMargin, 0, w, w, kDisplay, 21 * S, 2, true);
     const int total = c.h + 12 * S + h;
-    int y = (kH - 14 * S - total) / 2;
+    int y = (H() - 14 * S - total) / 2;
     if (y < 24 * S) y = 24 * S;
-    blit(c, (kW - c.w) / 2, y);
+    blit(c, (W() - c.w) / 2, y);
     titleBlock(v, kMargin, y + c.h + 12 * S, w, w, kDisplay, 21 * S, 2, false);
   } else {  // the 250x122 design: title, author, progress in the middle band
-    const int w = kW - 2 * kMargin;
-    const int h = titleBlock(v, kMargin, 0, w, kW - 40 * S, kDisplay, 21 * S, 2, true);
-    titleBlock(v, kMargin, kBandTop + 22 * S + (78 * S - h) / 2, w, kW - 40 * S, kDisplay,
+    const int w = W() - 2 * kMargin;
+    const int h = titleBlock(v, kMargin, 0, w, W() - 40 * S, kDisplay, 21 * S, 2, true);
+    titleBlock(v, kMargin, bandTop() + 22 * S + (78 * S - h) / 2, w, W() - 40 * S, kDisplay,
                21 * S, 2, false);
   }
   sleepFooter(v.locked);
@@ -628,7 +631,7 @@ void wifiScreen(const WifiView &v, Hint left, Hint right, int batteryPct) {
     const int scale = 104 * S / (size + 4);
     const int px = (size + 4) * scale;
     const int x0 = 2 * S + 2 * scale;
-    const int y0 = kBandTop + (kBandH - 13 * S - px) / 2 + 2 * scale;
+    const int y0 = bandTop() + (kBandH - 13 * S - px) / 2 + 2 * scale;
     for (int y = 0; y < size; y++) {
       for (int x = 0; x < size; x++) {
         if (qrcodegen_getModule(qr, x, y)) {
@@ -639,13 +642,13 @@ void wifiScreen(const WifiView &v, Hint left, Hint right, int batteryPct) {
     qrRight = 2 * S + px + 6 * S;
   }
   const int x = qrRight;
-  const int w = kW - x - kMargin;
-  const int batteryLeft = battery(kW - kMargin, 12 * S, batteryPct, kBlack);
-  const int top = kBandTop;
+  const int w = W() - x - kMargin;
+  const int batteryLeft = battery(W() - kMargin, 12 * S, batteryPct, kBlack);
+  const int top = bandTop();
   if (v.step > 0) {
     char step[24];
     snprintf(step, sizeof(step), tr(S::StepOf), v.step);
-    const int stepRight = top > 0 ? kW - kMargin : batteryLeft - 6 * S;  // battery above the band?
+    const int stepRight = top > 0 ? W() - kMargin : batteryLeft - 6 * S;  // battery above the band?
     text(kSmall, step, x, top + 12 * S, stepRight - x, kBlack);
   }
   text(kTitle, v.headline, x, top + 30 * S, w, kBlack);

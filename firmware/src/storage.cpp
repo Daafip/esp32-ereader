@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "board.h"
+#include "display.h"
 
 namespace storage {
 namespace {
@@ -24,7 +25,7 @@ bool endsWith(const char *name, const char *ext) {
 bool readEntry(fs::File &f, const String &dir, const String &folder, BookEntry &e) {
   t5b::Header h;
   t5b::Cover cover;
-  const t5b::Error err = checkBook(f, h, &cover);
+  const t5b::Error err = checkBook(f, h, &cover, &e.screen);
   if (err != t5b::Error::None) {
     Serial.printf("library: skipped %s/%s: %s\n", dir.c_str(), f.name(), t5b::errorText(err));
     return false;
@@ -98,12 +99,25 @@ int64_t freeBytes() {
   return total ? int64_t(total - SD.usedBytes()) : -1;
 }
 
-t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover) {
+t5b::Error checkHeader(const t5b::Header &h, uint32_t fileSize, int *screen) {
+  t5b::Error first = t5b::Error::None;
+  for (int i = 0; i < kScreenCount; i++) {
+    const t5b::Error err = t5b::validate(h, kScreens[i].w, kScreens[i].h, fileSize);
+    if (err == t5b::Error::None) {
+      if (screen) *screen = i;
+      return err;
+    }
+    if (i == 0) first = err;  // why it doesn't fit the board's own screen
+  }
+  return first;
+}
+
+t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover, int *screen) {
   uint8_t buf[t5b::kHeaderSize];
   if (!f.seek(0) || f.read(buf, sizeof(buf)) != sizeof(buf)) return t5b::Error::TooShort;
   t5b::Error err = t5b::parseHeader(buf, sizeof(buf), h);
   const uint32_t size = uint32_t(f.size());
-  if (err == t5b::Error::None) err = t5b::validate(h, kPageW, kPageH, size);
+  if (err == t5b::Error::None) err = checkHeader(h, size, screen);
   if (err != t5b::Error::None) return err;
   t5b::Cover c;
   uint8_t head[t5b::kCoverHeaderSize];
@@ -209,7 +223,7 @@ bool hasShape(size_t size, PictureShape shape) {
 
 void pictureNames(PictureShape shape, std::vector<String> &names) {
   names.clear();
-  fs::File d = SD.open(kPicturesDir);
+  fs::File d = SD.open(picturesDir());
   if (!d || !d.isDirectory()) return;
   for (fs::File f = d.openNextFile(); f && names.size() < 100; f = d.openNextFile()) {
     if (!f.isDirectory() && endsWith(f.name(), ".bin") && hasShape(f.size(), shape)) {
@@ -219,6 +233,12 @@ void pictureNames(PictureShape shape, std::vector<String> &names) {
   std::sort(names.begin(), names.end(), [](const String &a, const String &b) { return a < b; });
 }
 }  // namespace
+
+String picturesDir() {
+  const int screen = display::screenIndex();
+  if (screen <= 0 || screen >= kScreenCount) return kPicturesDir;
+  return String(kPicturesDir) + "/" + kScreens[screen].id;
+}
 
 int pictureCount(PictureShape shape) {
   std::vector<String> names;
@@ -230,7 +250,7 @@ String picturePath(PictureShape shape, int index) {
   std::vector<String> names;
   pictureNames(shape, names);
   if (index < 0 || index >= int(names.size())) return "";
-  return String(kPicturesDir) + "/" + names[index];
+  return picturesDir() + "/" + names[index];
 }
 
 void eraseAll() {

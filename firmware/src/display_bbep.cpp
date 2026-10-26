@@ -1,12 +1,16 @@
-// SPI e-paper (T5-2.13) through bb_epaper: the panel's own controller keeps the
-// image, a copy in RTC memory serves partial refreshes after deep sleep.
+// SPI e-paper with its own controller RAM, through bb_epaper: the T5-2.13 (SSD1680)
+// and the 7.5" Waveshare panel (UC81xx). A copy of the shown image serves partial
+// refreshes after deep sleep: in RTC memory where a page fits (T5-2.13), otherwise
+// in RAM (BOARD_SHOWN_IN_RAM), drawn again by the app after deep sleep.
 #include "board.h"
 
 #ifdef BOARD_PANEL_BBEPAPER
 
 #include <Arduino.h>
+#include <SPI.h>
 #include <driver/gpio.h>
 #include <esp_attr.h>
+#include <soc/soc_caps.h>
 #include <string.h>
 
 #include "display.h"
@@ -15,38 +19,59 @@ namespace display {
 namespace {
 
 BBEPAPER panel(kEpdPanel);
-// bb_epaper sizes its buffer by the native panel (16 x 250 = 4000 B); the
-// landscape page only uses the first kPageBytes of it.
-uint8_t fb[((122 + 7) / 8) * 250];
+// bb_epaper sizes its buffer by the native panel (T5-2.13: 16 x 250 = 4000 B); a
+// page uses the first kPageBytes of it.
+uint8_t fb[((kEpdNativeW + 7) / 8) * kEpdNativeH];
 static_assert(sizeof(fb) >= kPageBytes, "framebuffer too small for a page");
 
-// Survives deep sleep; zeroed on power-on.
-RTC_DATA_ATTR uint8_t rtcShown[kPageBytes];
-RTC_DATA_ATTR bool rtcShownValid = false;
+// The image on the glass. RTC memory survives deep sleep and is zeroed on
+// power-on; a 7.5" page (48 KB) is bigger than the C6's 16 KB of it.
+#ifdef BOARD_SHOWN_IN_RAM
+#define SHOWN_ATTR
+#else
+#define SHOWN_ATTR RTC_DATA_ATTR
+#endif
+SHOWN_ATTR uint8_t shownImage[kPageBytes];
+SHOWN_ATTR bool shownImageValid = false;
 RTC_DATA_ATTR bool rtcKeptPowered = false;
 RTC_DATA_ATTR uint16_t rtcPartials = 0;
-RTC_DATA_ATTR int16_t rtcRotation = 0;  // rotation of the shown image; 0 = power-on
+RTC_DATA_ATTR int16_t rtcRotation = -1;  // rotation of the shown image; -1 = power-on
 
-bool panelRamValid = false;  // controller's "old" RAM equals rtcShown
+bool panelRamValid = false;  // controller's "old" RAM equals shownImage
 Timing timing;
 
-const gpio_num_t kHeldPins[] = {gpio_num_t(kEpdPowerEn), gpio_num_t(kEpdRst), gpio_num_t(kEpdCs)};
+const int kHeldPins[] = {kEpdPowerEn, kEpdRst, kEpdCs};
 
 void releaseHolds() {
+#if !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
   gpio_deep_sleep_hold_dis();
-  for (gpio_num_t pin : kHeldPins) gpio_hold_dis(pin);
+#endif
+  for (int pin : kHeldPins) {
+    if (pin >= 0) gpio_hold_dis(gpio_num_t(pin));
+  }
 }
 
-// Keeps pin levels through ESP32 deep sleep. With the panel powered, RST and CS
-// stay high (no reset, no stray commands). With power cut, only the power pin
-// is held (low): driving RST/CS high would back-power the panel.
+// Keeps pin levels through ESP32 deep sleep. With the panel powered (always, on
+// boards without a power pin), RST and CS stay high (no reset, no stray commands).
+// With power cut, only the power pin is held (low): driving RST/CS high would
+// back-power the panel. The C6 holds single pins in deep sleep by itself.
 void holdPins(bool panelPowered) {
-  if (panelPowered) {
-    for (gpio_num_t pin : kHeldPins) gpio_hold_en(pin);
-  } else {
-    gpio_hold_en(gpio_num_t(kEpdPowerEn));
+  for (int pin : kHeldPins) {
+    if (pin >= 0 && (panelPowered || kEpdPowerEn < 0 || pin == kEpdPowerEn)) {
+      gpio_hold_en(gpio_num_t(pin));
+    }
   }
+#if !SOC_GPIO_SUPPORT_HOLD_SINGLE_IO_IN_DSLP
   gpio_deep_sleep_hold_en();
+#endif
+}
+
+// The card on the panel's bus (kSdSharedSpi) leaves the bus at its own clock, and
+// bb_epaper writes without transactions: set the panel's clock first.
+void claimBus() {
+  if (!kSdSharedSpi) return;
+  SPI.beginTransaction(SPISettings(kEpdSpiHz, MSBFIRST, SPI_MODE0));
+  SPI.endTransaction();
 }
 
 void waitIdle(uint32_t limitMs) {
@@ -148,7 +173,7 @@ void hardwareReset() {
   pinMode(kEpdBusy, INPUT);
   pinMode(kEpdRst, OUTPUT);
   digitalWrite(kEpdRst, LOW);
-  delay(20);
+  delay(kEpdResetMs);
   digitalWrite(kEpdRst, HIGH);
   delay(20);
 }
@@ -157,23 +182,33 @@ void hardwareReset() {
 
 void begin() {
   releaseHolds();
-  pinMode(kEpdPowerEn, OUTPUT);
-  digitalWrite(kEpdPowerEn, HIGH);
-  if (!rtcKeptPowered) delay(10);  // let the panel supply settle
-  hardwareReset();                  // also leaves the controller's deep sleep
+  if (kEpdPowerEn >= 0) {
+    pinMode(kEpdPowerEn, OUTPUT);
+    digitalWrite(kEpdPowerEn, HIGH);
+    if (!rtcKeptPowered) delay(10);  // let the panel supply settle
+  }
+  if (kSdSharedSpi) {
+    // One bus with the card: keep the card deselected, and start the bus with its
+    // MISO (bb_epaper starts it without one, and leaves a running bus as it is).
+    pinMode(kSdCs, OUTPUT);
+    digitalWrite(kSdCs, HIGH);
+    SPI.begin(kSdSck, kSdMiso, kSdMosi, -1);
+  }
+  hardwareReset();  // also leaves the controller's deep sleep
   panel.initIO(kEpdDc, kEpdRst, kEpdBusy, kEpdCs, kEpdMosi, kEpdSck, kEpdSpiHz);
   panel._bbep.x_offset = kEpdXOffsetBytes;  // used by every RAM window bb_epaper sets
-  if (!rtcRotation) rtcRotation = kEpdRotation;
+  if (rtcRotation < 0) rtcRotation = kEpdRotation;
   panel.setRotation(rtcRotation);
   panel.setBuffer(fb);
-  panelRamValid = rtcKeptPowered && rtcShownValid;
+  panelRamValid = rtcKeptPowered && shownImageValid;
   rtcKeptPowered = false;
 }
 
 void sleep(bool keepPower) {
+  claimBus();
   panel.sleep(keepPower ? LIGHT_SLEEP : DEEP_SLEEP);  // SSD16xx: 0x10 = 0x01 keeps RAM, 0x03 not
   rtcKeptPowered = keepPower;
-  if (!keepPower) digitalWrite(kEpdPowerEn, LOW);
+  if (!keepPower && kEpdPowerEn >= 0) digitalWrite(kEpdPowerEn, LOW);
   holdPins(keepPower);
 }
 
@@ -183,22 +218,23 @@ void clear() { memset(fb, 0xFF, sizeof(fb)); }
 
 Refresh show(Refresh mode) {
   if (mode == Refresh::Partial && !kEpdPartialWorks) mode = Refresh::Fast;
-  if (mode == Refresh::Partial && !rtcShownValid) mode = Refresh::Full;
+  if (mode == Refresh::Partial && !shownImageValid) mode = Refresh::Full;
   if (mode == Refresh::Fast && !panel.hasFastRefresh()) mode = Refresh::Full;
 
+  claimBus();
   const uint32_t t0 = millis();
   if (mode == Refresh::Fast && kEpdFastInitFirst) {
     sendFastInit();  // before the image, see there
     panel.writePlane(PLANE_DUPLICATE);
   } else if (mode == Refresh::Partial && kEpdCustomPartialLut) {
     loadPartialLut();
-    panel.setBuffer(rtcShown);  // what the glass shows -> "old" RAM
+    panel.setBuffer(shownImage);  // what the glass shows -> "old" RAM
     panel.writePlane(PLANE_0_TO_1);
     panel.setBuffer(fb);
     panel.writePlane(PLANE_0);
   } else if (mode == Refresh::Partial) {
     if (!panelRamValid) {  // tell the controller what is on the glass now
-      panel.setBuffer(rtcShown);
+      panel.setBuffer(shownImage);
       panel.writePlane(PLANE_0_TO_1);
       panel.setBuffer(fb);
     }
@@ -234,8 +270,8 @@ Refresh show(Refresh mode) {
                 mode == Refresh::Full ? "full" : mode == Refresh::Fast ? "fast" : "partial",
                 unsigned(t1 - t0), unsigned(t2 - t1));
 
-  memcpy(rtcShown, fb, kPageBytes);
-  rtcShownValid = true;
+  memcpy(shownImage, fb, kPageBytes);
+  shownImageValid = true;
   panelRamValid = true;
   rtcPartials = mode == Refresh::Partial ? rtcPartials + 1 : 0;
   return mode;
@@ -243,14 +279,17 @@ Refresh show(Refresh mode) {
 
 void setRotation(int degrees) { panel.setRotation(degrees); }
 
-void setFlipped(bool flipped) {
-  const int16_t r = flipped ? (kEpdRotation == 90 ? 270 : 90) : kEpdRotation;
+void setOrientation(uint8_t orientation) {
+  const int16_t r = int16_t(rotationFor(orientation));
   if (r == rtcRotation) return;
   rtcRotation = r;
   panel.setRotation(r);
-  rtcShownValid = false;  // the glass shows the other orientation: next one is full
+  shownImageValid = false;  // the glass shows the other orientation: next one is full
   panelRamValid = false;
 }
+
+int screenIndex() { return rtcRotation < 0 ? 0 : screenForRotation(rtcRotation); }
+const ScreenSpec &screen() { return kScreens[screenIndex()]; }
 
 void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
   panel.setFont(FONT_6x8);
@@ -263,12 +302,12 @@ void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
 }
 
 void assumeShown() {
-  memcpy(rtcShown, fb, kPageBytes);
-  rtcShownValid = true;
+  memcpy(shownImage, fb, kPageBytes);
+  shownImageValid = true;
   panelRamValid = false;
 }
 
-bool shownValid() { return rtcShownValid; }
+bool shownValid() { return shownImageValid; }
 uint16_t partialsSinceFull() { return rtcPartials; }
 Timing lastTiming() { return timing; }
 

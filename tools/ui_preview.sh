@@ -5,6 +5,8 @@
 #   t5-213     LilyGo T5-2.13 (250x122, two buttons)
 #   t5-47      LilyGo T5-4.7" S3 (540x960, one button)
 #   m5paper    M5PaperS3 / M5Paper (540x960, touch: bigger rows, footer buttons)
+#   firebeetle-75, firebeetle-75-landscape
+#              FireBeetle 2 ESP32-C6 + 7.5" (480x800 portrait, 800x480 landscape, three buttons)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,8 +18,11 @@ mkdir -p "$build" "$out"
 rm -f "$out"/*.png  # previews from before the per-board folders
 cc -std=c99 -O1 -w -c firmware/lib/qrcodegen/src/qrcodegen.c -o "$build/qrcodegen.o"
 
-for spec in t5-213:t5-213: t5-47:4.7in:-DBOARD_T5_47_S3 m5paper:4.7in:-DBOARD_M5PAPER_S3; do
-  IFS=: read -r board screen define <<<"$spec"
+# board:screen:define:orientation (Settings -> Orientation; 2 = landscape on the 7.5")
+for spec in t5-213:t5-213:: t5-47:4.7in:-DBOARD_T5_47_S3: m5paper:4.7in:-DBOARD_M5PAPER_S3: \
+    firebeetle-75:7.5in:-DBOARD_FIREBEETLE_75:0 \
+    firebeetle-75-landscape:7.5in-landscape:-DBOARD_FIREBEETLE_75:2; do
+  IFS=: read -r board screen define orientation <<<"$spec"
   python -m bookprep.devpages --screen "$screen" --t5b "$build/sample-$screen.t5b" \
     --picture "$build/sample-$screen-picture.bin" >/dev/null
   c++ -std=gnu++17 -O1 -w $define \
@@ -28,7 +33,7 @@ for spec in t5-213:t5-213: t5-47:4.7in:-DBOARD_T5_47_S3 m5paper:4.7in:-DBOARD_M5
   mkdir -p "$out/$board"
   rm -f "$out/$board"/*.pbm "$out/$board"/*.png
   "$build/ui_preview-$board" "$out/$board" "$build/sample-$screen.t5b" \
-    "$build/sample-$screen-picture.bin" >/dev/null
+    "$build/sample-$screen-picture.bin" $orientation >/dev/null
 done
 
 python - "$out" <<'PY'

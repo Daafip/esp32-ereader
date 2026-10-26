@@ -25,7 +25,8 @@ void setFlipped(bool on);     // Settings -> Flip screen: up/down keys swap (M5P
 
 Key poll();  // non-blocking; at most one key per call
 
-// The press that woke the chip (NEXT or MENU pin), classified as short or long.
+// The press that woke the chip (NEXT, MENU or PREV pin), classified as short or
+// long; PREV gives NextLong like a press while awake.
 // Counts from boot, which is roughly when the button went down.
 Key wakePress(int pin, uint32_t timeoutMs = 3000);
 

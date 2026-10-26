@@ -19,9 +19,12 @@ Flash with platform io, esptools or `pixi run fw-flash`
 | LilyGo T5-4.7" S3 | `t5-47-reader-x.x.x.bin` | `t5-47-reader-x.x.x-ota.bin` | NO - let me know! |
 | M5Stack M5PaperS3 | `m5papers3-reader-x.x.x.bin` | `m5papers3-reader-x.x.x-ota.bin` | NO - let me know! | 
 | M5Stack M5Paper | `m5paper-reader-x.x.x.bin` | `m5paper-reader-x.x.x-ota.bin` | NO - let me know! | 
+| FireBeetle 2 ESP32-C6 + Waveshare 7.5" (home-built) | `firebeetle-75-reader-x.x.x.bin` | `firebeetle-75-reader-x.x.x-ota.bin` | Hardware test only |
 
 The 4.7" boards and the M5 boards have not run this firmware yet: see
-[docs/checkpoints.md](docs/checkpoints.md) for what to check.
+[docs/checkpoints.md](docs/checkpoints.md) for what to check. The 7.5" build is a
+FireBeetle 2 ESP32-C6 with a Waveshare 7.5" HAT, three buttons and a microSD breakout,
+readable in portrait or landscape: [docs/hardware-firebeetle-75.md](docs/hardware-firebeetle-75.md).
 
 ## How it works
 
@@ -46,6 +49,7 @@ Hardware and display drivers:
 - [FastEPD](https://github.com/bitbank2/FastEPD) (Apache-2.0) by Larry Bank: parallel e-paper driver for the T5-4.7" and the M5PaperS3
 - [LilyGo T5 e-paper series](https://github.com/Xinyuan-LilyGO/LilyGo-T5-Epaper-Series) and [LilyGo-EPD47](https://github.com/Xinyuan-LilyGO/LilyGo-EPD47): pinouts and schematics of the LilyGo boards
 - [M5Unified](https://github.com/m5stack/M5Unified) and [M5GFX](https://github.com/m5stack/M5GFX): pinouts and power handling of the M5 boards, and the IT8951 protocol used for the M5Paper
+- [DFRobot FireBeetle 2 ESP32-C6](https://wiki.dfrobot.com/dfr1075/) and [Waveshare e-Paper Driver HAT](https://www.waveshare.com/wiki/e-Paper_Driver_HAT): the board and HAT of the 7.5" build
 
 Firmware build and flashing:
 

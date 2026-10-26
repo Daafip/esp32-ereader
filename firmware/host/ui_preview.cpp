@@ -1,9 +1,10 @@
 // Renders every UI screen with the real ui.cpp into PBM files:
-//   ui_preview <out_dir> <sample.t5b> <square-picture.bin>
+//   ui_preview <out_dir> <sample.t5b> <square-picture.bin> [orientation]
 // The last two pages of the .t5b (made for this board's screen) are the book
 // pages behind the status bar. Built once per board by `pixi run ui-preview`,
 // which also converts the PBMs to PNG.
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <vector>
@@ -29,7 +30,7 @@ void save(const char *name) {
     perror(path);
     return;
   }
-  fprintf(f, "P4\n%d %d\n", kPageW, kPageH);
+  fprintf(f, "P4\n%d %d\n", display::screen().w, display::screen().h);
   const uint8_t *fb = display::framebuffer();
   for (int i = 0; i < kPageBytes; i++) fputc(fb[i] ^ 0xFF, f);  // PBM: 1 = black
   fclose(f);
@@ -46,12 +47,16 @@ bool loadPage(const char *path, int fromEnd) {
   uint8_t raw[t5b::kHeaderSize];
   t5b::Header h;
   bool ok = fread(raw, 1, sizeof(raw), f) == sizeof(raw) &&
-            t5b::parseHeader(raw, sizeof(raw), h) == t5b::Error::None && h.pageW == kPageW &&
-            h.pageH == kPageH && h.pageCount > uint32_t(fromEnd);
+            t5b::parseHeader(raw, sizeof(raw), h) == t5b::Error::None &&
+            h.pageW == display::screen().w && h.pageH == display::screen().h &&
+            h.pageCount > uint32_t(fromEnd);
   ok = ok && fseek(f, long(h.pageOffset(h.pageCount - 1 - fromEnd)), SEEK_SET) == 0 &&
        fread(display::framebuffer(), 1, kPageBytes, f) == size_t(kPageBytes);
   fclose(f);
-  if (!ok) fprintf(stderr, "%s: no %dx%d sample page\n", path, kPageW, kPageH);
+  if (!ok) {
+    fprintf(stderr, "%s: no %dx%d sample page\n", path, display::screen().w,
+            display::screen().h);
+  }
   return ok;
 }
 
@@ -183,13 +188,16 @@ void settingItem(int i, ui::Item &it, void *) {
 
 int main(int argc, char **argv) {
   if (argc < 4) {
-    fprintf(stderr, "usage: ui_preview <out_dir> <sample.t5b> <square-picture.bin>\n");
+    fprintf(stderr, "usage: ui_preview <out_dir> <sample.t5b> <square-picture.bin> [orientation]\n");
     return 2;
   }
   outDir = argv[1];
   const char *sample = argv[2];
   const char *picture = argv[3];
   display::begin();
+  // Settings -> Orientation (boards that turn: 2 = landscape on the 7.5")
+  setOrientationCount(kScreenCount > 1 ? 4 : 2);
+  if (argc > 4) display::setOrientation(uint8_t(atoi(argv[4])));
   ListModel list;
   const char *title = "Max Havelaar / Of de koffiveilingen der Nederlandsche Handelsmaatschappy";
 

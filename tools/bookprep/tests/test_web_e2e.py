@@ -149,7 +149,13 @@ def upload_from_page(tmp_path: Path, epub: Path, name: str, **server) -> tuple[s
 
 
 @pytest.mark.parametrize(
-    ("screen", "size"), [("t5-213", (250, 122, 13)), ("4.7in", (540, 960, 28))]
+    ("screen", "size"),
+    [
+        ("t5-213", (250, 122, 13)),
+        ("4.7in", (540, 960, 28)),
+        ("7.5in", (480, 800, 18)),
+        ("7.5in-landscape", (800, 480, 22)),
+    ],
 )
 def test_page_typesets_and_uploads_to_the_reader_api(tmp_path, sample_epub, screen, size):
     """The real page: open an EPUB, typeset it for the reader's screen (from
@@ -215,6 +221,35 @@ def test_page_searches_a_book_on_the_reader(tmp_path, sample_epub, font_path):
     hits = re.search(r'<body[^>]*data-hits="(\d+)"', dom)
     assert hits and int(hits.group(1)) >= 1, dom[-800:]
     assert "<mark>alinea</mark>" in dom
+
+
+def test_page_shows_a_book_for_the_other_orientation(tmp_path, sample_epub):
+    """The 7.5" turns: on a portrait reader a landscape book is marked as such, its
+    pages are drawn landscape, and search typesets the original for landscape."""
+    from bookprep.cli import main as prep
+    from bookprep.devserver import make_server
+
+    srv = make_server(tmp_path, "1234", port=0, fonts=True, screen="7.5in", update_site="/updates/")
+    sd = tmp_path / "sd" / "books"
+    (sd / ".src").mkdir(parents=True)
+    assert prep([str(sample_epub), "--out", str(sd), "--screen", "7.5in-landscape"]) == 0
+    shutil.copy(sample_epub, sd / ".src" / "testboek.epub")
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        port = srv.server_address[1]
+        url = f"http://127.0.0.1:{port}/?k=1234#reader=testboek.t5b&find=alinea"
+        dom = subprocess.run(
+            [chromium(), "--headless=new", "--disable-gpu", "--no-first-run",
+             "--virtual-time-budget=60000", "--dump-dom", url],
+            capture_output=True, text=True, timeout=300, check=True,
+        ).stdout  # fmt: skip
+    finally:
+        srv.shutdown()
+    assert "made for landscape" in dom
+    page = re.search(r'<canvas id="r-page"[^>]*style="([^"]*)"', dom)
+    assert page and "800 / 480" in page.group(1).replace("/", " / ").replace("  ", " "), dom[-800:]
+    hits = re.search(r'<body[^>]*data-hits="(\d+)"', dom)
+    assert hits and int(hits.group(1)) >= 1, dom[-800:]
 
 
 def test_page_installs_the_latest_release(tmp_path):

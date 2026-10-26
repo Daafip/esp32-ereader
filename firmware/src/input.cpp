@@ -19,7 +19,7 @@ TouchEvent touchEvent;
 bool hasTouch = false;
 uint32_t activityMs = 0;
 
-bool down(int pin) { return pin >= 0 && digitalRead(pin) == LOW; }
+bool down(int pin) { return pin >= 0 && digitalRead(pin) == (kBtnActiveHigh ? HIGH : LOW); }
 
 // Settings -> Flip screen on a board with up/down keys (M5Paper's switch): held
 // the other way round, "up" and "down" swap.
@@ -45,6 +45,17 @@ Key translate(ButtonEvent e, bool isNext) {
   return Key::None;
 }
 
+// PREV (M5Paper's switch, the 7.5" board's button 1): back, short or long.
+Key translatePrev(ButtonEvent e) {
+  switch (e) {
+    case ButtonEvent::Short:
+    case ButtonEvent::Long: return Key::NextLong;
+    case ButtonEvent::Repeat: return Key::NextRepeat;
+    case ButtonEvent::None: break;
+  }
+  return Key::None;
+}
+
 Key translate(Gesture g) {
   switch (g) {
     case Gesture::Tap: return Key::NextShort;
@@ -62,10 +73,16 @@ void begin(uint16_t longPressMs) {
   for (int pin : {kBtnNext, kBtnMenu, kBtnPrev}) {
     if (pin >= 0 && rtc_gpio_is_valid_gpio(gpio_num_t(pin))) rtc_gpio_deinit(gpio_num_t(pin));
   }
-  if (kBtnNext >= 0) pinMode(kBtnNext, kBtnNextPullup ? INPUT_PULLUP : INPUT);
-  // GPIO34-39 are input-only without pull-ups; those boards have external ones
-  if (kBtnMenu >= 0) pinMode(kBtnMenu, kBtnMenu >= 34 ? INPUT : INPUT_PULLUP);
-  if (kBtnPrev >= 0) pinMode(kBtnPrev, kBtnPrev >= 34 ? INPUT : INPUT_PULLUP);
+  if (kBtnActiveHigh) {  // pulled down when released (the 7.5" board's modules do it too)
+    for (int pin : {kBtnNext, kBtnMenu, kBtnPrev}) {
+      if (pin >= 0) pinMode(pin, INPUT_PULLDOWN);
+    }
+  } else {
+    if (kBtnNext >= 0) pinMode(kBtnNext, kBtnNextPullup ? INPUT_PULLUP : INPUT);
+    // GPIO34-39 are input-only without pull-ups; those boards have external ones
+    if (kBtnMenu >= 0) pinMode(kBtnMenu, kBtnMenu >= 34 ? INPUT : INPUT_PULLUP);
+    if (kBtnPrev >= 0) pinMode(kBtnPrev, kBtnPrev >= 34 ? INPUT : INPUT_PULLUP);
+  }
   hasTouch = touch::begin();
   configure(longPressMs, false);
   activityMs = millis();
@@ -89,14 +106,7 @@ Key poll() {
   } else {
     k = translate(next.update(down(nextPin()), now), true);
     if (k == Key::None) k = translate(menu.update(down(kBtnMenu), now), false);
-    if (k == Key::None) {
-      switch (prev.update(down(prevPin()), now)) {
-        case ButtonEvent::Short:
-        case ButtonEvent::Long: k = Key::NextLong; break;
-        case ButtonEvent::Repeat: k = Key::NextRepeat; break;
-        case ButtonEvent::None: break;
-      }
-    }
+    if (k == Key::None) k = translatePrev(prev.update(down(prevPin()), now));
     busy = next.isDown() || menu.isDown() || prev.isDown();
   }
   if (hasTouch) {
@@ -120,19 +130,23 @@ Key wakePress(int pin, uint32_t timeoutMs) {
   // Pressed since (about) boot. Already released when we first look (a slow
   // boot, e.g. the S3's PSRAM test, outlasted a tap): count it as short.
   const uint32_t since = down(pin) ? 0 : millis();
+  // Which role the pin has now: flipped, NEXT and PREV swap (setFlipped()).
+  const bool isNext = pin == nextPin(), isPrev = !isNext && pin == prevPin();
+  ButtonTracker &b = isNext ? next : isPrev ? prev : menu;
   if (kSingleButton) {
     single.startPressed(since);
   } else {
-    (pin == kBtnNext ? next : menu).startPressed(since);
+    b.startPressed(since);
   }
   const uint32_t start = millis();
   while (millis() - start < timeoutMs) {
     Key k;
     if (kSingleButton) {
       k = translate(single.update(down(pin), millis()));
+    } else if (isPrev) {
+      k = translatePrev(b.update(down(pin), millis()));
     } else {
-      ButtonTracker &b = pin == kBtnNext ? next : menu;
-      k = translate(b.update(down(pin), millis()), pin == kBtnNext);
+      k = translate(b.update(down(pin), millis()), isNext);
     }
     if (k != Key::None) {
       activityMs = millis();

@@ -2,7 +2,8 @@
 
 Rendered and packed exactly like book pages, then written as a C header
 (``firmware/include/test_pages.h``, used by the calibration sketch) and as a small
-.t5b (to test the SD path). Run: ``pixi run devpages``. With ``--screen 4.7in`` only
+.t5b (to test the SD path). Run: ``pixi run devpages``. With ``--screen`` (``4.7in``,
+``7.5in``, ...) only
 the sample text, as a .t5b for that screen (UI previews). ``--picture`` also writes a
 made-up square sleep picture ("picture + book", UI previews).
 

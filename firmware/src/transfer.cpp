@@ -15,6 +15,7 @@
 #include "board.h"
 #include "board_tag.h"
 #include "bookmarks.h"
+#include "display.h"
 #include "i18n.h"
 #include "prefs.h"
 #include "rtc_clock.h"
@@ -72,6 +73,9 @@ const Kind kKinds[] = {
 };
 const Kind &kBookKind = kKinds[0];
 const Kind &kPictureKind = kKinds[4];
+
+// Where a kind's files are: pictures for the screen shown now (storage::picturesDir()).
+String kindDir(const Kind &k) { return &k == &kPictureKind ? storage::picturesDir() : String(k.dir); }
 
 // The board tag in this firmware; a Wi-Fi update must carry the same one. Images
 // from before 0.9.0 have none and are accepted (the chip is still checked).
@@ -272,15 +276,17 @@ void handleInfo() {
   addString(out, "name", prefs::deviceName().c_str());
   addString(out, "homeWifi", prefs::homeSsid().c_str());  // never the password
   addBool(out, "locked", prefs::locked());
-  // This reader's screen: the page typesets books for it (see bookprep.js, screens).
+  // This reader's screen now: the page typesets books for it (see bookprep.js,
+  // screens). The 7.5" turns (Settings -> Orientation): portrait or landscape.
+  const ScreenSpec &sc = display::screen();
   addKey(out, "screen");
   out += '{';
-  addString(out, "id", kScreenId);
-  addInt(out, "width", kPageW);
-  addInt(out, "height", kPageH);
-  addInt(out, "statusBar", kStatusBarH);
-  addInt(out, "size", kDefaultFontPx);
-  addInt(out, "margin", kDefaultMarginPx);
+  addString(out, "id", sc.id);
+  addInt(out, "width", sc.w);
+  addInt(out, "height", sc.h);
+  addInt(out, "statusBar", sc.statusBar);
+  addInt(out, "size", sc.fontPx);
+  addInt(out, "margin", sc.marginPx);
   out += '}';
   addInt(out, "battery", battery);
   addNumber(out, "total", SD.totalBytes());
@@ -297,6 +303,7 @@ void handleInfo() {
     addString(out, "author", b.author.c_str());
     addNumber(out, "pages", b.pages);
     addNumber(out, "size", b.size);
+    addString(out, "screen", kScreens[b.screen].id);  // the 7.5": maybe the other one
     const uint32_t mark = prefs::bookmark(b.id);
     addNumber(out, "position", mark);
     addInt(out, "progress", b.pages > 1 ? int(uint64_t(mark) * 100 / (b.pages - 1)) : 0);
@@ -381,7 +388,8 @@ bool flushUpload() {
   return ok;
 }
 
-// Validates the finished temp file as a book for this screen; fills upTitle.
+// Validates the finished temp file as a book for one of the board's screens (the
+// 7.5" has two); fills upTitle.
 bool validateUpload() {
   fs::File f = SD.open(upTmp, FILE_READ);
   uint8_t head[t5b::kHeaderSize];
@@ -389,7 +397,7 @@ bool validateUpload() {
   t5b::Error err = t5b::Error::TooShort;
   if (f && f.read(head, sizeof(head)) == sizeof(head)) {
     err = t5b::parseHeader(head, sizeof(head), h);
-    if (err == t5b::Error::None) err = t5b::validate(h, kPageW, kPageH, uint32_t(f.size()));
+    if (err == t5b::Error::None) err = storage::checkHeader(h, uint32_t(f.size()));
   }
   if (f) f.close();
   if (err != t5b::Error::None) {
@@ -428,7 +436,7 @@ void handleUploadData() {
       if (room >= 0 && int64_t(server.clientContentLength()) > room) {
         return failUpload(507, kCardFull);
       }
-      String dir = upKind->dir;
+      String dir = kindDir(*upKind);
       if (upKind == &kBookKind) {
         dir = bookDirFor(name);
         if (!dir.length()) return failUpload(400, "bad folder name");
@@ -475,7 +483,8 @@ void handleUploadData() {
           up.totalSize != size_t(kSquareBytes)) {
         char why[80];
         snprintf(why, sizeof(why), "a sleep picture is %ux%u (%u bytes) or %ux%u (%u bytes)",
-                 unsigned(kPageW), unsigned(kPageH), unsigned(kPageBytes), unsigned(kSquareSide),
+                 unsigned(display::screen().w), unsigned(display::screen().h),
+                 unsigned(kPageBytes), unsigned(kSquareSide),
                  unsigned(kSquareSide), unsigned(kSquareBytes));
         return failUpload(400, why);
       }
@@ -802,7 +811,7 @@ void handleDeletePicture() {
   if (!authorized()) return sendError(403, "wrong code");
   const String name = server.arg("name");
   if (!isSafeFileName(name.c_str(), kPictureExts, 1)) return sendError(400, "bad file name");
-  if (!SD.remove(String(storage::kPicturesDir) + "/" + name)) return sendError(404, "no such picture");
+  if (!SD.remove(storage::picturesDir() + "/" + name)) return sendError(404, "no such picture");
   touch();
   sendJson(200, "{}");
 }
@@ -835,7 +844,7 @@ void handleFile() {
   if (!kind || kind == &kBookKind || !isSafeFileName(name.c_str(), kind->exts, kind->extCount)) {
     return sendError(400, "bad request");
   }
-  fs::File f = SD.open(String(kind->dir) + "/" + name, FILE_READ);
+  fs::File f = SD.open(kindDir(*kind) + "/" + name, FILE_READ);
   if (!f || f.isDirectory()) return sendError(404, "not found");
   touch();
   server.streamFile(f, mimeFor(name));

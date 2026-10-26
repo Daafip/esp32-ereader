@@ -103,6 +103,7 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(SetSleepScreen, "Sleep screen", "Slaapscherm")                                         \
   X(SetStatusBar, "Status bar", "Statusbalk")                                              \
   X(SetFlip, "Flip screen", "Scherm omdraaien")                                            \
+  X(SetOrientation, "Orientation", "Schermstand")                                          \
   X(SetHoldMenu, "Hold MENU", "MENU vasthouden")                                           \
   X(SetLongHold, "Long hold", "Lang vasthouden")                                           \
   X(SetLongPress, "Long press", "Lang drukken")                                            \
@@ -131,7 +132,17 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(HoldSleep, "sleep", "slapen")                                                          \
   X(HoldBookmark, "bookmark", "bladwijzer")                                                \
   X(HoldLock, "lock", "vergrendelen")                                                      \
-  X(HoldOpenMenu, "menu", "menu")
+  X(HoldOpenMenu, "menu", "menu")                                                          \
+  X(OrientPortrait, "portrait", "staand")                                                  \
+  X(OrientPortraitFlip, "portrait 180\xC2\xB0", "staand 180\xC2\xB0")                       \
+  X(OrientLandscape, "landscape", "liggend")                                               \
+  X(OrientLandscapeFlip, "landscape 180\xC2\xB0", "liggend 180\xC2\xB0")                    \
+  /* a book made for the other orientation (boards that turn) */                           \
+  X(MadeForPortrait, "Made for portrait", "Opgemaakt voor staand")                        \
+  X(MadeForLandscape, "Made for landscape", "Opgemaakt voor liggend")                     \
+  X(OtherScreenLine1, "Turn the screen in Settings,", "Draai het scherm in Instellingen")  \
+  X(OtherScreenLine2, "or restyle it on the Wi-Fi page", "of pas de opmaak aan via wifi") \
+  X(BackAnyButton, "Press any button to go back", "Druk op een knop om terug te gaan")
 
 enum class S : uint16_t {
 #define T5_STRING_ID(id, en, nl) id,

@@ -10,9 +10,9 @@ NUL-padded and always NUL-terminated within their field.
 |---|---|---|
 | 0 | 4 | magic `"T5B1"` |
 | 4 | 2 | version (u16) = 1 |
-| 6 | 2 | page_w (u16): 250 (T5-2.13) or 540 (4.7" readers) |
-| 8 | 2 | page_h (u16): 122 (T5-2.13) or 960 (4.7" readers) |
-| 10 | 2 | stride (u16) = ceil(page_w / 8): 32 or 68 |
+| 6 | 2 | page_w (u16): 250 (T5-2.13), 540 (4.7" readers), 480 / 800 (7.5" portrait / landscape) |
+| 8 | 2 | page_h (u16): 122 (T5-2.13), 960 (4.7" readers), 800 / 480 (7.5") |
+| 10 | 2 | stride (u16) = ceil(page_w / 8): 32, 68, 60 or 100 |
 | 12 | 4 | page_count (u32) |
 | 16 | 2 | toc_count (u16) |
 | 18 | 64 | title |
@@ -21,8 +21,10 @@ NUL-padded and always NUL-terminated within their field.
 | 146 + 52 × toc_count | page_bytes × page_count | pages |
 | end of the pages | 12 + cover stride × cover h | optional cover block (below) |
 
-`page_bytes = stride × page_h`: 3904 (T5-2.13) or 65280 (4.7" readers). A reader only
-opens books whose page size matches its screen. Page *n* (0-based) starts at
+`page_bytes = stride × page_h`: 3904 (T5-2.13), 65280 (4.7" readers) or 48000 (7.5",
+either way). A reader only opens books whose page size matches its screen; the 7.5"
+has two screens (Settings → Orientation) and lists books for either, opening those
+for the one it shows. Page *n* (0-based) starts at
 
 ```
 146 + 52 * toc_count + n * page_bytes
@@ -60,8 +62,8 @@ a book with a cover, so those need 0.10.0 or later (`--no-cover`, or the page's
 | 10 | 2 | reserved = 0 |
 | 12 | stride × h | bitmap, same layout as a page |
 
-The cover is the EPUB's cover image scaled to fit 72×104 (T5-2.13) or 420×640 (4.7"
-readers), sharpened and Atkinson dithered; the screen size gives the box (`cover_w`/`cover_h` in
+The cover is the EPUB's cover image scaled to fit 72×104 (T5-2.13), 420×640 (4.7"
+readers), 340×520 (7.5" portrait) or 288×416 (7.5" landscape), sharpened and Atkinson dithered; the screen size gives the box (`cover_w`/`cover_h` in
 `layout.py`). A file with anything else after the pages, or a block whose size
 doesn't match, is invalid.
 

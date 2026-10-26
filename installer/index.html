@@ -56,6 +56,8 @@ a{color:inherit}
     <button class="install" data-board="m5papers3">Install</button></div>
   <div class="card"><div class="grow"><div class="title">M5Stack M5Paper</div><div class="sub">4.7" 960×540, touch and a 3-way switch</div></div>
     <button class="install" data-board="m5paper">Install</button></div>
+  <div class="card"><div class="grow"><div class="title">FireBeetle 2 ESP32-C6 + 7.5"</div><div class="sub">Home-built: Waveshare 7.5" 800×480, portrait or landscape, three buttons</div></div>
+    <button class="install" data-board="firebeetle-75">Install</button></div>
 
   <label class="erase"><input type="checkbox" id="erase"> <span>Erase everything on the
     reader first: settings, reading positions, statistics and the saved Wi-Fi. Books on
@@ -74,7 +76,7 @@ a{color:inherit}
       <a href="#linux">below</a> first.</li>
     <li>Pick the right board: the page checks the chip, and updates over Wi-Fi refuse
       another board's file.</li>
-    <li>Only the LilyGo T5-2.13 has been tested on hardware so far; the other three
+    <li>Only the LilyGo T5-2.13 has been tested on hardware so far; the other
       boards are untested. See the
       <a href="https://github.com/Daafip/esp32-ereader">project page</a> and its docs.</li>
   </ul>
@@ -118,6 +120,7 @@ const connectHelp = {
   "t5-47": "The reader didn't switch to install mode. Hold BOOT, press RST, release BOOT, then try again.",
   "m5papers3": "The reader didn't switch to install mode. Put it in download mode as M5Stack describes for the M5PaperS3, then try again.",
   "m5paper": "The reader didn't switch to install mode. Unplug and replug the USB cable, then try again.",
+  "firebeetle-75": "The reader didn't switch to install mode. Hold BOOT, press RST, release BOOT, then try again.",
 };
 
 if (!("serial" in navigator)) {

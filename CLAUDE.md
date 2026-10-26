@@ -7,14 +7,20 @@ More build targets (Phases 7-8): LilyGo T5-4.7" S3 (ESP32-S3, 960×540 parallel 
 via FastEPD, one button; `docs/hardware-t5-47.md`), M5Stack M5PaperS3 (same panel via
 FastEPD's preset, touch only) and M5Paper (ESP32 + IT8951 controller with our own driver,
 touch + 3-way switch; `docs/hardware-m5paper.md`). The 4.7" boards use portrait 540×960.
+Phase 10: a home-built FireBeetle 2 ESP32-C6 + Waveshare 7.5" 800×480 SPI panel
+(`boards/firebeetle_75.h`, `docs/hardware-firebeetle-75.md`; three active-high buttons,
+SD card on the panel's SPI bus). It turns: portrait 480×800 or landscape 800×480
+(Settings → Orientation), two screens `7.5in` / `7.5in-landscape`, a book is made for one.
 
 ## Current phase
 
 Phases 0-5 and 7-9 are written and build (7: T5-4.7" S3, 8: M5PaperS3/M5Paper,
 9: ideas from the Pala One firmware). **The T5-2.13 runs (David's V2.3.1 board,
 2026-10-13, release 1.0.0; 1.1.0 on 2026-10-14; 1.2.0, 1.3.0 and 1.3.1 on 2026-10-20)**: panel, one button, SD, Wi-Fi transfer, partial refresh
-with a custom LUT; results in `docs/hardware.md`. The other three boards have never
-run. Open checks: `docs/checkpoints.md` (ghosting, power, the other boards, Phase 9).
+with a custom LUT; results in `docs/hardware.md`. The three 4.7" boards have never
+run. The FireBeetle 7.5" passed its hardware test (`fb75_test`, 2026-10-26); the reader
+on it hasn't run yet. Open checks: `docs/checkpoints.md` (ghosting, power, the other
+boards, Phase 9).
 T5-2.13: take the SD card out before flashing (uploads fail with it in). Checkpoint 2 is done: Ubuntu Regular 13 px
 (bookprep default). Phase 6 is optional; Wi-Fi transfer and in-browser conversion
 are done. UI look: check `pixi run ui-preview` after
@@ -27,13 +33,13 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 |---|---|
 | Build all firmware envs | `pixi run fw-build` |
 | Firmware unit tests (PC) | `pixi run fw-test` (`firmware/lib/core`, Unity, native env) |
-| Render all screens (PC) | `pixi run ui-preview` -> `out/ui-preview/<board>/` (`t5-213`, `t5-47`, `m5paper` = touch UI) |
-| Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; `reader_t547`, `reader_m5papers3`, `reader_m5paper`) |
+| Render all screens (PC) | `pixi run ui-preview` -> `out/ui-preview/<board>/` (`t5-213`, `t5-47`, `m5paper` = touch UI, `firebeetle-75`, `firebeetle-75-landscape`) |
+| Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; `reader_t547`, `reader_m5papers3`, `reader_m5paper`; `reader_firebeetle75`, `fb75_test`) |
 | Images for browser/OTA flashing | `pixi run fw-dist` -> `out/firmware/` |
 | Browser installer (keeps NVS) | `pixi run installer` -> `out/installer/` (after `fw-build`) |
 | Release on GitHub | bump `FW_VERSION`, then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images) |
 | Serial monitor | `pixi run fw-monitor` |
-| Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` (`--screen 4.7in`) |
+| Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` (`--screen 4.7in`, `7.5in`, `7.5in-landscape`) |
 | Font comparison | `pixi run font-sheet book.epub --font a.ttf --sizes 11 12 13` |
 | Regenerate generated headers | `pixi run devpages` (test_pages.h), `pixi run ui-fonts` (fonts/), `pixi run web` (web_assets.h from `firmware/web/`) |
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
@@ -45,8 +51,11 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 - All pins, the panel and the screen geometry live in `firmware/include/boards/<board>.h`
   (selected by `board.h`), nowhere else. A screen's size and converter defaults also
   appear in `SCREENS` (`bookprep/layout.py`) and `screens` (`firmware/web/bookprep.js`):
-  change all three together.
-- Display backends: `display_bbep.cpp` (SPI panels with their own RAM: T5-2.13) and
+  change all three together. A board that turns (`BOARD_TURNS`) has a second screen a
+  quarter turn away (`kScreens` in `board.h`): the page size is then `display::screen()`,
+  not `kPageW`/`kPageH` (those are the first screen); `kPageBytes` fits either.
+- Display backends: `display_bbep.cpp` (SPI panels with their own RAM: T5-2.13, 7.5";
+  the shown-image copy in RTC memory, or RAM with `BOARD_SHOWN_IN_RAM`) and
   `display_canvas.cpp` (portrait RAM canvas, rotated onto a `panel.h` driver:
   `fastepd_panel.cpp` for T5-4.7"/PaperS3, `it8951_panel.cpp` for M5Paper). FastEPD.h and
   bb_epaper.h never go in one translation unit; `firmware/tools/fastepd_symbols.py`

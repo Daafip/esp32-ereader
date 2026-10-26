@@ -26,7 +26,9 @@ enum class HoldAction : uint8_t { Sleep, Bookmark, Lock, Menu };
 struct Settings {
   SleepScreen sleepScreen = SleepScreen::Book;
   StatusBarMode statusBar = StatusBarMode::Full;
-  bool flip = false;  // screen upside down (the reader held the other way round)
+  // Screen orientation, key "flip": 0 as built, 1 upside down; boards that turn
+  // (setOrientationCount(4), the 7.5") also 2 and 3, the other screen either way up.
+  uint8_t orientation = 0;
   HoldAction holdAction = HoldAction::Sleep;
   bool lockOnSleep = false;
   Lang language = Lang::En;
@@ -55,6 +57,10 @@ enum class SettingId : uint8_t {
 constexpr int kSettingCount = int(SettingId::Count);
 
 int settingOptionCount(SettingId id);
+// Options of SettingId::Flip: 2 (Flip screen: off / on), or 4 on boards that turn
+// (Orientation: portrait / portrait 180 / landscape / landscape 180). Set it before
+// loading settings: an index beyond the count reads as 0.
+void setOrientationCount(int count);
 int settingIndex(const Settings &s, SettingId id);  // current option
 void setSettingIndex(Settings &s, SettingId id, int index);  // ignored if out of range
 void cycleSetting(Settings &s, SettingId id);  // next option, wrapping

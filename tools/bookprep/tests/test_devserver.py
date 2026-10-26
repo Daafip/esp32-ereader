@@ -89,8 +89,8 @@ def test_upload_book_source_meta_font_and_restyle_flow(server, tmp_path):
     data = info(base)
     (book,) = data["books"]
     assert book == {"file": "boek.t5b", "folder": "", "title": "Testboek", "author": "A",
-                    "pages": 2, "size": book["size"], "position": 0, "progress": 0,
-                    "cover": False, "marks": 0, "source": "boek.epub"}  # fmt: skip
+                    "pages": 2, "size": book["size"], "screen": "t5-213", "position": 0,
+                    "progress": 0, "cover": False, "marks": 0, "source": "boek.epub"}  # fmt: skip
     assert data["fonts"] == [{"name": "Mijn Font.ttf", "size": 9}]
 
     assert call(f"{base}/file?kind=source&name=boek.epub&k={CODE}")[1] == b"PK fake epub"
@@ -150,6 +150,42 @@ def test_screen_is_reported_and_enforced(tmp_path):
         assert upload(base, "book", "groot.t5b", t5b_bytes(tmp_path, w=540, h=960))[0] == 200
     finally:
         srv.shutdown()
+
+
+def test_a_board_that_turns_takes_books_for_both_screens(tmp_path):
+    """The 7.5": portrait and landscape (Settings -> Orientation). A book is made for
+    one of them; /api/info names it, the page marks the other orientation's books."""
+    for screen, other, turned in (
+        ("7.5in", (800, 480), False),
+        ("7.5in-landscape", (480, 800), True),
+    ):
+        root = tmp_path / screen
+        srv = make_server(root, CODE, port=0, fonts=False, screen=screen)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+        try:
+            data = info(base)
+            assert (data["board"], data["screen"]["id"]) == ("firebeetle-75", screen)
+            own = (data["screen"]["width"], data["screen"]["height"])
+            assert upload(base, "book", "eigen.t5b", t5b_bytes(root, "Eigen", *own))[0] == 200
+            assert upload(base, "book", "ander.t5b", t5b_bytes(root, "Ander", *other))[0] == 200
+            assert upload(base, "book", "t5.t5b", t5b_bytes(root, "T5"))[0] == 400
+            got = {b["title"]: b["screen"] for b in info(base)["books"]}
+            other_id = "7.5in" if turned else "7.5in-landscape"
+            assert got == {"Eigen": screen, "Ander": other_id}
+
+            _, body = call(f"{base}/api/settings?k={CODE}")
+            flip = {s["key"]: s for s in json.loads(body)["settings"]}["flip"]
+            assert flip["label"] == "Orientation"
+            assert len(flip["options"]) == 4 and flip["value"] == (2 if turned else 0)
+
+            # a full-screen picture: same bytes either way, so a folder per orientation
+            assert upload(base, "sleep", "p.bin", bytes(60 * 800))[0] == 200
+            folder = root / "sd" / "sleep" / ("7.5in-landscape" if turned else "")
+            assert (folder / "p.bin").exists()
+            assert info(base)["pictures"] == ["p.bin"]
+        finally:
+            srv.shutdown()
 
 
 def test_default_screen_is_the_t5_213(server):

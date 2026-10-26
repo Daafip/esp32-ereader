@@ -13,7 +13,7 @@ bool Book::open(const char *path) {
     error_ = "file not found";
     return false;
   }
-  const t5b::Error err = storage::checkBook(file_, header_, &cover_);
+  const t5b::Error err = storage::checkBook(file_, header_, &cover_, &screen_);
   if (err != t5b::Error::None || !file_.seek(t5b::kHeaderSize)) {
     error_ = t5b::errorText(err);
     file_.close();

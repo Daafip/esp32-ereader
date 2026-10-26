@@ -66,12 +66,15 @@ Refresh show(Refresh mode) {
 
 void setRotation(int degrees) { rotation = degrees; }
 
-void setFlipped(bool flipped) {
-  const int r = flipped ? (kEpdRotation == 90 ? 270 : 90) : kEpdRotation;
+void setOrientation(uint8_t orientation) {
+  const int r = rotationFor(orientation);
   if (r == rotation) return;
   rotation = r;
   shown = false;  // the next partial update becomes a full one
 }
+
+int screenIndex() { return 0; }  // one screen, either way up
+const ScreenSpec &screen() { return kScreens[0]; }
 
 void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
   canvas.setFont(FONT_6x8);

@@ -1,6 +1,6 @@
 // Framebuffer-only stand-in for the display backends (UI previews on the PC).
-// Same canvas as on the board: the rotated panel buffer (T5-2.13) or a virtual
-// portrait canvas (T5-4.7" S3).
+// Same canvas as on the board: the rotated panel buffer (T5-2.13, 7.5") or a
+// virtual portrait canvas (4.7" boards).
 #include <string.h>
 
 #include "board.h"
@@ -10,16 +10,17 @@ namespace display {
 namespace {
 #ifdef BOARD_PANEL_BBEPAPER
 BBEPAPER panel(kEpdPanel);
-uint8_t fb[((122 + 7) / 8) * 250];
+uint8_t fb[((kEpdNativeW + 7) / 8) * kEpdNativeH];
 #else
 BBEPAPER panel;
 uint8_t fb[kPageBytes];
 #endif
+int rotation = kEpdRotation;
 }  // namespace
 
 void begin() {
 #ifdef BOARD_PANEL_BBEPAPER
-  panel.setRotation(kEpdRotation);
+  panel.setRotation(rotation);
 #else
   panel.createVirtual(kPageW, kPageH, 0);
 #endif
@@ -31,6 +32,18 @@ uint8_t *framebuffer() { return fb; }
 void clear() { memset(fb, 0xFF, sizeof(fb)); }
 Refresh show(Refresh mode) { return mode; }
 void setRotation(int degrees) { panel.setRotation(degrees); }
+void setOrientation(uint8_t orientation) {
+  rotation = rotationFor(orientation);
+#ifdef BOARD_PANEL_BBEPAPER
+  panel.setRotation(rotation);
+#endif
+}
+#ifdef BOARD_PANEL_BBEPAPER
+int screenIndex() { return screenForRotation(rotation); }
+#else
+int screenIndex() { return 0; }
+#endif
+const ScreenSpec &screen() { return kScreens[screenIndex()]; }
 void drawText6x8(const char *ascii, int x, int y, int color, int bg) {
   panel.setFont(FONT_6x8);
   panel.setTextColor(color, bg);
