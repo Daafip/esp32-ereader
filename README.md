@@ -25,6 +25,8 @@ The 4.7" boards and the M5 boards have not run this firmware yet: see
 [docs/checkpoints.md](docs/checkpoints.md) for what to check. The 7.5" build is a
 FireBeetle 2 ESP32-C6 with a Waveshare 7.5" HAT, three buttons and a microSD breakout,
 readable in portrait or landscape: [docs/hardware-firebeetle-75.md](docs/hardware-firebeetle-75.md).
+Without a card it keeps about 43 pages in its flash (`firebeetle-75-flash-reader-x.x.x.bin`,
+updates over USB only).
 
 ## How it works
 

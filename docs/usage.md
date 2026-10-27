@@ -28,7 +28,8 @@ Other ways:
 - **From this PC:** `pixi run fw-flash reader` (SD card out while flashing).
   T5-4.7": `pixi run fw-flash reader_t547` (if no port shows up: hold BOOT, press
   RST, release BOOT). M5PaperS3: `reader_m5papers3`, M5Paper: `reader_m5paper`,
-  FireBeetle 7.5": `reader_firebeetle75`. This keeps settings too.
+  FireBeetle 7.5": `reader_firebeetle75`, or `reader_firebeetle75_flash` without a
+  microSD card (below). This keeps settings too.
 - **Ready-made images:** every release on
   <https://github.com/Daafip/esp32-ereader/releases> has the images attached (built
   by GitHub Actions from the version tag).
@@ -74,9 +75,18 @@ Large books take a moment: Max Havelaar is 3600 pages, ~14 MB to send to the T5-
 (about 55 MB to the T5-4.7", whose pages are 17× bigger). Keep the phone's screen on
 while it uploads.
 
+**A FireBeetle 7.5" without a card** (`reader_firebeetle75_flash`) keeps its books in
+its flash: room for about 43 pages (a 7.5" page is 48 KB), enough to try it out. When a
+book doesn't fit, the page offers to send its first pages ("Only the first 40 of 797
+pages fit"), without the original, so there's no Restyle for it. On the PC:
+`--max-pages 40`. That build has no room for a firmware update over Wi-Fi either:
+update it over USB. Once a card is fitted, flash `reader_firebeetle75` (settings stay,
+the books in the flash don't).
+
 **On the PC:** `pixi run prep book.epub --out out/ --preview` (`--font`, `--size`, `--mono`,
 `--lang`, `--bionic`, `--no-cover`, ...: `pixi run prep --help`; add `--screen 4.7in` for
-the 4.7" readers, `--screen 7.5in` or `7.5in-landscape` for the 7.5"), then copy `out/<book>.t5b` to `/books/` (or a folder in it) on the
+the 4.7" readers, `--screen 7.5in` or `7.5in-landscape` for the 7.5", `--max-pages N` for
+only the first pages), then copy `out/<book>.t5b` to `/books/` (or a folder in it) on the
 card (FAT32). Page breaks differ slightly from the browser: the two use different font
 engines.
 
@@ -142,6 +152,7 @@ your board from a release or `pixi run fw-dist` with "Choose": `t5-reader-…`,
 `t5-47-reader-…`, `m5papers3-reader-…` or `m5paper-reader-…` (the page names the
 right one; another board's file is refused). The reader checks the image, restarts
 into it and leaves Wi-Fi mode. If anything goes wrong, install over USB as above.
+(A FireBeetle 7.5" without a card can't update this way: the page says so.)
 
 **Factory reset:** ⚙ Settings → Factory reset → "Erase everything", then type ERASE.
 It deletes all books, originals, bookmarks, pictures and fonts from the card, and all

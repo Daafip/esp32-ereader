@@ -142,7 +142,15 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(MadeForLandscape, "Made for landscape", "Opgemaakt voor liggend")                     \
   X(OtherScreenLine1, "Turn the screen in Settings,", "Draai het scherm in Instellingen")  \
   X(OtherScreenLine2, "or restyle it on the Wi-Fi page", "of pas de opmaak aan via wifi") \
-  X(BackAnyButton, "Press any button to go back", "Druk op een knop om terug te gaan")
+  X(BackAnyButton, "Press any button to go back", "Druk op een knop om terug te gaan")     \
+  /* FireBeetle 7.5" without a card: books in the flash */                                 \
+  X(NoBooksFlash1, "Upload them over Wi-Fi", "Stuur ze via wifi")                          \
+  X(NoBooksFlash2, "(no card: room for %u pages)", "(geen kaart: plek voor %u pagina's)")  \
+  X(MemoryFlashValue, "flash %s free  \xC2\xB7  %u KB RAM", "flash %s vrij  \xC2\xB7  %u KB RAM") \
+  X(FileDamaged, "The file may be damaged", "Het bestand is misschien beschadigd")         \
+  X(NoFlash, "No book storage", "Geen boekenopslag")                                       \
+  X(NoFlashLine1, "Flash this firmware again", "Flash deze firmware opnieuw")              \
+  X(NoFlashLine2, "over USB", "via USB")
 
 enum class S : uint16_t {
 #define T5_STRING_ID(id, en, nl) id,

@@ -1,5 +1,6 @@
 // TF card and the /books library: books (one folder level), bookmarks, sleep
-// pictures. Layout on the card:
+// pictures. A FireBeetle 7.5" without a card keeps the same files in its flash
+// (kBooksInFlash: LittleFS). Layout on the card:
 //   /books/*.t5b, /books/<folder>/*.t5b   books (file stems unique across folders)
 //   /books/.src/<stem>.epub|.txt|.json    originals and converter settings (Restyle)
 //   /books/.marks/<stem>.txt              bookmarks, one page number per line
@@ -39,11 +40,17 @@ struct BookEntry {
   bool hasCover = false;
 };
 
-// Mounts the card (tries 20, 10, 4 MHz). Safe to call again.
+// Mounts the card (tries 20, 10, 4 MHz), or the flash (formats it the first time).
+// Safe to call again.
 bool mount();
 bool mounted();
+// The card's (or the flash's) files: every path below is on it.
+fs::FS &files();
+// Size of the card in bytes, 0 if unknown.
+uint64_t totalBytes();
 // Free space on the card in bytes, or -1 if unknown. The first call after mounting
 // may scan the FAT (a second or two on a big card); FatFs keeps the count after that.
+// In the flash: what a new file can take (less a little for LittleFS's own blocks).
 int64_t freeBytes();
 
 // Checks a header against the board's screens (two on boards that turn); `screen`

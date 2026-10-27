@@ -34,6 +34,10 @@ def call(url, method="GET", data=None, headers=None):
 
 
 def upload(base, kind, name, data, code=CODE):
+    return post_file(f"{base}/api/upload?kind={kind}&k={code}", name, data)
+
+
+def post_file(url, name, data):
     boundary = "----t5test"
     body = (
         (
@@ -43,8 +47,7 @@ def upload(base, kind, name, data, code=CODE):
         + data
         + f"\r\n--{boundary}--\r\n".encode()
     )
-    return call(f"{base}/api/upload?kind={kind}&k={code}", "POST", body,
-                {"Content-Type": f"multipart/form-data; boundary={boundary}"})  # fmt: skip
+    return call(url, "POST", body, {"Content-Type": f"multipart/form-data; boundary={boundary}"})
 
 
 def t5b_bytes(tmp_path: Path, title="Testboek", w=250, h=122) -> bytes:
@@ -130,10 +133,25 @@ def test_full_card_is_refused_with_the_free_space(tmp_path):
         assert free == info(base)["free"] < data["total"]
         status, body = upload(base, "source", "boek.epub", bytes(free + 1))
         assert status == 507
-        assert json.loads(body) == {"error": "not enough space on the SD card", "free": free}
+        assert json.loads(body) == {"error": "not enough space on the reader", "free": free}
         assert not (tmp_path / "sd" / "books" / ".src" / "boek.epub").exists()
         status, body = upload(base, "book", "x" * 61 + ".t5b", t5b_bytes(tmp_path))
         assert status == 400 and b"too long" in body
+    finally:
+        srv.shutdown()
+
+
+def test_a_reader_without_update_slot_refuses_firmware(tmp_path):
+    """FireBeetle 7.5" without a card: books in the flash, one app slot (transfer.cpp
+    hasUpdateSlot()). The page reads "ota" and says to update over USB."""
+    srv = make_server(tmp_path, CODE, port=0, fonts=False, ota=False)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        assert info(base)["ota"] is False
+        status, body = post_file(f"{base}/api/firmware?k={CODE}", "x-ota.bin", b"\xe9" * 64)
+        assert status == 400 and b"over USB" in body
+        assert not (tmp_path / "firmware").exists()
     finally:
         srv.shutdown()
 

@@ -11,6 +11,9 @@ Phase 10: a home-built FireBeetle 2 ESP32-C6 + Waveshare 7.5" 800×480 SPI panel
 (`boards/firebeetle_75.h`, `docs/hardware-firebeetle-75.md`; three active-high buttons,
 SD card on the panel's SPI bus). It turns: portrait 480×800 or landscape 800×480
 (Settings → Orientation), two screens `7.5in` / `7.5in-landscape`, a book is made for one.
+Without a card (David's build for now): env `reader_firebeetle75_flash`
+(`BOARD_BOOKS_IN_FLASH`), books in a 2 MB LittleFS partition (~43 pages), no Wi-Fi
+updates. Its button and card pins: "Your wiring" at the top of the board header.
 
 ## Current phase
 
@@ -34,7 +37,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Build all firmware envs | `pixi run fw-build` |
 | Firmware unit tests (PC) | `pixi run fw-test` (`firmware/lib/core`, Unity, native env) |
 | Render all screens (PC) | `pixi run ui-preview` -> `out/ui-preview/<board>/` (`t5-213`, `t5-47`, `m5paper` = touch UI, `firebeetle-75`, `firebeetle-75-landscape`) |
-| Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; `reader_t547`, `reader_m5papers3`, `reader_m5paper`; `reader_firebeetle75`, `fb75_test`) |
+| Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; `reader_t547`, `reader_m5papers3`, `reader_m5paper`; `reader_firebeetle75`, `reader_firebeetle75_flash`, `fb75_test`) |
 | Images for browser/OTA flashing | `pixi run fw-dist` -> `out/firmware/` |
 | Browser installer (keeps NVS) | `pixi run installer` -> `out/installer/` (after `fw-build`) |
 | Release on GitHub | bump `FW_VERSION`, then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images) |
@@ -95,6 +98,8 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 - Settings: a new one goes in `lib/core/src/settings.*` (options, stable key; NVS
   stores the option index as `s_<key>`) and in devserver's `SETTINGS` table. The
   page builds its form from `/api/settings`, so it needs no change.
+- Files on the card go through `storage::files()` (SD, or LittleFS in the flash
+  build), never `SD` directly.
 - Card layout: books in `/books` and one folder level, originals in `/books/.src`,
   bookmarks in `/books/.marks/<stem>.txt`, sleep pictures in `/sleep/*.bin` (one
   full-screen page each, or a square of the short side for "picture + book": told

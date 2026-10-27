@@ -1,9 +1,14 @@
 // Board definition for a home-built 7.5" reader: DFRobot FireBeetle 2 ESP32-C6
 // (DFR1075: 4 MB flash, no PSRAM, 16 KB RTC memory, one general-purpose SPI bus),
 // Waveshare 7.5" e-Paper HAT B/W V2 (800x480, UC81xx controller, on the e-Paper
-// Driver HAT Rev2.3), three DFRobot Gravity buttons (DFR0029) and a microSD
-// breakout. Included through board.h with -DBOARD_FIREBEETLE_75 (envs
-// reader_firebeetle75, fb75_test). See docs/hardware-firebeetle-75.md.
+// Driver HAT Rev2.3), three DFRobot Gravity buttons (DFR0029) and, optionally, a
+// microSD breakout. Included through board.h with -DBOARD_FIREBEETLE_75. See
+// docs/hardware-firebeetle-75.md.
+//
+// Envs: reader_firebeetle75 keeps the books on the microSD card;
+// reader_firebeetle75_flash (-DBOARD_BOOKS_IN_FLASH) keeps them in the flash, for a
+// build without a card (room for about 43 pages, no Wi-Fi updates); fb75_test is the
+// hardware test. Buttons and card are wired by hand: "Your wiring" below.
 //
 // Status column: SPEC = epaper-display-wiring-case-specs.md (2026-10-20), VARIANT =
 // Arduino-ESP32's dfrobot_firebeetle2_esp32c6 pin variant, ADDED = not in the
@@ -14,9 +19,36 @@
 
 #include <stdint.h>
 
+// ===== Your wiring =====================================================================
+// GPIO numbers, -1 = not fitted. The checks at the end of this file catch a pin used
+// twice and a button that can't wake the chip.
+//
+// Buttons: NEXT is needed, MENU and PREV are optional.
+//   NEXT, MENU, PREV  NEXT = next page (long: back), MENU = menu, PREV = back
+//   NEXT, MENU        the same without PREV (the two-button scheme)
+//   NEXT alone        tap = next, double tap = back, hold = menu (one-button scheme)
+// Only GPIO0-7 (LP GPIOs) wake the C6 from deep sleep, so every button goes there.
+constexpr int kBtnPrev = 2;           // button 1, previous (A1). SPEC
+constexpr int kBtnNext = 3;           // button 2, next (A2). SPEC
+constexpr int kBtnMenu = 7;           // button 3, home (D11). SPEC
+// DFRobot Gravity buttons idle low (pull-down on the module) and go high when pressed.
+// Plain push buttons between the pin and GND: delete this line (internal pull-ups).
+#define BOARD_BUTTONS_ACTIVE_HIGH 1
+
+// microSD card on the panel's SPI bus: card CLK to GPIO23, DI to GPIO22, and these
+// two. Only the card build (env reader_firebeetle75) uses them.
+constexpr int kSdMisoPin = 6;         // card DO (D12). ADDED, VERIFY
+constexpr int kSdCsPin = 1;           // card CS (D6). ADDED, VERIFY
+// =========================================================================================
+
 // Short name: release file names (<name>-reader-*.bin) and the tag that Wi-Fi
-// updates check (transfer.cpp), so another board's firmware is refused.
+// updates check (transfer.cpp), so another board's firmware is refused. The flash
+// build has another partition table: it can't run in the card build's slots.
+#ifdef BOARD_BOOKS_IN_FLASH
+#define BOARD_NAME "firebeetle-75-flash"
+#else
 #define BOARD_NAME "firebeetle-75"
+#endif
 #include <bb_epaper.h>
 
 #define BOARD_PANEL_BBEPAPER 1  // display_bbep.cpp
@@ -25,8 +57,6 @@
 #define BOARD_SHOWN_IN_RAM 1
 // Settings -> Orientation: portrait or landscape, either way up (board.h kScreens).
 #define BOARD_TURNS 1
-// Gravity buttons idle low (pull-down on the module) and go high when pressed.
-#define BOARD_BUTTONS_ACTIVE_HIGH 1
 
 // --- E-paper panel: HAT switches Display Config = B (0.47R), Interface = 0 (4-wire SPI).
 // HAT PWR is tied to 3V3: the panel is always powered, no power pin.
@@ -55,23 +85,27 @@ constexpr int kEpdNativeH = 480;
 // landscape rotations (board.h rotationFor()).
 constexpr int kEpdRotation = 90;      // TESTED (upright)
 
-// --- TF card: a 3.3 V microSD breakout on the panel's SPI bus (the C6 has only one;
-// the spec leaves GPIO1 and GPIO6 free). A 7.5" page is 48 KB, a book 10-20 MB:
-// the 4 MB of flash holds none.
-constexpr int kSdSck = kEpdSck;       // ADDED
-constexpr int kSdMosi = kEpdMosi;     // ADDED
-constexpr int kSdMiso = 6;            // ADDED (D12). VERIFY
-constexpr int kSdCs = 1;              // ADDED (D6). VERIFY
+// --- Books: a microSD card on the panel's SPI bus (the C6 has only one), or the flash.
+// A 7.5" page is 48 KB, a book 10-40 MB: the flash (2 MB beside the app, no second
+// app slot for Wi-Fi updates) holds about 43 pages, enough to try the reader.
+#ifdef BOARD_BOOKS_IN_FLASH
+constexpr int kSdMiso = -1;           // no card (storage.cpp: LittleFS on "books")
+constexpr int kSdCs = -1;
+#else
+constexpr int kSdMiso = kSdMisoPin;
+constexpr int kSdCs = kSdCsPin;
+#endif
+constexpr int kSdSck = kEpdSck;
+constexpr int kSdMosi = kEpdMosi;
 constexpr uint32_t kSdSpiHz = 20000000;
-constexpr bool kSdSharedSpi = true;   // Arduino's global SPI for panel and card
+constexpr bool kSdSharedSpi = kSdCs >= 0;  // Arduino's global SPI for panel and card
 
-// --- Buttons: LP GPIOs 0-7, the only ones that wake the C6 from deep sleep (ext1).
-// Two-button scheme plus PREV (input.cpp): NEXT short = next page, long = previous;
-// HOME = MENU (short = menu, long = the hold action); PREV = previous page / item.
-constexpr int kBtnPrev = 2;           // button 1, previous (A1). SPEC
-constexpr int kBtnNext = 3;           // button 2, next (A2). SPEC
-constexpr int kBtnMenu = 7;           // button 3, home (D11). SPEC
-constexpr bool kBtnNextPullup = false;  // the module's own pull-down
+// --- Buttons: the pins are in "Your wiring" at the top.
+#ifdef BOARD_BUTTONS_ACTIVE_HIGH
+constexpr bool kBtnNextPullup = false;  // the module's own pull-down (input.cpp adds one)
+#else
+constexpr bool kBtnNextPullup = true;   // plain button to GND. VERIFY: pull-ups in deep sleep
+#endif
 
 // --- Power ----------------------------------------------------------------------
 constexpr bool kLightSleep = false;   // between pages: deep sleep, any button wakes (ext1)
@@ -95,3 +129,22 @@ constexpr int kDefaultMarginPx = 20;
 constexpr const char *kTurnedScreenId = "7.5in-landscape";
 constexpr int kTurnedFontPx = 22;
 constexpr int kTurnedMarginPx = 32;
+
+// --- Checks on "Your wiring" ----------------------------------------------------------
+namespace fb75 {
+constexpr int kPins[] = {kEpdSck, kEpdMosi, kEpdCs, kEpdDc, kEpdRst,  kEpdBusy,
+                         kBatAdc, kSdMiso,  kSdCs,  kBtnPrev, kBtnNext, kBtnMenu};
+constexpr bool pinsDistinct() {
+  for (int i = 0; i < int(sizeof(kPins) / sizeof(kPins[0])); i++) {
+    for (int j = i + 1; j < int(sizeof(kPins) / sizeof(kPins[0])); j++) {
+      if (kPins[i] >= 0 && kPins[i] == kPins[j]) return false;
+    }
+  }
+  return true;
+}
+constexpr bool canWake(int pin) { return pin <= 7; }  // -1 (not fitted) or an LP GPIO
+}  // namespace fb75
+static_assert(fb75::pinsDistinct(), "Your wiring: two things on one GPIO");
+static_assert(kBtnNext >= 0, "Your wiring: the NEXT button is needed");
+static_assert(fb75::canWake(kBtnNext) && fb75::canWake(kBtnMenu) && fb75::canWake(kBtnPrev),
+              "Your wiring: buttons go on GPIO0-7, the only pins that wake the C6");

@@ -328,6 +328,14 @@ int main(int argc, char **argv) {
   ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksLine1), tr(S::NoBooksLine2),
               {Button::Next, tr(S::WifiTransfer), nullptr}, {Button::None, nullptr, nullptr});
   save("24-no-books-nl");
+#ifdef BOARD_FIREBEETLE_75
+  // the same without a card (reader_firebeetle75_flash, app.cpp showNoBooks())
+  char room[48];
+  snprintf(room, sizeof(room), tr(S::NoBooksFlash2), 43u);
+  ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksFlash1), room,
+              {Button::Next, tr(S::WifiTransfer), nullptr}, {Button::None, nullptr, nullptr});
+  save("25-no-books-flash-nl");
+#endif
   setLanguage(Lang::En);
   return 0;
 }

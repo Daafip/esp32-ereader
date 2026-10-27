@@ -28,6 +28,14 @@ constexpr bool kBtnActiveHigh = true;
 constexpr bool kBtnActiveHigh = false;
 #endif
 
+// Books on a microSD card (every board), or in the flash for a FireBeetle 7.5" without
+// one (-DBOARD_BOOKS_IN_FLASH, env reader_firebeetle75_flash; storage.cpp).
+#ifdef BOARD_BOOKS_IN_FLASH
+constexpr bool kBooksInFlash = true;
+#else
+constexpr bool kBooksInFlash = false;
+#endif
+
 // Touch screen (GT911): kTouch* pins in the board header (touch_gt911.cpp).
 #ifdef BOARD_HAS_TOUCH
 constexpr bool kHasTouch = true;

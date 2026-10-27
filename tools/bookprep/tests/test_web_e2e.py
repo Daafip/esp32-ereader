@@ -197,6 +197,40 @@ def test_page_refuses_a_book_that_does_not_fit_before_sending(tmp_path, sample_e
     assert not list((tmp_path / "sd").rglob("*.t5b"))
 
 
+def test_page_sends_the_first_pages_that_fit(tmp_path, sample_epub):
+    """Little room (the FireBeetle 7.5" without a card keeps ~43 pages in its flash):
+    the page offers the first pages that fit, and leaves the original out."""
+    status, _ = upload_from_page(tmp_path, sample_epub, "testboek.epub", card_mb=0.0093)
+    assert status == "ok", status
+    sd = tmp_path / "sd" / "books"
+    book = T5BFile(sd / "testboek.t5b")
+    assert book.header.page_count == 1  # 9.5 KB: one 3.9 KB page, one kept for the rest
+    assert [e.title for e in book.toc] == ["Hoofdstuk 1"]
+    assert not (sd / ".src" / "testboek.epub").exists()
+    assert (sd / ".src" / "testboek.json").exists()
+
+
+def test_page_says_to_update_over_usb_without_an_update_slot(tmp_path):
+    """The FireBeetle 7.5" flash build has one app slot ("ota": false in /api/info)."""
+    from bookprep.devserver import make_server
+
+    srv = make_server(tmp_path, "1234", port=0, fonts=False, update_site="/updates/", ota=False)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{srv.server_address[1]}/?k=1234#update"
+        dom = subprocess.run(
+            [chromium(), "--headless=new", "--disable-gpu", "--no-first-run",
+             "--virtual-time-budget=60000", "--dump-dom", url],
+            capture_output=True, text=True, timeout=300, check=True,
+        ).stdout  # fmt: skip
+    finally:
+        srv.shutdown()
+    status = re.search(r'<body[^>]*data-update="([^"]*)"', dom)
+    assert status and "update it over USB" in html.unescape(status.group(1)), dom[-800:]
+    assert re.search(r'<button class="link" id="fwgh"[^>]*hidden', dom), "GitHub button shown"
+    assert not (tmp_path / "firmware").exists()
+
+
 def test_page_searches_a_book_on_the_reader(tmp_path, sample_epub, font_path):
     """The book sheet: page bitmaps from the reader, search in the original."""
     from bookprep.cli import main as prep

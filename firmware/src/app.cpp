@@ -9,7 +9,6 @@
 #include "app.h"
 
 #include <Arduino.h>
-#include <SD.h>
 #include <esp_attr.h>
 #include <string.h>
 #include <time.h>
@@ -156,7 +155,7 @@ bool readNextPicture(storage::PictureShape shape, uint8_t *out, size_t size) {
   const int n = storage::pictureCount(shape);
   if (n <= 0) return false;
   const uint32_t i = prefs::nextPicture() % uint32_t(n);
-  fs::File f = SD.open(storage::picturePath(shape, int(i)), FILE_READ);
+  fs::File f = storage::files().open(storage::picturePath(shape, int(i)), FILE_READ);
   const bool ok = f && f.read(out, size) == size;
   if (f) f.close();
   if (ok) prefs::setNextPicture(i + 1);
@@ -298,7 +297,8 @@ void showReading(Refresh requested) {
     display::assumeShown();
   }
   if (!drawPage(page, batteryPct)) {
-    showMessage(ui::Icon::Card, tr(S::ReadError), baseName(book.path()), tr(S::CardRemoved));
+    showMessage(ui::Icon::Card, tr(S::ReadError), baseName(book.path()),
+                tr(kBooksInFlash ? S::FileDamaged : S::CardRemoved));
     return;
   }
   const int chapter = book.chapterForPage(page);
@@ -523,7 +523,13 @@ void renderLibrary() {
 void showNoBooks() {
   // Any press starts Wi-Fi transfer: the only way forward without a PC (the card
   // is read again when it ends). A "retry" here just restarted to the same screen.
-  ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksLine1), tr(S::NoBooksLine2),
+  // Books in the flash: Wi-Fi is the only way in, and the room is small.
+  char room[48];
+  snprintf(room, sizeof(room), tr(S::NoBooksFlash2),
+           unsigned(max<int64_t>(storage::freeBytes(), 0) / kPageBytes));
+  ui::message(ui::Icon::Book, tr(S::NoBooksYet),
+              tr(kBooksInFlash ? S::NoBooksFlash1 : S::NoBooksLine1),
+              kBooksInFlash ? room : tr(S::NoBooksLine2),
               {Button::Next, tr(S::WifiTransfer), nullptr}, kNoHint);
   display::show(Refresh::Full);
   setScreen(Screen::Message);
@@ -607,7 +613,8 @@ void openAbout() {
   char card[16] = "-";
   const int64_t room = storage::freeBytes();
   if (room >= 0) formatBytes(uint64_t(room), card, sizeof(card));
-  snprintf(v[4], sizeof(v[4]), tr(S::MemoryValue), card, unsigned(ESP.getFreeHeap() / 1024));
+  snprintf(v[4], sizeof(v[4]), tr(kBooksInFlash ? S::MemoryFlashValue : S::MemoryValue), card,
+           unsigned(ESP.getFreeHeap() / 1024));
   snprintf(v[5], sizeof(v[5]), tr(S::WakeValue), unsigned(rtc.imageMs), unsigned(rtc.wakes));
   const char *labels[] = {tr(S::Firmware), tr(S::Battery), tr(S::Book),
                           tr(S::Position), tr(S::Memory),  tr(S::WakeToPage)};
@@ -1053,7 +1060,11 @@ void setup() {
     power::deepSleep(0);
   }
   if (!storage::mount()) {
-    showMessage(ui::Icon::Card, tr(S::NoCard), tr(S::NoCardLine1), tr(S::NoCardLine2));
+    if (kBooksInFlash) {  // not this env's partition table (flashed the app alone?)
+      showMessage(ui::Icon::Card, tr(S::NoFlash), tr(S::NoFlashLine1), tr(S::NoFlashLine2));
+    } else {
+      showMessage(ui::Icon::Card, tr(S::NoCard), tr(S::NoCardLine1), tr(S::NoCardLine2));
+    }
     return;
   }
   if (!restoreBook()) {

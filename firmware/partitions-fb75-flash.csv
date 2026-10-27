@@ -1,0 +1,8 @@
+# FireBeetle 2 ESP32-C6 without a card (env reader_firebeetle75_flash): one app slot
+# as big as one of min_spiffs.csv's, and the rest of the 4 MB for books (LittleFS,
+# label "books"). nvs where min_spiffs.csv has it, so settings survive a switch.
+# Name,   Type, SubType,  Offset,   Size
+nvs,      data, nvs,      0x9000,   0x5000,
+app0,     app,  factory,  0x10000,  0x1E0000,
+books,    data, spiffs,   0x1F0000, 0x200000,
+coredump, data, coredump, 0x3F0000, 0x10000,

@@ -34,6 +34,17 @@ def test_no_cover_and_bionic(sample_epub, tmp_path, font_path):
     assert any(darker)  # word starts drawn bolder
 
 
+def test_max_pages_keeps_the_first_pages(sample_epub, tmp_path, font_path):
+    """A FireBeetle 7.5" without a card has room for about 43 pages."""
+    full, part = tmp_path / "full", tmp_path / "part"
+    assert main([str(sample_epub), "--out", str(full)]) == 0
+    assert main([str(sample_epub), "--out", str(part), "--max-pages", "1"]) == 0
+    a, b = T5BFile(full / "testboek.t5b"), T5BFile(part / "testboek.t5b")
+    assert a.header.page_count > 1 and b.header.page_count == 1
+    assert b.page_image(0).tobytes() == a.page_image(0).tobytes()
+    assert [e.title for e in b.toc] == ["Hoofdstuk 1"]  # chapter 2 starts later
+
+
 def test_end_to_end_txt_and_overrides(tmp_path, font_path):
     src = tmp_path / "Mijn boek!.txt"
     src.write_text("HOOFDSTUK I\n\n" + "Tekst. " * 300, encoding="utf-8")

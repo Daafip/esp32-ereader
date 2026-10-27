@@ -159,14 +159,16 @@ The reader itself is the test here too. Results go in `docs/hardware-m5paper.md`
 ## FireBeetle 2 ESP32-C6 + 7.5"
 
 Home-built board (`docs/hardware-firebeetle-75.md`): FireBeetle 2 ESP32-C6, Waveshare
-7.5" HAT V2, three Gravity buttons, a microSD breakout. Results go in that file →
-"Checkpoint results".
+7.5" HAT V2, three Gravity buttons, optionally a microSD breakout. Results go in that
+file → "Checkpoint results". Pins of the buttons and the card, and the button type:
+"Your wiring" at the top of `firmware/include/boards/firebeetle_75.h`.
 
-**SD card (not in the spec).** The reader keeps books on a card: a 7.5" page is 48 KB,
-a book 10-20 MB, and the 4 MB of flash holds none. A 3.3 V microSD breakout (no 5 V
-regulator or level shifter) on the panel's SPI bus, as the C6 has only one:
-CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), CS → **GPIO1** (D6),
-VCC → 3V3 bus, GND. The rest of the spec's wiring stays.
+**SD card (not in the spec, optional).** A 7.5" page is 48 KB, a book 10-40 MB. Without
+a card, `reader_firebeetle75_flash` keeps the books in the flash: room for about 43
+pages, and no Wi-Fi updates (one app slot). With a card, `reader_firebeetle75`: a 3.3 V
+microSD breakout (no 5 V regulator or level shifter) on the panel's SPI bus, as the C6
+has only one: CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), CS →
+**GPIO1** (D6), VCC → 3V3 bus, GND. The rest of the spec's wiring stays.
 
 ### Hardware test (done 2026-10-26, except the card and the button log)
 
@@ -183,16 +185,20 @@ VCC → 3V3 bus, GND. The rest of the spec's wiring stays.
 
 ### The reader
 
-1. `pixi run fw-flash reader_firebeetle75`, then `pixi run fw-monitor`. Books: Wi-Fi
-   transfer (the page typesets for the orientation the reader is in), or
-   `pixi run prep book.epub --screen 7.5in` and copy the `.t5b` to `/books`.
-   **Send:** the start-up lines (`card: ... MB`), or what the screen says.
+1. Without a card: `pixi run fw-flash reader_firebeetle75_flash`; with one:
+   `pixi run fw-flash reader_firebeetle75`. Then `pixi run fw-monitor`. Books: Wi-Fi
+   transfer (the page typesets for the orientation the reader is in; without a card
+   it offers the first pages that fit), or `pixi run prep book.epub --screen 7.5in`
+   (`--max-pages 40` without a card) and upload the `.t5b` on the page (with a card:
+   or copy it to `/books`). **Send:** the start-up lines (`flash: ... KB` or
+   `card: ... MB`), or what the screen says. The first start of the flash build formats
+   the books partition (a few seconds).
 2. Turn pages with NEXT (short: next, long: previous) and PREV; HOME opens the menu.
    **Send:** the `page ... refresh` lines, and ghosting after how many partial turns
    (Settings → Full refresh, default every 20).
 3. "Sleep after page: on" (default): each press wakes the chip. **Send:** whether every
    button wakes it, the `page ... at N ms` lines (wake to image), and whether the first
-   turn after waking is partial and clean (the old page comes from the card).
+   turn after waking is partial and clean (the old page comes from the card or flash).
 4. Settings → Orientation → landscape: the menus turn. The open book (portrait) can't
    follow: the library opens, the book is marked "portrait". Make a landscape book
    (the page's Restyle, or `--screen 7.5in-landscape`) and read it. **Send:** which

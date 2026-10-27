@@ -1,14 +1,17 @@
 # FireBeetle 2 ESP32-C6 + Waveshare 7.5" (home-built)
 
 A reader built from parts (Phase 10): a DFRobot FireBeetle 2 ESP32-C6, a Waveshare
-7.5" e-Paper HAT B/W V2 on its e-Paper Driver HAT, three DFRobot Gravity buttons, a
-microSD breakout and a Li-ion cell. Wiring, case and parts list for the original
-(ESPHome) build: `epaper-display-wiring-case-specs.md`. Pins in the firmware:
-`firmware/include/boards/firebeetle_75.h`; envs `reader_firebeetle75` (the reader) and
+7.5" e-Paper HAT B/W V2 on its e-Paper Driver HAT, three DFRobot Gravity buttons,
+optionally a microSD breakout, and a Li-ion cell. Wiring, case and parts list for the
+original (ESPHome) build: `epaper-display-wiring-case-specs.md`. Pins in the firmware:
+`firmware/include/boards/firebeetle_75.h` (buttons and card: "Your wiring" at its top).
+Envs: `reader_firebeetle75` (the reader, books on a microSD card),
+`reader_firebeetle75_flash` (the reader without a card, books in the flash) and
 `fb75_test` (hardware test).
 
-Status (2026-10-26): the hardware test ran on David's build (results below). The reader
-itself has not run yet: `docs/checkpoints.md` → "FireBeetle 2 ESP32-C6 + 7.5"".
+Status (2026-10-27): the hardware test ran on David's build (results below). The reader
+itself has not run yet: `docs/checkpoints.md` → "FireBeetle 2 ESP32-C6 + 7.5"". No card
+fitted yet: the flash build (`reader_firebeetle75_flash`) is the one to try first.
 
 ## Parts
 
@@ -17,11 +20,14 @@ itself has not run yet: `docs/checkpoints.md` → "FireBeetle 2 ESP32-C6 + 7.5""
 | DFRobot FireBeetle 2 ESP32-C6 (DFR1075) | 4 MB flash, no PSRAM, 512 KB SRAM, 16 KB RTC memory, one general-purpose SPI bus, Li-ion charger, battery divider on GPIO0. Deep sleep 36 µA (board v1.2) |
 | Waveshare 7.5" e-Paper HAT B/W V2 | 800×480, UC81xx controller (bb_epaper `EP75_800x480_GEN2`), on the e-Paper Driver HAT **Rev2.3** (PWR pin) |
 | 3 × DFRobot Gravity push button (DFR0029) | idle low (pull-down on the module), high when pressed |
-| microSD breakout, 3.3 V | **not in the spec**: the reader keeps books on a card. Take one without a 5 V regulator or level shifter |
+| microSD breakout, 3.3 V | **not in the spec, optional**: without one the books live in the flash (about 43 pages). Take one without a 5 V regulator or level shifter |
 | Li-ion cell with protection | JST-PH 2.0 into the BAT socket |
 
 Why the card: a 7.5" page is 48 KB (pages are stored as bitmaps, `docs/t5b-format.md`),
-so a book is 10-20 MB. The 4 MB of flash holds the firmware twice (OTA) and no book.
+so a book is 10-40 MB (a Dutch novel at the default 18 px: 797 pages, 38 MB). The 4 MB
+of flash holds the firmware twice (Wi-Fi updates) and no book; with the firmware once,
+2 MB are left: about 43 pages. Compressed pages wouldn't change that much: deflate
+makes such a page about 10 KB, so that novel would still need 7.8 MB.
 
 ## Wiring
 
@@ -36,18 +42,36 @@ PWR on 3V3: the panel is always powered.
 | GPIO14 | HAT DC | |
 | GPIO19 | HAT RST | GPIO20 gave no output on this board |
 | GPIO21 (MISO) | HAT BUSY | low = busy (UC81xx) |
-| GPIO6 (D12) | card DO (MISO) | added for the card |
-| GPIO1 (D6) | card CS | added for the card |
+| GPIO6 (D12) | card DO (MISO) | added for the card (card build only) |
+| GPIO1 (D6) | card CS | added for the card (card build only) |
 | GPIO2 (A1) | button 1: PREV | LP GPIO: wakes from deep sleep |
 | GPIO3 (A2) | button 2: NEXT | LP GPIO |
 | GPIO7 (D11) | button 3: HOME (MENU) | LP GPIO |
 | GPIO0 | battery divider (onboard) | × 2 |
 | 3V3, GND | HAT VCC/PWR/GND, buttons, card | one shared bus |
 
-Keep free: GPIO4, 5, 8, 9 (BOOT) and 15 (LED) are strapping pins, GPIO12/13 are USB,
-GPIO16/17 UART0.
+Keep free: GPIO8, 9 (BOOT) and 15 (LED) are strapping pins, GPIO12/13 are USB,
+GPIO16/17 UART0. GPIO4 and 5 are strapping pins too, but only for JTAG: a button with a
+pull-down there is fine.
+
+**Your wiring.** The top of `boards/firebeetle_75.h` holds what differs between builds:
+the three button pins (-1 = not fitted: MENU and PREV are optional, NEXT alone gives the
+one-button scheme), the button type (Gravity modules are active high; plain push buttons
+to GND: delete `BOARD_BUTTONS_ACTIVE_HIGH`, the internal pull-ups take over) and the card's
+MISO and CS. The build checks them: a GPIO used twice, or a button outside GPIO0-7 (the
+only pins that wake the C6 from deep sleep), stops it with a message.
 
 ## How the firmware drives it
+
+- **Books in the flash** (`reader_firebeetle75_flash`, `-DBOARD_BOOKS_IN_FLASH`):
+  `partitions-fb75-flash.csv` has one app slot (1.9 MB, as big as one of the card
+  build's) and a 2 MB LittleFS partition `books`, formatted at the first start. Same
+  folders as on a card (`storage::files()`). Room for about 43 pages; the page offers
+  the first pages of a bigger book (and leaves the original out, so no Restyle), and
+  `pixi run prep --max-pages N` does the same. With one app slot there is no update
+  over Wi-Fi: `/api/info` says `"ota": false` and the page says to flash over USB. Its
+  board tag is `firebeetle-75-flash`, so the card build refuses its image over Wi-Fi.
+  Switching builds keeps the settings (nvs at the same place) but not the books.
 
 - **Panel:** `display_bbep.cpp` with bb_epaper's 7.5" V2 sequences: full refresh
   2.6 s, fast 1.5 s, partial 1.0 s (plus 0.23 s to send old and new image at 10 MHz).
@@ -58,15 +82,16 @@ GPIO16/17 UART0.
   behaves like "rewrite".
 - **No panel power pin:** RST and CS are held high through deep sleep, so the
   controller stays in its deep sleep.
-- **Shared SPI bus:** the bus starts with the card's MISO before bb_epaper (which would
+- **Shared SPI bus** (card build): the bus starts with the card's MISO before bb_epaper (which would
   start it without), the card's CS is kept high while the panel talks, and every panel
   write sets the bus back to the panel's clock (the SD library leaves its own).
 - **Buttons:** active high (`BOARD_BUTTONS_ACTIVE_HIGH`): NEXT short = next page,
   long = previous page; HOME = MENU (short: menu, long: the hold action); PREV =
-  previous page or item. Deep sleep: any button wakes the chip (ext1 "any high"; the
-  C6 has no ext0), and a PREV press that woke it turns back a page.
-- **Memory:** 155 KB of static RAM (the two page buffers are 96 KB), app 1.67 MB of
-  the 1.9 MB slot (`min_spiffs.csv`, as on the T5-2.13).
+  previous page or item. Deep sleep: any button wakes the chip (ext1 "any high", or
+  "any low" for plain buttons to GND; the C6 has no ext0), and a PREV press that woke
+  it turns back a page.
+- **Memory:** 155 KB of static RAM (the two page buffers are 96 KB), app 1.68 MB of
+  the 1.9 MB slot (`min_spiffs.csv` as on the T5-2.13, or `partitions-fb75-flash.csv`).
 
 ## Two screens: portrait and landscape
 

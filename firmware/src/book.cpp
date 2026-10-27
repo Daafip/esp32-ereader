@@ -1,14 +1,12 @@
 #include "book.h"
 
-#include <SD.h>
-
 #include "board.h"
 #include "storage.h"
 
 bool Book::open(const char *path) {
   close();
   strlcpy(path_, path, sizeof(path_));
-  file_ = SD.open(path, FILE_READ);
+  file_ = storage::files().open(path, FILE_READ);
   if (!file_) {
     error_ = "file not found";
     return false;

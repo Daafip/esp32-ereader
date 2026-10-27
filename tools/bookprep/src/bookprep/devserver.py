@@ -134,6 +134,7 @@ class Handler(SimpleHTTPRequestHandler):
     screen: Screen
     card_bytes: int | None = None  # a fake card this small (--card-mb), else the real disk
     update_site: str | None = None  # the page's releases (--update-site), else GitHub
+    ota: bool = True  # False: no second app slot, as the FireBeetle's flash build (--no-ota)
 
     def log_message(self, fmt, *args):
         if not self.path.startswith(("/fonts/", "/hyph/")):
@@ -269,6 +270,9 @@ class Handler(SimpleHTTPRequestHandler):
                 if not got:
                     return self.send_json(400, {"error": "no file"})
                 name, data = got
+                if not self.ota:
+                    msg = "no room for an update over Wi-Fi: flash over USB"
+                    return self.send_json(400, {"error": msg})
                 name = name.rsplit("/", 1)[-1]
                 if not is_safe_name(name, (".bin",)):
                     name = "firmware.bin"
@@ -365,7 +369,7 @@ class Handler(SimpleHTTPRequestHandler):
             "version": "dev", "board": BOARD_FOR_SCREEN.get(sc.id, sc.id),
             "lang": "nl" if state["settings"].get("language") == 1 else "en",
             "name": state["name"], "homeWifi": state["wifi"].get("ssid", ""), "locked": False,
-            "screen": screen, "battery": -1, "total": total, "free": free,
+            "screen": screen, "battery": -1, "total": total, "free": free, "ota": self.ota,
             "stats": stats, "books": books, "fonts": fonts, "pictures": pictures,
             **({"updateSite": self.update_site} if self.update_site else {}),
         })  # fmt: skip
@@ -420,7 +424,7 @@ class Handler(SimpleHTTPRequestHandler):
         # as transfer.cpp: the whole request must fit next to a book it replaces
         free = self.card_space()[1]
         if int(self.headers.get("Content-Length", 0)) > free:
-            return self.send_json(507, {"error": "not enough space on the SD card", "free": free})
+            return self.send_json(507, {"error": "not enough space on the reader", "free": free})
         if len(data) > limit:
             return self.send_json(413, {"error": "file too large"})
         sizes = picture_sizes(self.screen)
@@ -651,6 +655,7 @@ def make_server(
     screen: str = DEFAULT_SCREEN,
     card_mb: float | None = None,
     update_site: str | None = None,
+    ota: bool = True,
 ) -> ThreadingHTTPServer:
     root.mkdir(parents=True, exist_ok=True)
     write_files(build_assets(Path("firmware/.pio/fontcache"), fonts=fonts), root / "www")
@@ -663,6 +668,7 @@ def make_server(
     Bound.screen = SCREENS[screen]
     Bound.card_bytes = int(card_mb * 1048576) if card_mb else None
     Bound.update_site = update_site
+    Bound.ota = ota
 
     def factory(*args, **kwargs):
         return Bound(*args, directory=str(root / "www"), **kwargs)
@@ -679,12 +685,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--screen", choices=sorted(SCREENS), default=DEFAULT_SCREEN, help="reader")
     p.add_argument("--card-mb", type=float, help="fake card size (try a full card)")
     p.add_argument("--update-site", help="where the page looks for releases (default: GitHub)")
+    p.add_argument(
+        "--no-ota", action="store_true", help='no Wi-Fi updates (FireBeetle 7.5" without a card)'
+    )
     args = p.parse_args(argv)
     code = args.code or f"{random.randrange(10000):04d}"
     bind = "0.0.0.0" if args.lan else "127.0.0.1"
     server = make_server(
         args.root, code, bind, args.port, screen=args.screen, card_mb=args.card_mb,
-        update_site=args.update_site,
+        update_site=args.update_site, ota=not args.no_ota,
     )  # fmt: skip
     host = lan_address() if args.lan else "localhost"
     print(f"T5 reader dev server: http://{host}:{args.port}/?k={code}   (code {code})")

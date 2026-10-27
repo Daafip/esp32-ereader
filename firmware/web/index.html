@@ -348,6 +348,7 @@ const T = {
     uploadFailed: "Upload failed: {0}", fontFailed: "Could not add the font: {0}",
     storage: "Storage", storageLine: "{0} free of {1}",
     noSpace: "Not enough space on the reader: this needs {0} and {1} is free. Delete books or pictures to make room.",
+    onlyFirst: "Only the first {0} of {1} pages fit on the reader. Send those?",
     nl_NL: "Dutch", en_GB: "English (UK)", en_US: "English (US)", fr: "French",
     pageOf: "{0} / {1}", bookmarkHere: "Bookmark this page", removeBookmark: "Remove bookmark", bookmarks: "Bookmarks",
     noMarks: "No bookmarks yet.", search: "Search in the book", find: "Find",
@@ -376,6 +377,7 @@ const T = {
     ghOffline: "Can't reach GitHub: this phone needs internet. Put the reader on your home Wi-Fi (⚙ Settings), or choose a downloaded file.",
     downloadingPct: "Downloading · {0}%",
     updated: "Updated. The reader restarts and leaves Wi-Fi mode.",
+    noOta: "This reader keeps its books in its flash, so an update doesn't fit beside the firmware: update it over USB.",
     note: "Books are typeset in this browser, then only the result goes to the reader. The reader keeps the original, so “Restyle” works from any phone later.",
     licences: "Font and hyphenation licences", connectionLost: "connection lost: is the reader still in Wi-Fi mode?",
     failed: "failed ({0})", noOriginal: "could not load the original from the reader",
@@ -404,6 +406,7 @@ const T = {
     uploadFailed: "Versturen mislukt: {0}", fontFailed: "Kan het lettertype niet toevoegen: {0}",
     storage: "Opslag", storageLine: "{0} vrij van {1}",
     noSpace: "Niet genoeg ruimte op de lezer: dit is {0} en er is {1} vrij. Verwijder boeken of afbeeldingen om ruimte te maken.",
+    onlyFirst: "Alleen de eerste {0} van {1} pagina's passen op de lezer. Die versturen?",
     nl_NL: "Nederlands", en_GB: "Engels (VK)", en_US: "Engels (VS)", fr: "Frans",
     pageOf: "{0} / {1}", bookmarkHere: "Bladwijzer op deze pagina", removeBookmark: "Bladwijzer weghalen", bookmarks: "Bladwijzers",
     noMarks: "Nog geen bladwijzers.", search: "Zoeken in het boek", find: "Zoek",
@@ -432,6 +435,7 @@ const T = {
     ghOffline: "GitHub is niet bereikbaar: deze telefoon heeft internet nodig. Zet de lezer op de wifi thuis (⚙ Instellingen), of kies een gedownload bestand.",
     downloadingPct: "Downloaden · {0}%",
     updated: "Bijgewerkt. De lezer start opnieuw en stopt de wifi-modus.",
+    noOta: "Deze lezer bewaart zijn boeken in het flashgeheugen, dus een update past niet naast de firmware: werk hem bij via USB.",
     note: "Boeken worden in deze browser opgemaakt; alleen het resultaat gaat naar de lezer. De lezer bewaart het origineel, zodat ‘Opmaak’ later vanaf elke telefoon werkt.",
     licences: "Licenties van lettertypes en afbreekpatronen", connectionLost: "verbinding verbroken: staat de lezer nog in wifi-modus?",
     failed: "mislukt ({0})", noOriginal: "kan het origineel niet van de lezer laden",
@@ -969,9 +973,14 @@ function busy(text, fraction) {
   if (text !== null) { $("#busy-text").textContent = text; $("#busy-bar").style.width = (fraction || 0) * 100 + "%"; }
 }
 
-async function buildT5b() {
+// maxPages: only the first pages (what fits on a reader without a card)
+async function buildT5b(maxPages = Infinity) {
   await relayout();
-  return B.writeBook(current.book, current.layout, (n, total) => busy(t("typesettingN", n, total), n / total));
+  let layout = current.layout;
+  if (layout.pages.length > maxPages) {
+    layout = { ...layout, pages: layout.pages.slice(0, maxPages), toc: layout.toc.filter((e) => e.startPage < maxPages) };
+  }
+  return B.writeBook(current.book, layout, (n, total) => busy(t("typesettingN", n, total), n / total));
 }
 
 // leaves room for the .epub and .json kept beside it under the same name
@@ -992,13 +1001,27 @@ $("#s-upload").addEventListener("click", async () => {
   const c = current;
   const name = c.source.file ? c.source.file.replace(/^.*\//, "") : fileNameFor(c.source);
   const base = stem(name);
-  const original = c.source.onReader ? null : new Blob([c.source.bytes]);
+  let original = c.source.onReader ? null : new Blob([c.source.bytes]);
   const meta = new Blob([JSON.stringify(c.settings)], { type: "application/json" });
-  const extra = (original ? original.size : 0) + meta.size;
   try {
-    checkSpace((c.layout ? c.layout.pages.length * pageBytes() : 0) + extra);  // before typesetting, roughly
+    // Before typesetting, roughly. Too big (a reader without a card has room for a few
+    // dozen pages): leave out the original first, then offer the pages that fit (a
+    // page's worth kept for header, contents and cover). Without the original, the
+    // reader can't restyle it: that would typeset the whole book again.
+    const pages = c.layout ? c.layout.pages.length : 0;
+    let maxPages = Infinity;
+    if (info.total > 0 && pages * pageBytes() + (original ? original.size : 0) + meta.size > info.free) {
+      original = null;
+      const fit = Math.floor((info.free - meta.size) / pageBytes()) - 1;
+      if (fit >= 1 && fit < pages) {
+        if (!confirm(t("onlyFirst", fit, pages))) return;
+        maxPages = fit;
+      }
+    }
+    const extra = (original ? original.size : 0) + meta.size;
+    checkSpace(Math.min(pages, maxPages) * pageBytes() + extra);
     busy(t("typesetting"), 0);
-    const bytes = await buildT5b();
+    const bytes = await buildT5b(maxPages);
     checkSpace(bytes.length + extra);
     await upload("book", new Blob([bytes]), name, (p) => busy(t("sending", Math.round(p * 100), size(bytes.length)), p), c.folder);
     if (original) {
@@ -1386,6 +1409,7 @@ async function checkLatest() {
 }
 
 function fwHint() {
+  if (info.ota === false) return t("noOta");
   if (!latest) return t("otaHint", otaPrefix());
   const cmp = compareVersions(latest.version, info.version), v = "v" + latest.version;
   return t(cmp === 0 ? "ghCurrent" : cmp === 1 ? "ghNewer" : "ghOther", v);
@@ -1396,7 +1420,8 @@ function fwHint() {
 function renderLatest() {
   const b = $("#fwgh");
   const cmp = latest && compareVersions(latest.version, info.version);
-  b.hidden = cmp === 0;
+  b.hidden = cmp === 0 || info.ota === false;
+  $("#fw").parentElement.hidden = info.ota === false;  // "Choose"
   b.className = cmp === 1 ? "btn small" : "link";
   b.textContent = latest ? t("ghInstall", "v" + latest.version) : t("ghCheck");
 }
@@ -1417,6 +1442,7 @@ async function download(url, onProgress) {
 }
 
 async function installLatest() {
+  if (info.ota === false) return fwSay(t("noOta"));
   if (!latest) {
     fwSay(t("ghChecking"));
     try { await checkLatest(); } catch (err) { return fwSay(t("ghOffline"), "err"); }
@@ -1464,6 +1490,7 @@ applyLang();
     await openSheet({ name: url.split("/").pop(), bytes: await (await fetch(url)).arrayBuffer(), onReader: false });
     if (hook[2]) {
       window.alert = (m) => console.log(m);  // unattended: the result is in body data-upload
+      window.confirm = () => true;
       $("#s-upload").click();
     }
   }

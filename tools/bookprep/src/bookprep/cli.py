@@ -72,6 +72,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--mono", action="store_true", help="FreeType mono rendering, no threshold")
     p.add_argument("--bionic", action="store_true", help="bolder word starts (bionic reading)")
     p.add_argument("--no-cover", action="store_true", help="leave out the EPUB's cover image")
+    p.add_argument(
+        "--max-pages",
+        type=int,
+        help='only the first N pages (a FireBeetle 7.5" without a card holds about 43)',
+    )
     p.add_argument("--title", help="override the title")
     p.add_argument("--author", help="override the author")
     p.add_argument("--preview", action="store_true", help="write preview PNGs + contact sheet")
@@ -160,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
     if not pages:
         print("error: the book has no text", file=sys.stderr)
         return 1
+    if args.max_pages and len(pages) > args.max_pages:
+        print(f"note: only the first {args.max_pages} of {len(pages)} pages (--max-pages)")
+        pages = pages[: args.max_pages]
 
     render_opts = RenderOptions(
         line_height, threshold=args.threshold, mono=args.mono, bionic=args.bionic

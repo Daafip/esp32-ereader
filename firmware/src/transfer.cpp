@@ -2,11 +2,11 @@
 
 #include <Arduino.h>
 #include <ESPmDNS.h>
-#include <SD.h>
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <esp_app_format.h>
+#include <esp_ota_ops.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -192,7 +192,7 @@ bool openBookArg(fs::File &f, t5b::Header &h, String &path) {
     sendError(400, "bad file name");
     return false;
   }
-  f = SD.open(path, FILE_READ);
+  f = storage::files().open(path, FILE_READ);
   if (!f || storage::checkBook(f, h) != t5b::Error::None) {
     if (f) f.close();
     sendError(404, "no such book");
@@ -245,6 +245,9 @@ void addBool(String &out, const char *key, bool value) {
   out += value ? "true" : "false";
 }
 
+// A second app slot to update into (FireBeetle 7.5" without a card: none).
+bool hasUpdateSlot() { return esp_ota_get_next_update_partition(nullptr) != nullptr; }
+
 void addStats(String &out) {
   const ReadingStats st = prefs::loadStats();
   const uint32_t now = uint32_t(time(nullptr));
@@ -289,8 +292,11 @@ void handleInfo() {
   addInt(out, "margin", sc.marginPx);
   out += '}';
   addInt(out, "battery", battery);
-  addNumber(out, "total", SD.totalBytes());
-  addNumber(out, "free", SD.totalBytes() - SD.usedBytes());
+  addNumber(out, "total", storage::totalBytes());
+  addNumber(out, "free", uint64_t(max<int64_t>(storage::freeBytes(), 0)));
+  // No second app slot (books in the flash): "Update firmware" can't work, so the
+  // page says to update over USB instead.
+  addBool(out, "ota", hasUpdateSlot());
   addStats(out);
   addKey(out, "books");
   out += '[';
@@ -315,7 +321,7 @@ void handleInfo() {
     // the original kept for "Restyle", if any
     String source;
     for (const char *ext : kSourceExts) {
-      if (SD.exists(String(kSourceDir) + "/" + stem + ext)) {
+      if (storage::files().exists(String(kSourceDir) + "/" + stem + ext)) {
         source = stem + ext;
         break;
       }
@@ -331,7 +337,7 @@ void handleInfo() {
   out += ']';
   addKey(out, "fonts");
   out += '[';
-  fs::File dir = SD.open(kFontDir);
+  fs::File dir = storage::files().open(kFontDir);
   if (dir && dir.isDirectory()) {
     for (fs::File f = dir.openNextFile(); f; f = dir.openNextFile()) {
       if (f.isDirectory() || !isSafeFileName(f.name(), kFontExts, 4)) continue;
@@ -355,7 +361,7 @@ void handleInfo() {
   sendJson(200, out);
 }
 
-constexpr const char *kCardFull = "not enough space on the SD card";
+constexpr const char *kCardFull = "not enough space on the reader";
 
 // Why isSafeFileName() refused an upload's name, for the page.
 const char *badNameReason(String name, const Kind &k) {
@@ -378,7 +384,7 @@ void failUpload(int status, const char *message) {
     upError = message;
   }
   if (upFile) upFile.close();
-  if (upTmp.length()) SD.remove(upTmp);
+  if (upTmp.length()) storage::files().remove(upTmp);
 }
 
 bool flushUpload() {
@@ -391,7 +397,7 @@ bool flushUpload() {
 // Validates the finished temp file as a book for one of the board's screens (the
 // 7.5" has two); fills upTitle.
 bool validateUpload() {
-  fs::File f = SD.open(upTmp, FILE_READ);
+  fs::File f = storage::files().open(upTmp, FILE_READ);
   uint8_t head[t5b::kHeaderSize];
   t5b::Header h;
   t5b::Error err = t5b::Error::TooShort;
@@ -441,13 +447,13 @@ void handleUploadData() {
         dir = bookDirFor(name);
         if (!dir.length()) return failUpload(400, "bad folder name");
       }
-      SD.mkdir(storage::kBooksDir);
-      SD.mkdir(upKind->dir);
-      SD.mkdir(dir);
+      storage::files().mkdir(storage::kBooksDir);
+      storage::files().mkdir(upKind->dir);
+      storage::files().mkdir(dir);
       upFinal = dir + "/" + name;
       upTmp = upFinal + ".part";
-      SD.remove(upTmp);
-      upFile = SD.open(upTmp, FILE_WRITE);
+      storage::files().remove(upTmp);
+      upFile = storage::files().open(upTmp, FILE_WRITE);
       if (!upFile) return failUpload(500, "cannot write to the SD card");
       Serial.printf("upload start: %s\n", name.c_str());
       touch();
@@ -472,7 +478,7 @@ void handleUploadData() {
       if (!flushUpload()) return failUpload(507, kCardFull);
       upFile.close();
       {  // the last bytes sit in a stdio buffer until close(), which can't report a full card
-        fs::File f = SD.open(upTmp, FILE_READ);
+        fs::File f = storage::files().open(upTmp, FILE_READ);
         const size_t stored = f ? f.size() : 0;
         if (f) f.close();
         if (stored != up.totalSize) return failUpload(507, kCardFull);
@@ -491,7 +497,7 @@ void handleUploadData() {
       // Replacing a book (restyled): carry the reading position over in proportion.
       uint32_t oldMark = 0, oldPages = 0;
       if (isBook) {
-        fs::File old = SD.open(upFinal, FILE_READ);
+        fs::File old = storage::files().open(upFinal, FILE_READ);
         uint8_t head[t5b::kHeaderSize];
         t5b::Header oh;
         if (old && old.read(head, sizeof(head)) == sizeof(head) &&
@@ -501,8 +507,10 @@ void handleUploadData() {
         }
         if (old) old.close();
       }
-      SD.remove(upFinal);
-      if (!SD.rename(upTmp, upFinal)) return failUpload(500, "could not store the file");
+      storage::files().remove(upFinal);
+      if (!storage::files().rename(upTmp, upFinal)) {
+        return failUpload(500, "could not store the file");
+      }
       if (isBook && oldPages && oldPages != upPages) {  // restyled: positions move along
         if (oldMark) prefs::setBookmark(upId, remapPage(oldMark, oldPages, upPages));
         PageList marks;
@@ -559,6 +567,9 @@ void handleFirmwareData() {
       fwError = "";
       if (!authorized()) return failFirmware(403, "wrong code");
       fwTag.reset();
+      if (!hasUpdateSlot()) {
+        return failFirmware(400, "no room for an update over Wi-Fi: flash over USB");
+      }
       if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) return failFirmware(500, Update.errorString());
       touch(tr(S::UpdatingFirmware));
       break;
@@ -606,13 +617,15 @@ void handleDelete() {
   if (!authorized()) return sendError(403, "wrong code");
   const String path = bookPathArg();
   if (!path.length()) return sendError(400, "bad file name");
-  if (!SD.exists(path)) return sendError(404, "no such book");
-  if (!SD.remove(path)) return sendError(500, "could not delete");
+  if (!storage::files().exists(path)) return sendError(404, "no such book");
+  if (!storage::files().remove(path)) return sendError(500, "could not delete");
   const String stem = stemOf(path);
-  for (const char *ext : {".epub", ".txt", ".json"}) SD.remove(String(kSourceDir) + "/" + stem + ext);
+  for (const char *ext : {".epub", ".txt", ".json"}) {
+    storage::files().remove(String(kSourceDir) + "/" + stem + ext);
+  }
   storage::writeMarks(stem, PageList());
   const String dir = path.substring(0, path.lastIndexOf('/'));
-  if (dir != storage::kBooksDir) SD.rmdir(dir);  // only succeeds when empty
+  if (dir != storage::kBooksDir) storage::files().rmdir(dir);  // only succeeds when empty
   char event[80];
   snprintf(event, sizeof(event), tr(S::Deleted), baseName(path.c_str()));
   touch(event);
@@ -631,13 +644,13 @@ void handleMove() {
   const String dir = folder.length() ? String(storage::kBooksDir) + "/" + folder : storage::kBooksDir;
   const String to = dir + "/" + baseName(from.c_str());
   if (to == from) return sendJson(200, "{}");
-  if (!SD.exists(from)) return sendError(404, "no such book");
-  if (SD.exists(to)) return sendError(409, "a book with that name is already there");
-  SD.mkdir(dir);
-  if (!SD.rename(from, to)) return sendError(500, "could not move");
+  if (!storage::files().exists(from)) return sendError(404, "no such book");
+  if (storage::files().exists(to)) return sendError(409, "a book with that name is already there");
+  storage::files().mkdir(dir);
+  if (!storage::files().rename(from, to)) return sendError(500, "could not move");
   if (prefs::lastBook() == from) prefs::setLastBook(to.c_str());
   const String oldDir = from.substring(0, from.lastIndexOf('/'));
-  if (oldDir != storage::kBooksDir) SD.rmdir(oldDir);
+  if (oldDir != storage::kBooksDir) storage::files().rmdir(oldDir);
   char event[80];
   snprintf(event, sizeof(event), tr(S::Moved), baseName(from.c_str()));
   touch(event);
@@ -811,7 +824,9 @@ void handleDeletePicture() {
   if (!authorized()) return sendError(403, "wrong code");
   const String name = server.arg("name");
   if (!isSafeFileName(name.c_str(), kPictureExts, 1)) return sendError(400, "bad file name");
-  if (!SD.remove(storage::picturesDir() + "/" + name)) return sendError(404, "no such picture");
+  if (!storage::files().remove(storage::picturesDir() + "/" + name)) {
+    return sendError(404, "no such picture");
+  }
   touch();
   sendJson(200, "{}");
 }
@@ -831,7 +846,9 @@ void handleDeleteFont() {
   if (!authorized()) return sendError(403, "wrong code");
   const String name = server.arg("name");
   if (!isSafeFileName(name.c_str(), kFontExts, 4)) return sendError(400, "bad file name");
-  if (!SD.remove(String(kFontDir) + "/" + name)) return sendError(404, "no such font");
+  if (!storage::files().remove(String(kFontDir) + "/" + name)) {
+    return sendError(404, "no such font");
+  }
   touch();
   sendJson(200, "{}");
 }
@@ -844,7 +861,7 @@ void handleFile() {
   if (!kind || kind == &kBookKind || !isSafeFileName(name.c_str(), kind->exts, kind->extCount)) {
     return sendError(400, "bad request");
   }
-  fs::File f = SD.open(kindDir(*kind) + "/" + name, FILE_READ);
+  fs::File f = storage::files().open(kindDir(*kind) + "/" + name, FILE_READ);
   if (!f || f.isDirectory()) return sendError(404, "not found");
   touch();
   server.streamFile(f, mimeFor(name));

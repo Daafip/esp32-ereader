@@ -23,7 +23,10 @@ for pair in reader_t547:t5-47 reader_m5papers3:m5papers3 reader_m5paper:m5paper 
   cp "firmware/.pio/build/$env/firmware.factory.bin" "out/firmware/$name-reader-$version.bin"
   cp "firmware/.pio/build/$env/firmware.bin" "out/firmware/$name-reader-$version-ota.bin"
 done
-# The 7.5" board's hardware test (docs/checkpoints.md)
+# The 7.5" board without a card (books in the flash: one app slot, so no -ota image)
+# and its hardware test (docs/checkpoints.md)
+cp firmware/.pio/build/reader_firebeetle75_flash/firmware.factory.bin \
+  "out/firmware/firebeetle-75-flash-reader-$version.bin"
 cp firmware/.pio/build/fb75_test/firmware.factory.bin "out/firmware/firebeetle-75-test-$version.bin"
 ls -l out/firmware/*"$version"*.bin
 echo "USB/browser: flash <board>-reader-$version.bin (T5-2.13: t5-reader-$version.bin) at 0x0."

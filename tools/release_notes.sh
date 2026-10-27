@@ -16,6 +16,7 @@ board yet, the home-built FireBeetle 7.5" only its hardware test so far
 | M5Stack M5PaperS3 | \`m5papers3-reader-$v.bin\` | \`m5papers3-reader-$v-ota.bin\` |
 | M5Stack M5Paper | \`m5paper-reader-$v.bin\` | \`m5paper-reader-$v-ota.bin\` |
 | FireBeetle 2 ESP32-C6 + 7.5" | \`firebeetle-75-reader-$v.bin\` | \`firebeetle-75-reader-$v-ota.bin\` |
+| the same without a microSD card | \`firebeetle-75-flash-reader-$v.bin\` | over USB only |
 
 **Install from a browser:** Chrome or Edge, <https://daafip.github.io/esp32-ereader/>,
 pick your board, Install. Leave "Erase everything" unticked to keep settings, bookmarks
@@ -36,5 +37,7 @@ Diagnostic sketches for the T5-2.13 hardware checkpoints (\`docs/checkpoints.md\
 
 Books: drop an EPUB on the reader's Wi-Fi page (it typesets for the reader's screen),
 or \`pixi run prep book.epub\` (\`--screen 4.7in\` for the 4.7" readers, \`7.5in\` or
-\`7.5in-landscape\` for the FireBeetle). See \`docs/usage.md\`.
+\`7.5in-landscape\` for the FireBeetle). A FireBeetle without a card keeps its books in
+its flash, room for about 43 pages: the page offers the first pages that fit. See
+\`docs/usage.md\`.
 NOTES
