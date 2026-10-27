@@ -195,7 +195,8 @@ has only one: CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), C
    the books partition (a few seconds).
 2. Turn pages with NEXT (short: next, long: previous) and PREV; HOME opens the menu.
    **Send:** the `page ... refresh` lines, and ghosting after how many partial turns
-   (Settings → Full refresh, default every 20).
+   (Settings → Full refresh, default every 20). *Partial turns work (2026-10-27).* The
+   USB port is gone while the chip sleeps: for the serial log, Sleep after page off.
 3. "Sleep after page: on" (default): each press wakes the chip. **Send:** whether every
    button wakes it, the `page ... at N ms` lines (wake to image), and whether the first
    turn after waking is partial and clean (the old page comes from the card or flash).

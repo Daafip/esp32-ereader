@@ -9,9 +9,9 @@ Envs: `reader_firebeetle75` (the reader, books on a microSD card),
 `reader_firebeetle75_flash` (the reader without a card, books in the flash) and
 `fb75_test` (hardware test).
 
-Status (2026-10-27): the hardware test ran on David's build (results below). The reader
-itself has not run yet: `docs/checkpoints.md` → "FireBeetle 2 ESP32-C6 + 7.5"". No card
-fitted yet: the flash build (`reader_firebeetle75_flash`) is the one to try first.
+Status (2026-10-27): the hardware test ran on David's build, and the reader runs on it
+(flash build `reader_firebeetle75_flash`, no card fitted yet) with partial page turns
+(results below). Still open: `docs/checkpoints.md` → "FireBeetle 2 ESP32-C6 + 7.5"".
 
 ## Parts
 
@@ -127,3 +127,15 @@ ones live in `/sleep`, landscape ones in `/sleep/7.5in-landscape`.
 
 Not yet checked: the SD card, the button log, deep sleep (the test's first version had
 a sleep step; it hung while BUSY was still broken, and was removed), sleep current.
+
+**2026-10-27, the reader (`reader_firebeetle75_flash`) on David's build** (no card):
+
+| Check | Result |
+|---|---|
+| Reader | runs, books in the flash |
+| Page turns | partial refresh works ("partial refreshes are working") |
+| USB port | gone while the chip sleeps (the C6's USB serial is off in deep sleep): flash in download mode (BOOT + RST), or Sleep after page off for the serial log |
+
+An earlier try the same day had every turn as a full refresh, not explained yet:
+check the turns right after a wake (Sleep after page on) again. Also open: ghosting,
+the button wake, which landscape way is upright, sleep current, the SD card.

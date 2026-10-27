@@ -22,7 +22,8 @@ Phases 0-5 and 7-9 are written and build (7: T5-4.7" S3, 8: M5PaperS3/M5Paper,
 2026-10-13, release 1.0.0; 1.1.0 on 2026-10-14; 1.2.0, 1.3.0 and 1.3.1 on 2026-10-20)**: panel, one button, SD, Wi-Fi transfer, partial refresh
 with a custom LUT; results in `docs/hardware.md`. The three 4.7" boards have never
 run. The FireBeetle 7.5" passed its hardware test (`fb75_test`, 2026-10-26); the reader
-on it hasn't run yet. Open checks: `docs/checkpoints.md` (ghosting, power, the other
+runs on it with partial page turns (flash build, no card, 2026-10-27). Its USB port
+is gone in deep sleep (flash in download mode: BOOT + RST). Open checks: `docs/checkpoints.md` (ghosting, power, the other
 boards, Phase 9).
 T5-2.13: take the SD card out before flashing (uploads fail with it in). Checkpoint 2 is done: Ubuntu Regular 13 px
 (bookprep default). Phase 6 is optional; Wi-Fi transfer and in-browser conversion
