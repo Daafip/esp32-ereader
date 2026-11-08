@@ -1,8 +1,12 @@
+import struct
+import zlib
+
 import pytest
 from PIL import Image
 
 from bookprep.t5b import (
     HEADER,
+    INDEX_ENTRY,
     TOC_ENTRY,
     Header,
     T5BFile,
@@ -40,12 +44,17 @@ def test_encode_str_truncates_on_char_boundary_and_terminates():
 
 
 def test_page_offset_math():
-    header = Header(250, 122, 10, 3, "t", "a")
+    header = Header(250, 122, 10, 3, "t", "a", version=1)
     first = HEADER.size + 3 * TOC_ENTRY.size
     assert header.page_offset(0) == first == 302
     assert header.page_offset(5) == first + 5 * 3904
     with pytest.raises(IndexError):
         header.page_offset(10)
+    v2 = Header(250, 122, 10, 3, "t", "a")
+    assert v2.compressed and v2.index_offset == first
+    assert v2.pages_offset == first + 11 * 4
+    with pytest.raises(ValueError):
+        v2.page_offset(0)
 
 
 def test_pack_page_bit_layout():
@@ -75,23 +84,88 @@ def test_pack_page_rejects_non_1bit():
         pack_page(Image.new("L", (250, 122), 255))
 
 
-def test_write_and_read_file(tmp_path):
+def three_pages():
     pages = []
     for n in range(3):
         img = white_page()
         img.putpixel((n, n), 0)
         pages.append(pack_page(img))
+    return pages
+
+
+@pytest.mark.parametrize("compress", [True, False])
+def test_write_and_read_file(tmp_path, compress):
+    pages = three_pages()
     toc = [TocEntry(0, "Begin"), TocEntry(2, "Hoofdstuk twee")]
     path = tmp_path / "b.t5b"
-    write_t5b(path, title="T", author="A", page_w=250, page_h=122, toc=toc, pages=pages)
+    header = write_t5b(path, title="T", author="A", page_w=250, page_h=122, toc=toc, pages=pages,
+                       compress=compress)  # fmt: skip
 
     book = T5BFile(path)
+    assert book.header == header
+    assert book.header.version == (2 if compress else 1)
     assert book.header.page_count == 3
     assert book.header.toc_count == 2
     assert book.toc == toc
     assert [book.page_data(n) for n in range(3)] == pages
-    assert path.stat().st_size == HEADER.size + 2 * TOC_ENTRY.size + 3 * 3904
     assert book.page_image(1).getpixel((1, 1)) == 0
+    raw_size = HEADER.size + 2 * TOC_ENTRY.size + 3 * 3904
+    if compress:
+        assert path.stat().st_size < raw_size / 10
+    else:
+        assert path.stat().st_size == raw_size
+
+
+def test_compressed_layout(tmp_path):
+    """Index right after the TOC; each page a zlib stream; the cover after the last."""
+    pages = three_pages()
+    cover = Image.new("1", (13, 4), 1)
+    path = tmp_path / "b.t5b"
+    write_t5b(path, title="T", author="A", page_w=250, page_h=122, toc=[TocEntry(0, "x")],
+              pages=pages, cover=cover)  # fmt: skip
+    data = path.read_bytes()
+    first = HEADER.size + TOC_ENTRY.size
+    index = [o for (o,) in INDEX_ENTRY.iter_unpack(data[first : first + 4 * 4])]
+    assert index[0] == first + 4 * 4
+    for n, page in enumerate(pages):
+        assert zlib.decompress(data[index[n] : index[n + 1]]) == page
+    assert data[index[3] : index[3] + 4] == b"T5CV"
+    book = T5BFile(path)
+    assert book.page_stored(1) == data[index[1] : index[2]]
+    assert book.cover is not None
+
+
+def test_corrupt_index_and_page_rejected(tmp_path):
+    path = tmp_path / "b.t5b"
+    write_t5b(path, title="T", author="A", page_w=250, page_h=122, toc=[], pages=three_pages())
+    good = path.read_bytes()
+    first = HEADER.size
+
+    def patched(entry, value):
+        data = bytearray(good)
+        struct.pack_into("<I", data, first + 4 * entry, value)
+        path.write_bytes(bytes(data))
+
+    start = struct.unpack_from("<I", good, first)[0]
+    for entry, value in [(0, start + 1), (3, len(good) + 1), (1, start)]:
+        patched(entry, value)
+        with pytest.raises(ValueError, match="index"):
+            T5BFile(path)
+
+    data = bytearray(good)
+    data[start + 5] ^= 0xFF  # inside page 0's deflate data
+    path.write_bytes(bytes(data))
+    book = T5BFile(path)  # the index is fine
+    with pytest.raises(ValueError, match="page 0"):
+        book.page_data(0)
+    assert book.page_data(1) == three_pages()[1]
+
+
+def test_unknown_version_rejected():
+    data = bytearray(pack_header(Header(250, 122, 1, 0, "t", "a")))
+    struct.pack_into("<H", data, 4, 3)
+    with pytest.raises(ValueError, match="version 3"):
+        unpack_header(bytes(data))
 
 
 def test_write_rejects_toc_outside_book(tmp_path):

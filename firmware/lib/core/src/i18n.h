@@ -145,7 +145,7 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(BackAnyButton, "Press any button to go back", "Druk op een knop om terug te gaan")     \
   /* FireBeetle 7.5" without a card: books in the flash */                                 \
   X(NoBooksFlash1, "Upload them over Wi-Fi", "Stuur ze via wifi")                          \
-  X(NoBooksFlash2, "(no card: room for %u pages)", "(geen kaart: plek voor %u pagina's)")  \
+  X(NoBooksFlash2, "(no card: room for ~%u pages)", "(geen kaart: plek voor ~%u pagina's)")  \
   X(MemoryFlashValue, "flash %s free  \xC2\xB7  %u KB RAM", "flash %s vrij  \xC2\xB7  %u KB RAM") \
   X(FileDamaged, "The file may be damaged", "Het bestand is misschien beschadigd")         \
   X(NoFlash, "No book storage", "Geen boekenopslag")                                       \

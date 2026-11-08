@@ -461,7 +461,6 @@ const ext = (name) => (name.match(/[.][^.]*$/) || [""])[0].toLowerCase();
 const withKey = (url) => url + (url.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(key);
 const show = (id) => { for (const x of ["keybox", "app"]) $("#" + x).hidden = x !== id; };
 const screen = () => B.screenFor(info.screen);
-const pageBytes = () => Math.ceil(screen().width / 8) * screen().height;
 // The screen a book was made for: the reader's own, or (7.5") its other orientation.
 const bookScreen = (b) => (b && b.screen && b.screen !== screen().id ? B.screenFor(b.screen) : screen());
 // Square sleep pictures ("picture + book"): the screen's short side (kSquareSide).
@@ -861,9 +860,23 @@ async function relayout() {
     if (line.index < line.count - 1 && line.runs.length) { chars += line.runs.reduce((a, r) => a + r.text.length + 1, -1); full++; }
   }
   const avgChars = Math.round(chars / Math.max(1, full));
-  $("#stats").textContent = t("statsLine", lines, avgChars, n, size(n * pageBytes()));
+  // Size: a few pages compressed, times the page count (the reader stores them deflated)
+  const layout = c.layout;
+  $("#stats").textContent = t("statsLine", lines, avgChars, n, "…");
+  estimateBytes(layout).then((bytes) => {
+    if (current === c && c.layout === layout) $("#stats").textContent = t("statsLine", lines, avgChars, n, "~" + size(bytes));
+  }).catch(() => {});
   $("#p-slider").max = n - 1;
   setPage(fraction === null ? c.page : Math.round(fraction * (n - 1)));
+}
+
+// Roughly what a layout's .t5b takes: four pages spread through it, compressed.
+async function estimateBytes(layout) {
+  const n = layout.pages.length;
+  const picks = [...new Set([1, 2, 3, 4].map((k) => Math.floor((n * k) / 5)))];
+  let total = 0;
+  for (const i of picks) total += (await B.compressPage(layout.renderer.render(layout.pages[i]))).length;
+  return Math.round((total / picks.length) * n);
 }
 
 function setPage(n) {
@@ -973,14 +986,11 @@ function busy(text, fraction) {
   if (text !== null) { $("#busy-text").textContent = text; $("#busy-bar").style.width = (fraction || 0) * 100 + "%"; }
 }
 
-// maxPages: only the first pages (what fits on a reader without a card)
-async function buildT5b(maxPages = Infinity) {
+// The book typeset and compressed, as the parts of a .t5b (B.assembleT5b): the first
+// pages can be kept when the whole book doesn't fit (a reader without a card).
+async function buildParts() {
   await relayout();
-  let layout = current.layout;
-  if (layout.pages.length > maxPages) {
-    layout = { ...layout, pages: layout.pages.slice(0, maxPages), toc: layout.toc.filter((e) => e.startPage < maxPages) };
-  }
-  return B.writeBook(current.book, layout, (n, total) => busy(t("typesettingN", n, total), n / total));
+  return B.bookParts(current.book, current.layout, (n, total) => busy(t("typesettingN", n, total), n / total));
 }
 
 // leaves room for the .epub and .json kept beside it under the same name
@@ -989,7 +999,7 @@ const fileNameFor = (source) => B.slug(stem(source.name)).slice(0, kMaxName - 5)
 $("#s-download").addEventListener("click", async () => {
   try {
     busy(t("typesetting"), 0);
-    const bytes = await buildT5b();
+    const bytes = B.assembleT5b(await buildParts());
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([bytes])), download: fileNameFor(current.source) });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
@@ -1004,24 +1014,23 @@ $("#s-upload").addEventListener("click", async () => {
   let original = c.source.onReader ? null : new Blob([c.source.bytes]);
   const meta = new Blob([JSON.stringify(c.settings)], { type: "application/json" });
   try {
-    // Before typesetting, roughly. Too big (a reader without a card has room for a few
-    // dozen pages): leave out the original first, then offer the pages that fit (a
-    // page's worth kept for header, contents and cover). Without the original, the
-    // reader can't restyle it: that would typeset the whole book again.
-    const pages = c.layout ? c.layout.pages.length : 0;
-    let maxPages = Infinity;
-    if (info.total > 0 && pages * pageBytes() + (original ? original.size : 0) + meta.size > info.free) {
+    busy(t("typesetting"), 0);
+    let parts = await buildParts();
+    // Too big (a reader without a card has room for a few hundred pages): leave out the
+    // original first, then offer the pages that fit. Without the original, the reader
+    // can't restyle it: that would typeset the whole book again.
+    if (info.total > 0 && B.t5bSize(parts) + (original ? original.size : 0) + meta.size > info.free) {
       original = null;
-      const fit = Math.floor((info.free - meta.size) / pageBytes()) - 1;
+      const pages = parts.streams.length;
+      const fit = B.pagesThatFit(parts, info.free - meta.size);
       if (fit >= 1 && fit < pages) {
+        busy(null);
         if (!confirm(t("onlyFirst", fit, pages))) return;
-        maxPages = fit;
+        parts = B.firstPages(parts, fit);
       }
     }
+    const bytes = B.assembleT5b(parts);
     const extra = (original ? original.size : 0) + meta.size;
-    checkSpace(Math.min(pages, maxPages) * pageBytes() + extra);
-    busy(t("typesetting"), 0);
-    const bytes = await buildT5b(maxPages);
     checkSpace(bytes.length + extra);
     await upload("book", new Blob([bytes]), name, (p) => busy(t("sending", Math.round(p * 100), size(bytes.length)), p), c.folder);
     if (original) {

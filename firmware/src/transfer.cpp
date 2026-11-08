@@ -395,16 +395,11 @@ bool flushUpload() {
 }
 
 // Validates the finished temp file as a book for one of the board's screens (the
-// 7.5" has two); fills upTitle.
+// 7.5" has two), as the library will: header, page index, cover. Fills upTitle.
 bool validateUpload() {
   fs::File f = storage::files().open(upTmp, FILE_READ);
-  uint8_t head[t5b::kHeaderSize];
   t5b::Header h;
-  t5b::Error err = t5b::Error::TooShort;
-  if (f && f.read(head, sizeof(head)) == sizeof(head)) {
-    err = t5b::parseHeader(head, sizeof(head), h);
-    if (err == t5b::Error::None) err = storage::checkHeader(h, uint32_t(f.size()));
-  }
+  const t5b::Error err = f ? storage::checkBook(f, h) : t5b::Error::TooShort;
   if (f) f.close();
   if (err != t5b::Error::None) {
     failUpload(400, t5b::errorText(err));
@@ -706,6 +701,8 @@ void handlePosition() {
 }
 
 // GET /api/page?file=&n=: one page bitmap (the .t5b page layout) for the preview.
+// A compressed page goes out as it is stored, a zlib stream: Content-Encoding
+// "deflate", which the browser inflates.
 void handlePage() {
   if (!authorized()) return sendError(403, "wrong code");
   fs::File f;
@@ -713,15 +710,19 @@ void handlePage() {
   String path;
   if (!openBookArg(f, h, path)) return;
   const long n = server.arg("n").toInt();
-  if (n < 0 || uint32_t(n) >= h.pageCount || !f.seek(h.pageOffset(uint32_t(n)))) {
+  storage::FileReader reader(f);
+  uint32_t offset = 0, len = 0;
+  if (n < 0 || t5b::pageSpan(reader, h, uint32_t(n), offset, len) != t5b::Error::None ||
+      !f.seek(offset)) {
     f.close();
     return sendError(400, "bad page");
   }
   touch();
   static uint8_t buf[2048];
-  server.setContentLength(h.pageBytes());
+  if (h.compressed()) server.sendHeader("Content-Encoding", "deflate");
+  server.setContentLength(len);
   server.send(200, "application/octet-stream", "");
-  for (uint32_t left = h.pageBytes(); left;) {
+  for (uint32_t left = len; left;) {
     const size_t chunk = left < sizeof(buf) ? left : sizeof(buf);
     if (f.read(buf, chunk) != chunk) break;
     server.sendContent(reinterpret_cast<const char *>(buf), chunk);

@@ -1,13 +1,18 @@
 // Host unit tests for lib/core: `pixi run fw-test`.
 #include <string.h>
 #include <unity.h>
+#include <zlib.h>  // the reference the inflater is checked against
+
+#include <vector>
 
 #include "bitmap.h"
 #include "board_tag.h"
 #include "bookmarks.h"
 #include "button.h"
+#include "golden_book_v2.h"
 #include "golden_header.h"
 #include "i18n.h"
+#include "inflater.h"
 #include "menu.h"
 #include "policy.h"
 #include "reading_stats.h"
@@ -34,6 +39,8 @@ static void test_parse_golden_header_from_python_writer() {
   TEST_ASSERT_EQUAL_STRING("Max Havelaar \xE2\x80\x94 \xC3\xA9\xC3\xA9n", h.title);
   TEST_ASSERT_EQUAL_STRING("Multatuli", h.author);
   TEST_ASSERT_EQUAL(3904, h.pageBytes());
+  TEST_ASSERT_FALSE(h.compressed());
+  TEST_ASSERT_EQUAL(146 + 2 * 52 + 3 * 3904, h.pagesEnd);
   TEST_ASSERT_EQUAL(146 + 2 * 52, h.pageOffset(0));
   TEST_ASSERT_EQUAL(146 + 2 * 52 + 2 * 3904, h.pageOffset(2));
 
@@ -54,8 +61,17 @@ static void test_header_errors() {
   d[0] = 'X';
   TEST_ASSERT_EQUAL(int(t5b::Error::BadMagic), int(t5b::parseHeader(d, 146, h)));
   d[0] = 'T';
-  d[4] = 2;
+  d[4] = 3;
   TEST_ASSERT_EQUAL(int(t5b::Error::BadVersion), int(t5b::parseHeader(d, 146, h)));
+  d[4] = 0;
+  TEST_ASSERT_EQUAL(int(t5b::Error::BadVersion), int(t5b::parseHeader(d, 146, h)));
+  // a page count whose offsets don't fit in 32 bits, either version
+  memset(d + 12, 0xFF, 4);
+  d[4] = 1;
+  TEST_ASSERT_EQUAL(int(t5b::Error::SizeMismatch), int(t5b::parseHeader(d, 146, h)));
+  d[4] = 2;
+  TEST_ASSERT_EQUAL(int(t5b::Error::SizeMismatch), int(t5b::parseHeader(d, 146, h)));
+  memcpy(d + 12, kGoldenHeader + 12, 4);
   d[4] = 1;
   d[10] = 31;
   TEST_ASSERT_EQUAL(int(t5b::Error::BadStride), int(t5b::parseHeader(d, 146, h)));
@@ -100,6 +116,248 @@ static void test_book_id_and_key() {
   char key[10];
   t5b::bookmarkKey(0x0012abcd, key);
   TEST_ASSERT_EQUAL_STRING("b0012abcd", key);
+}
+
+// A byte array as a book file.
+class MemReader : public t5b::Reader {
+ public:
+  MemReader(const uint8_t *d, uint32_t n) : d_(d), n_(n) {}
+  bool read(uint32_t offset, uint8_t *buf, uint32_t len) override {
+    if (offset > n_ || len > n_ - offset) return false;
+    memcpy(buf, d_ + offset, len);
+    return true;
+  }
+  uint32_t size() override { return n_; }
+
+ private:
+  const uint8_t *d_;
+  uint32_t n_;
+};
+
+static zinf::Inflater inflater;  // 1.8 KB: not on the stack
+
+static void test_v2_book_from_python_writer() {
+  MemReader r(kGoldenBookV2, sizeof(kGoldenBookV2));
+  t5b::Header h;
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::parseHeader(kGoldenBookV2, 146, h)));
+  TEST_ASSERT_EQUAL(2, h.version);
+  TEST_ASSERT_TRUE(h.compressed());
+  TEST_ASSERT_EQUAL(3, h.pageCount);
+  TEST_ASSERT_EQUAL_STRING("Max Havelaar", h.title);
+  TEST_ASSERT_EQUAL(146 + 2 * 52, h.indexOffset());
+  TEST_ASSERT_EQUAL(146 + 2 * 52 + 4 * 4, h.pagesOffset());
+  TEST_ASSERT_EQUAL(0, h.pagesEnd);  // known after readIndex()
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::validate(h, 250, 122, r.size())));
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::readIndex(r, h)));
+  TEST_ASSERT_EQUAL(sizeof(kGoldenBookV2) - 12 - 3 * 3, h.pagesEnd);  // 20x3 cover after it
+
+  static uint8_t page[3904];
+  for (uint32_t n = 0; n < 3; n++) {
+    memset(page, 0x55, sizeof(page));
+    TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::readPage(r, h, n, page, inflater)));
+    for (uint32_t i = 0; i < sizeof(page); i++) {
+      if (page[i] != goldenPageByte(n, i)) TEST_FAIL_MESSAGE("page differs from the Python one");
+    }
+  }
+  TEST_ASSERT_EQUAL(int(t5b::Error::BadPage), int(t5b::readPage(r, h, 3, page, inflater)));
+  uint32_t offset = 0, len = 0;
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::pageSpan(r, h, 0, offset, len)));
+  TEST_ASSERT_EQUAL(h.pagesOffset(), offset);
+  TEST_ASSERT_EQUAL(0x78, kGoldenBookV2[offset]);  // a zlib stream
+
+  t5b::Cover c;
+  TEST_ASSERT_EQUAL(int(t5b::Error::None),
+                    int(t5b::parseCover(h, r.size(), kGoldenBookV2 + h.pagesEnd, 12, c)));
+  TEST_ASSERT_TRUE(c.present);
+  TEST_ASSERT_EQUAL(20, c.w);
+  TEST_ASSERT_EQUAL(0x7F, kGoldenBookV2[c.offset]);  // pixel (0,0) black
+}
+
+static void test_v2_index_and_page_errors() {
+  std::vector<uint8_t> f(kGoldenBookV2, kGoldenBookV2 + sizeof(kGoldenBookV2));
+  const uint32_t at = 146 + 2 * 52;  // the index
+  auto get32 = [&f](uint32_t off) {
+    return uint32_t(f[off]) | uint32_t(f[off + 1]) << 8 | uint32_t(f[off + 2]) << 16 |
+           uint32_t(f[off + 3]) << 24;
+  };
+  auto put32 = [&f](uint32_t off, uint32_t v) {
+    for (int i = 0; i < 4; i++) f[off + i] = uint8_t(v >> (8 * i));
+  };
+  t5b::Header h;
+  auto open = [&f, &h](uint32_t size) {
+    MemReader r(f.data(), size);
+    t5b::parseHeader(f.data(), 146, h);
+    const t5b::Error e = t5b::validate(h, 250, 122, size);
+    return int(e != t5b::Error::None ? e : t5b::readIndex(r, h));
+  };
+  const uint32_t size = uint32_t(f.size());
+  const uint32_t first = get32(at), second = get32(at + 4), last = get32(at + 12);
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), open(size));
+
+  put32(at, first + 1);  // the first page doesn't start right after the index
+  TEST_ASSERT_EQUAL(int(t5b::Error::BadIndex), open(size));
+  put32(at, first);
+  put32(at + 12, size + 1);  // the pages end past the file
+  TEST_ASSERT_EQUAL(int(t5b::Error::BadIndex), open(size));
+  put32(at + 12, last);
+  TEST_ASSERT_EQUAL(int(t5b::Error::SizeMismatch), open(at + 8));  // cut inside the index
+
+  // A middle entry out of order: the book opens, those pages don't.
+  put32(at + 4, first);
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), open(size));
+  MemReader r(f.data(), size);
+  static uint8_t page[3904];
+  TEST_ASSERT_EQUAL(int(t5b::Error::BadIndex), int(t5b::readPage(r, h, 0, page, inflater)));
+  TEST_ASSERT_EQUAL(int(t5b::Error::BadIndex), int(t5b::readPage(r, h, 1, page, inflater)));
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::readPage(r, h, 2, page, inflater)));
+  put32(at + 4, second);
+
+  // A damaged page: that one fails, the others read.
+  f[second + 6] ^= 0xFF;
+  TEST_ASSERT_EQUAL(int(t5b::Error::BadPage), int(t5b::readPage(r, h, 1, page, inflater)));
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::readPage(r, h, 0, page, inflater)));
+  TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::readPage(r, h, 2, page, inflater)));
+}
+
+// --- inflater ---------------------------------------------------------------
+
+// A byte vector as the inflater's input, at most `piece` bytes per pull.
+class VecSource : public zinf::Source {
+ public:
+  explicit VecSource(const std::vector<uint8_t> &d, size_t piece) : d_(d), piece_(piece) {}
+  size_t pull(uint8_t *buf, size_t max) override {
+    size_t n = d_.size() - pos_;
+    if (n > max) n = max;
+    if (n > piece_) n = piece_;
+    memcpy(buf, d_.data() + pos_, n);
+    pos_ += n;
+    return n;
+  }
+
+ private:
+  const std::vector<uint8_t> &d_;
+  size_t piece_, pos_ = 0;
+};
+
+static std::vector<uint8_t> zcompress(const std::vector<uint8_t> &in, int level, int strategy) {
+  z_stream z = {};
+  deflateInit2(&z, level, Z_DEFLATED, 15, 8, strategy);
+  std::vector<uint8_t> out(deflateBound(&z, uLong(in.size())));
+  z.next_in = const_cast<Bytef *>(in.data());
+  z.avail_in = uInt(in.size());
+  z.next_out = out.data();
+  z.avail_out = uInt(out.size());
+  TEST_ASSERT_EQUAL(Z_STREAM_END, deflate(&z, Z_FINISH));
+  out.resize(z.total_out);
+  deflateEnd(&z);
+  return out;
+}
+
+// 0: text-like (mostly white, black specks), 1: random (stored blocks), 2: long runs.
+static std::vector<uint8_t> sample(int kind, size_t n, uint32_t seed) {
+  std::vector<uint8_t> d(n);
+  uint32_t x = seed * 2654435761u + 1;
+  auto rnd = [&x]() {
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return x;
+  };
+  for (size_t i = 0; i < n; i++) {
+    if (kind == 0) {
+      d[i] = rnd() % 7 ? 0xFF : uint8_t(rnd());
+    } else if (kind == 1) {
+      d[i] = uint8_t(rnd());
+    } else {
+      d[i] = uint8_t(i * 7 / 300);
+    }
+  }
+  return d;
+}
+
+static zinf::Status inflateAll(const std::vector<uint8_t> &z, std::vector<uint8_t> &out,
+                               size_t piece = 4096) {
+  VecSource src(z, piece);
+  return inflater.zlib(src, out.data(), out.size());
+}
+
+static void test_inflate_matches_zlib() {
+  const int strategies[] = {Z_DEFAULT_STRATEGY, Z_FILTERED, Z_HUFFMAN_ONLY, Z_RLE, Z_FIXED};
+  const size_t sizes[] = {0, 1, 300, 3904, 48000, 70000};  // 70000: two stored blocks
+  for (int kind = 0; kind < 3; kind++) {
+    for (size_t n : sizes) {
+      const std::vector<uint8_t> data = sample(kind, n, uint32_t(n) + kind);
+      for (int level : {0, 1, 6, 9}) {
+        for (int strategy : strategies) {
+          const std::vector<uint8_t> z = zcompress(data, level, strategy);
+          std::vector<uint8_t> out(n, 0x55);
+          TEST_ASSERT_EQUAL_STRING("ok", zinf::statusText(inflateAll(z, out)));
+          TEST_ASSERT_TRUE(out == data);
+        }
+      }
+    }
+  }
+}
+
+static void test_inflate_input_in_small_pieces() {
+  const std::vector<uint8_t> data = sample(0, 48000, 7);
+  for (int strategy : {Z_DEFAULT_STRATEGY, Z_FIXED}) {
+    const std::vector<uint8_t> z = zcompress(data, 9, strategy);
+    for (size_t piece : {size_t(1), size_t(3), size_t(1023)}) {
+      std::vector<uint8_t> out(data.size());
+      TEST_ASSERT_EQUAL(int(zinf::Status::Ok), int(inflateAll(z, out, piece)));
+      TEST_ASSERT_TRUE(out == data);
+    }
+  }
+  const std::vector<uint8_t> raw = sample(1, 70000, 3);  // stored blocks across pulls
+  const std::vector<uint8_t> z0 = zcompress(raw, 0, Z_DEFAULT_STRATEGY);
+  std::vector<uint8_t> out(raw.size());
+  TEST_ASSERT_EQUAL(int(zinf::Status::Ok), int(inflateAll(z0, out, 7)));
+  TEST_ASSERT_TRUE(out == raw);
+}
+
+static void test_inflate_errors() {
+  const std::vector<uint8_t> data = sample(0, 3904, 1);
+  const std::vector<uint8_t> z = zcompress(data, 9, Z_DEFAULT_STRATEGY);
+  std::vector<uint8_t> out(data.size());
+  std::vector<uint8_t> small(data.size() - 1), big(data.size() + 1);
+  TEST_ASSERT_EQUAL(int(zinf::Status::TooLong), int(inflateAll(z, small)));
+  TEST_ASSERT_EQUAL(int(zinf::Status::TooShort), int(inflateAll(z, big)));
+  for (size_t len = 0; len < z.size(); len++) {  // every cut fails
+    const std::vector<uint8_t> cut(z.begin(), z.begin() + long(len));
+    TEST_ASSERT_NOT_EQUAL(int(zinf::Status::Ok), int(inflateAll(cut, out)));
+  }
+  std::vector<uint8_t> bad = z;
+  bad[0] = 0x79;  // method 9
+  TEST_ASSERT_EQUAL(int(zinf::Status::BadHeader), int(inflateAll(bad, out)));
+  bad = z;
+  bad[1] ^= 0x01;  // check bits
+  TEST_ASSERT_EQUAL(int(zinf::Status::BadHeader), int(inflateAll(bad, out)));
+  const std::vector<uint8_t> dict = {0x78, 0xBB, 0, 0, 0, 0};  // valid check bits, FDICT set
+  TEST_ASSERT_EQUAL(int(zinf::Status::BadHeader), int(inflateAll(dict, out)));
+  bad = z;
+  bad.back() ^= 0x01;
+  TEST_ASSERT_EQUAL(int(zinf::Status::BadChecksum), int(inflateAll(bad, out)));
+  const std::vector<uint8_t> reserved = {0x78, 0x9C, 0x07};  // block type 3
+  TEST_ASSERT_EQUAL(int(zinf::Status::BadData), int(inflateAll(reserved, out)));
+  const std::vector<uint8_t> nlen = {0x78, 0x9C, 0x01, 5, 0, 0, 0};  // stored, NLEN != ~LEN
+  TEST_ASSERT_EQUAL(int(zinf::Status::BadData), int(inflateAll(nlen, out)));
+  // Flipped bits anywhere in the deflate data: an error, or (if the checksum still
+  // matches) the right page; never a crash or a write past the buffer.
+  for (size_t i = 2; i + 4 < z.size(); i++) {
+    for (int bit = 0; bit < 8; bit += 3) {
+      bad = z;
+      bad[i] ^= uint8_t(1 << bit);
+      if (inflateAll(bad, out) == zinf::Status::Ok) TEST_ASSERT_TRUE(out == data);
+    }
+  }
+}
+
+static void test_adler32() {
+  TEST_ASSERT_EQUAL_HEX32(1, zinf::adler32(nullptr, 0));
+  const std::vector<uint8_t> d = sample(1, 100000, 9);  // several 5552-byte rounds
+  TEST_ASSERT_EQUAL_HEX32(uint32_t(adler32(1, d.data(), uInt(d.size()))),
+                          zinf::adler32(d.data(), d.size()));
 }
 
 // --- button -----------------------------------------------------------------
@@ -330,7 +588,7 @@ static void test_board_tag_absent() {
 static void test_cover_block() {
   t5b::Header h;
   TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::parseHeader(kGoldenHeader, 146, h)));
-  const uint32_t end = h.fileSize();
+  const uint32_t end = h.pagesEnd;
   t5b::Cover c;
   TEST_ASSERT_EQUAL(int(t5b::Error::None), int(t5b::parseCover(h, end, nullptr, 0, c)));
   TEST_ASSERT_FALSE(c.present);
@@ -854,6 +1112,12 @@ int main() {
   RUN_TEST(test_validate);
   RUN_TEST(test_chapter_for_page);
   RUN_TEST(test_book_id_and_key);
+  RUN_TEST(test_v2_book_from_python_writer);
+  RUN_TEST(test_v2_index_and_page_errors);
+  RUN_TEST(test_inflate_matches_zlib);
+  RUN_TEST(test_inflate_input_in_small_pieces);
+  RUN_TEST(test_inflate_errors);
+  RUN_TEST(test_adler32);
   RUN_TEST(test_short_press_with_bounce);
   RUN_TEST(test_long_press_fires_while_held_and_not_on_release);
   RUN_TEST(test_repeat);

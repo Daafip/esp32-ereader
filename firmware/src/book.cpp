@@ -43,8 +43,10 @@ void Book::close() {
 
 bool Book::readPage(uint32_t n, uint8_t *dst) {
   if (!open_ || n >= header_.pageCount) return false;
-  const uint32_t bytes = header_.pageBytes();
-  return file_.seek(header_.pageOffset(n)) && file_.read(dst, bytes) == bytes;
+  storage::FileReader reader(file_);
+  const t5b::Error err = t5b::readPage(reader, header_, n, dst, inflater_);
+  if (err != t5b::Error::None) Serial.printf("book: page %u: %s\n", unsigned(n), t5b::errorText(err));
+  return err == t5b::Error::None;
 }
 
 bool Book::readCover(uint8_t *dst) {

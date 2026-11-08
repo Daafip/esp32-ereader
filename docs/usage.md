@@ -76,10 +76,10 @@ Large books take a moment: Max Havelaar is 3600 pages, ~14 MB to send to the T5-
 while it uploads.
 
 **A FireBeetle 7.5" without a card** (`reader_firebeetle75_flash`) keeps its books in
-its flash: room for about 43 pages (a 7.5" page is 48 KB), enough to try it out. When a
-book doesn't fit, the page offers to send its first pages ("Only the first 40 of 797
-pages fit"), without the original, so there's no Restyle for it. On the PC:
-`--max-pages 40`. That build has no room for a firmware update over Wi-Fi either:
+its flash: room for about 170 pages (a 7.5" page is about 10 KB compressed), enough to
+try it out. When a book doesn't fit, the page offers to send its first pages ("Only the
+first 180 of 797 pages fit"), without the original, so there's no Restyle for it. On the
+PC: `--max-pages 180`. That build has no room for a firmware update over Wi-Fi either:
 update it over USB. Once a card is fitted, flash `reader_firebeetle75` (settings stay,
 the books in the flash don't).
 

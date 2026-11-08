@@ -41,11 +41,6 @@ out.layout = cases.layout.map((c) => {
 
 out.txt = cases.txt.map(([name, b64]) => B.extractTxt(Buffer.from(b64, "base64"), name));
 
-out.t5b = Buffer.from(B.writeT5b({
-  ...cases.t5b,
-  pages: cases.t5b.pages.map((b64) => new Uint8Array(Buffer.from(b64, "base64"))),
-  cover: { ...cases.t5b.cover, bits: new Uint8Array(Buffer.from(cases.t5b.cover.bits, "base64")) },
-})).toString("base64");
 out.bionic = cases.bionic.map((w) => B.bionicPrefix(w));
 out.dither = cases.dither.map((c) =>
   Buffer.from(B.dither(c.gray, c.w, c.h, { method: c.method, level: c.level })).toString("base64"));
@@ -57,6 +52,11 @@ out.lineHeights = cases.lineHeights.map(([size, spacing]) => B.lineHeightFor(siz
 out.screens = B.screens;
 
 (async () => {
+  out.t5b = Buffer.from(await B.writeT5b({
+    ...cases.t5b,
+    pages: cases.t5b.pages.map((b64) => new Uint8Array(Buffer.from(b64, "base64"))),
+    cover: { ...cases.t5b.cover, bits: new Uint8Array(Buffer.from(cases.t5b.cover.bits, "base64")) },
+  })).toString("base64");
   // ZIP reader + inflate on a real EPUB (no DOM needed for this part)
   const zip = await B.openZip(fs.readFileSync(cases.zip.path));
   out.zip = { names: zip.names().sort(), container: await zip.text("META-INF/container.xml") };

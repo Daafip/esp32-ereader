@@ -1,15 +1,18 @@
-"""The .t5b book format: fixed-size 1-bpp page bitmaps plus a small header and TOC.
+"""The .t5b book format: 1-bpp page bitmaps plus a small header and TOC.
 
 Layout (all integers little-endian, strings UTF-8, NUL-padded, always NUL-terminated):
 
     header   146 B  magic "T5B1", version u16, page_w u16, page_h u16, stride u16,
                     page_count u32, toc_count u16, title[64], author[64]
     toc      toc_count x 52 B  {start_page u32, title[48]}
-    pages    page_count x (stride * page_h) B
+    index    version 2: (page_count + 1) x u32, the file offset of each page's data,
+             then the end of the last page
+    pages    version 2: one zlib stream per page, each inflating to stride * page_h B;
+             version 1: page_count x (stride * page_h) B, uncompressed
     cover    optional: "T5CV", width u16, height u16, stride u16, reserved u16, then
-             the bitmap (same layout as a page); the file ends with it
+             the bitmap (same layout as a page, uncompressed); the file ends with it
 
-Page n starts at ``HEADER.size + toc_count * TOC_ENTRY.size + n * page_bytes``.
+Version 1 page n starts at ``HEADER.size + toc_count * TOC_ENTRY.size + n * page_bytes``.
 
 Page bitmap: row-major, top row first, ``stride = ceil(page_w / 8)`` bytes per row,
 MSB first (pixel x is bit ``0x80 >> (x & 7)`` of byte ``x >> 3``), 1 = white,
@@ -20,16 +23,21 @@ for a 250x122 landscape panel, so the firmware can memcpy a page into it.
 from __future__ import annotations
 
 import struct
+import zlib
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 
 from PIL import Image
 
 MAGIC = b"T5B1"
-VERSION = 1
+VERSION = 2  # compressed pages and a page index (firmware after 1.3.1)
+OLDEST_VERSION = 1  # uncompressed pages
 HEADER = struct.Struct("<4sHHHHIH64s64s")
 TOC_ENTRY = struct.Struct("<I48s")
+INDEX_ENTRY = struct.Struct("<I")
+ZLIB_LEVEL = 9
 TITLE_BYTES = 64
 AUTHOR_BYTES = 64
 TOC_TITLE_BYTES = 48
@@ -62,10 +70,27 @@ class Header:
     def page_bytes(self) -> int:
         return self.stride * self.page_h
 
+    @property
+    def compressed(self) -> bool:
+        return self.version >= 2
+
+    @property
+    def index_offset(self) -> int:
+        return HEADER.size + self.toc_count * TOC_ENTRY.size
+
+    @property
+    def pages_offset(self) -> int:
+        """Where the first page's data starts (after the index in version 2)."""
+        index = (self.page_count + 1) * INDEX_ENTRY.size if self.compressed else 0
+        return self.index_offset + index
+
     def page_offset(self, n: int) -> int:
+        """Version 1 only: pages are page_bytes each."""
+        if self.compressed:
+            raise ValueError("compressed pages have no fixed offset (see the index)")
         if not 0 <= n < self.page_count:
             raise IndexError(f"page {n} out of range 0..{self.page_count - 1}")
-        return HEADER.size + self.toc_count * TOC_ENTRY.size + n * self.page_bytes
+        return self.pages_offset + n * self.page_bytes
 
 
 def stride_for(width: int) -> int:
@@ -110,7 +135,7 @@ def unpack_header(data: bytes) -> Header:
     magic, version, w, h, stride, count, toc_count, title, author = HEADER.unpack_from(data)
     if magic != MAGIC:
         raise ValueError(f"not a .t5b file (magic {magic!r})")
-    if version != VERSION:
+    if not OLDEST_VERSION <= version <= VERSION:
         raise ValueError(f"unsupported .t5b version {version}")
     if stride != stride_for(w):
         raise ValueError(f"stride {stride} does not match width {w}")
@@ -148,6 +173,11 @@ def unpack_page(data: bytes, width: int, height: int) -> Image.Image:
     return Image.frombytes("1", (width, height), data, "raw", "1")
 
 
+def compress_page(data: bytes) -> bytes:
+    """A packed page as stored in a version 2 file: one zlib stream."""
+    return zlib.compress(data, ZLIB_LEVEL)
+
+
 def pack_cover(image: Image.Image) -> bytes:
     """The optional cover block: header + bitmap of a mode-"1" image."""
     w, h = image.size
@@ -164,8 +194,12 @@ def write_t5b(
     toc: list[TocEntry],
     pages: Iterable[bytes],
     cover: Image.Image | None = None,
+    compress: bool = True,
 ) -> Header:
-    """Write a .t5b file. ``pages`` are already-packed bitmaps; ``cover`` a mode-"1" image."""
+    """Write a .t5b file. ``pages`` are already-packed bitmaps; ``cover`` a mode-"1" image.
+
+    ``compress=False`` writes version 1 (uncompressed pages), for firmware up to 1.3.1.
+    """
     toc = toc[:MAX_TOC]
     page_bytes = stride_for(page_w) * page_h
     pages = list(pages)
@@ -175,11 +209,20 @@ def write_t5b(
     for entry in toc:
         if not 0 <= entry.start_page < len(pages):
             raise ValueError(f"TOC entry {entry.title!r} points at page {entry.start_page}")
-    header = Header(page_w, page_h, len(pages), len(toc), title, author)
+    version = VERSION if compress else OLDEST_VERSION
+    header = Header(page_w, page_h, len(pages), len(toc), title, author, version)
+    if compress:
+        pages = [compress_page(page) for page in pages]
     with open(path, "wb") as f:
         f.write(pack_header(header))
         for entry in toc:
             f.write(pack_toc_entry(entry))
+        if compress:
+            offset = header.pages_offset
+            for page in pages:
+                f.write(INDEX_ENTRY.pack(offset))
+                offset += len(page)
+            f.write(INDEX_ENTRY.pack(offset))
         for page in pages:
             f.write(page)
         if cover is not None:
@@ -192,14 +235,27 @@ class T5BFile:
 
     def __init__(self, path: Path):
         self.path = Path(path)
+        actual = self.path.stat().st_size
         with open(self.path, "rb") as f:
             self.header = unpack_header(f.read(HEADER.size))
             toc_data = f.read(self.header.toc_count * TOC_ENTRY.size)
+            self.index: list[int] = []
+            if self.header.compressed:
+                count = self.header.page_count + 1
+                data = f.read(count * INDEX_ENTRY.size)
+                if len(data) != count * INDEX_ENTRY.size:
+                    raise ValueError("file too short for its page index")
+                self.index = [o for (o,) in INDEX_ENTRY.iter_unpack(data)]
         self.toc = [
             unpack_toc_entry(toc_data, i * TOC_ENTRY.size) for i in range(self.header.toc_count)
         ]
-        expected = HEADER.size + len(toc_data) + self.header.page_count * self.header.page_bytes
-        actual = self.path.stat().st_size
+        if self.header.compressed:
+            ok = self.index[0] == self.header.pages_offset and self.index[-1] <= actual
+            if not ok or any(b <= a for a, b in pairwise(self.index)):
+                raise ValueError("corrupt page index")
+            expected = self.index[-1]
+        else:
+            expected = self.header.pages_offset + self.header.page_count * self.header.page_bytes
         self.cover: Image.Image | None = None
         if actual > expected:  # the optional cover block
             with open(self.path, "rb") as f:
@@ -215,10 +271,35 @@ class T5BFile:
         elif actual != expected:
             raise ValueError(f"file is {actual} bytes, header implies {expected}")
 
-    def page_data(self, n: int) -> bytes:
+    def page_span(self, n: int) -> tuple[int, int]:
+        """(file offset, length) of page n as stored: a zlib stream in version 2."""
+        if not 0 <= n < self.header.page_count:
+            raise IndexError(f"page {n} out of range 0..{self.header.page_count - 1}")
+        if self.header.compressed:
+            return self.index[n], self.index[n + 1] - self.index[n]
+        return self.header.page_offset(n), self.header.page_bytes
+
+    def page_stored(self, n: int) -> bytes:
+        """Page n as stored (compressed in version 2)."""
+        offset, length = self.page_span(n)
         with open(self.path, "rb") as f:
-            f.seek(self.header.page_offset(n))
-            return f.read(self.header.page_bytes)
+            f.seek(offset)
+            return f.read(length)
+
+    def page_data(self, n: int) -> bytes:
+        """Page n as a packed bitmap."""
+        data = self.page_stored(n)
+        if self.header.compressed:
+            d = zlib.decompressobj()
+            try:
+                data = d.decompress(data)
+            except zlib.error as e:
+                raise ValueError(f"page {n}: {e}") from e
+            if not d.eof or d.unused_data:  # as the firmware: exactly one stream
+                raise ValueError(f"page {n}: not one complete zlib stream")
+            if len(data) != self.header.page_bytes:
+                raise ValueError(f"page {n} inflates to {len(data)} bytes")
+        return data
 
     def page_image(self, n: int) -> Image.Image:
         return unpack_page(self.page_data(n), self.header.page_w, self.header.page_h)

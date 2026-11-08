@@ -524,9 +524,10 @@ void showNoBooks() {
   // Any press starts Wi-Fi transfer: the only way forward without a PC (the card
   // is read again when it ends). A "retry" here just restarted to the same screen.
   // Books in the flash: Wi-Fi is the only way in, and the room is small.
+  // Text pages compress about 4 to 5 times (deflate, .t5b version 2): count 4.
   char room[48];
   snprintf(room, sizeof(room), tr(S::NoBooksFlash2),
-           unsigned(max<int64_t>(storage::freeBytes(), 0) / kPageBytes));
+           unsigned(max<int64_t>(storage::freeBytes(), 0) / (kPageBytes / 4)));
   ui::message(ui::Icon::Book, tr(S::NoBooksYet),
               tr(kBooksInFlash ? S::NoBooksFlash1 : S::NoBooksLine1),
               kBooksInFlash ? room : tr(S::NoBooksLine2),

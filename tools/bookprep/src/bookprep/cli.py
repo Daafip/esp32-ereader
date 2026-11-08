@@ -73,6 +73,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--bionic", action="store_true", help="bolder word starts (bionic reading)")
     p.add_argument("--no-cover", action="store_true", help="leave out the EPUB's cover image")
     p.add_argument(
+        "--uncompressed",
+        action="store_true",
+        help="uncompressed pages (.t5b version 1), for reader firmware up to 1.3.1",
+    )
+    p.add_argument(
         "--max-pages",
         type=int,
         help='only the first N pages (a FireBeetle 7.5" without a card holds about 43)',
@@ -190,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         toc=toc,
         pages=(pack_page(img) for img in images),
         cover=cover,
+        compress=not args.uncompressed,
     )
 
     lines_per_page = geometry.text_height // line_height

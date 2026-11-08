@@ -29,6 +29,8 @@ const char *errorText(Error e) {
     case Error::WrongGeometry: return "made for another screen size";
     case Error::NoPages: return "book has no pages";
     case Error::SizeMismatch: return "file size does not match header";
+    case Error::BadIndex: return "corrupt page index";
+    case Error::BadPage: return "corrupt page";
   }
   return "unknown error";
 }
@@ -44,21 +46,91 @@ Error parseHeader(const uint8_t *d, size_t len, Header &out) {
   out.tocCount = rd16(d + 16);
   copyField(out.title, d + 18, kTitleBytes);
   copyField(out.author, d + 82, kAuthorBytes);
-  if (out.version != kVersion) return Error::BadVersion;
+  if (out.version < kOldestVersion || out.version > kVersion) return Error::BadVersion;
   if (out.stride != (out.pageW + 7) / 8) return Error::BadStride;
+  // Offsets are u32: a page count that pushes them past 4 GB can't be a real file.
+  const uint64_t indexEnd =
+      uint64_t(out.indexOffset()) + (out.compressed() ? 4 * (uint64_t(out.pageCount) + 1) : 0);
+  const uint64_t end =
+      out.compressed() ? 0 : indexEnd + uint64_t(out.pageCount) * out.pageBytes();
+  if (indexEnd > UINT32_MAX || end > UINT32_MAX) return Error::SizeMismatch;
+  out.pagesEnd = uint32_t(end);
   return Error::None;
 }
 
 Error validate(const Header &h, uint16_t pageW, uint16_t pageH, uint32_t fileSize) {
   if (h.pageW != pageW || h.pageH != pageH) return Error::WrongGeometry;
   if (h.pageCount == 0) return Error::NoPages;
-  if (fileSize < h.fileSize()) return Error::SizeMismatch;
+  if (fileSize < (h.compressed() ? h.pagesOffset() : h.pagesEnd)) return Error::SizeMismatch;
   return Error::None;
+}
+
+Error readIndex(Reader &r, Header &h) {
+  if (!h.compressed()) return Error::None;
+  uint8_t b[4];
+  if (!r.read(h.indexOffset(), b, sizeof(b))) return Error::TooShort;
+  const uint32_t first = rd32(b);
+  if (!r.read(h.indexOffset() + 4 * h.pageCount, b, sizeof(b))) return Error::TooShort;
+  const uint32_t last = rd32(b);
+  if (first != h.pagesOffset() || last < first || last - first < h.pageCount || last > r.size()) {
+    return Error::BadIndex;
+  }
+  h.pagesEnd = last;
+  return Error::None;
+}
+
+Error pageSpan(Reader &r, const Header &h, uint32_t n, uint32_t &offset, uint32_t &len) {
+  if (n >= h.pageCount) return Error::BadPage;
+  if (!h.compressed()) {
+    offset = h.pageOffset(n);
+    len = h.pageBytes();
+    return Error::None;
+  }
+  uint8_t b[8];
+  if (!r.read(h.indexOffset() + 4 * n, b, sizeof(b))) return Error::TooShort;
+  const uint32_t from = rd32(b), to = rd32(b + 4);
+  if (from < h.pagesOffset() || to <= from || to > h.pagesEnd) return Error::BadIndex;
+  offset = from;
+  len = to - from;
+  return Error::None;
+}
+
+namespace {
+
+// A stretch of the file as the inflater's input.
+class Span : public zinf::Source {
+ public:
+  Span(Reader &r, uint32_t pos, uint32_t end) : r_(r), pos_(pos), end_(end) {}
+  size_t pull(uint8_t *buf, size_t max) override {
+    uint32_t n = end_ - pos_;
+    if (n > max) n = uint32_t(max);
+    if (n == 0 || !r_.read(pos_, buf, n)) return 0;
+    pos_ += n;
+    return n;
+  }
+  uint32_t left() const { return end_ - pos_; }
+
+ private:
+  Reader &r_;
+  uint32_t pos_, end_;
+};
+
+}  // namespace
+
+Error readPage(Reader &r, const Header &h, uint32_t n, uint8_t *dst, zinf::Inflater &inflater) {
+  uint32_t offset = 0, len = 0;
+  const Error err = pageSpan(r, h, n, offset, len);
+  if (err != Error::None) return err;
+  if (!h.compressed()) return r.read(offset, dst, len) ? Error::None : Error::TooShort;
+  Span src(r, offset, offset + len);
+  if (inflater.zlib(src, dst, h.pageBytes()) != zinf::Status::Ok) return Error::BadPage;
+  // The stream must fill its stretch: one that ends early is another page's.
+  return inflater.unused() == 0 && src.left() == 0 ? Error::None : Error::BadIndex;
 }
 
 Error parseCover(const Header &h, uint32_t fileSize, const uint8_t *head, size_t len, Cover &out) {
   out = Cover();
-  const uint32_t end = h.fileSize();
+  const uint32_t end = h.pagesEnd;
   if (fileSize == end) return Error::None;  // no cover
   if (fileSize < end + kCoverHeaderSize || !head || len < kCoverHeaderSize ||
       memcmp(head, "T5CV", 4) != 0) {

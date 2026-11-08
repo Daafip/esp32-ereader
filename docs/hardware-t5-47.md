@@ -84,8 +84,8 @@ All in `firmware/include/boards/t5_47_s3.h`.
 - **Partitions:** `default_16MB.csv` (2 × 6.5 MB app slots, OTA works). App 1.48 MB
   in 0.8.0.
 - **Books are bigger:** 64.8 KB per page (vs 3.9 KB), but about 4× fewer pages at the
-  default 28 px: Max Havelaar comes to about 55 MB. Page compression would be a format
-  v2 (FastEPD has a Group5 decoder).
+  default 28 px: Max Havelaar comes to about 55 MB uncompressed, about a fifth of that
+  as `.t5b` version 2 (zlib per page, `docs/t5b-format.md`).
 
 ## To verify (checkpoint list in `docs/checkpoints.md`)
 

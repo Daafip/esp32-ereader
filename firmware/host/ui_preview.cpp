@@ -37,6 +37,31 @@ void save(const char *name) {
   printf("%s\n", path);
 }
 
+// A PC file as a t5b::Reader.
+class FileReader : public t5b::Reader {
+ public:
+  explicit FileReader(FILE *f) : f_(f) {}
+  bool read(uint32_t offset, uint8_t *buf, uint32_t len) override {
+    return fseek(f_, long(offset), SEEK_SET) == 0 && fread(buf, 1, len, f_) == len;
+  }
+  uint32_t size() override {
+    fseek(f_, 0, SEEK_END);
+    return uint32_t(ftell(f_));
+  }
+
+ private:
+  FILE *f_;
+};
+
+// Header and page index of the sample .t5b.
+bool readHeader(FILE *f, t5b::Header &h) {
+  FileReader r(f);
+  uint8_t raw[t5b::kHeaderSize];
+  return r.read(0, raw, sizeof(raw)) && t5b::parseHeader(raw, sizeof(raw), h) == t5b::Error::None &&
+         t5b::validate(h, h.pageW, h.pageH, r.size()) == t5b::Error::None &&
+         t5b::readIndex(r, h) == t5b::Error::None;
+}
+
 // Book page n of the sample .t5b (counted from the end) into the framebuffer.
 bool loadPage(const char *path, int fromEnd) {
   FILE *f = fopen(path, "rb");
@@ -44,14 +69,13 @@ bool loadPage(const char *path, int fromEnd) {
     perror(path);
     return false;
   }
-  uint8_t raw[t5b::kHeaderSize];
   t5b::Header h;
-  bool ok = fread(raw, 1, sizeof(raw), f) == sizeof(raw) &&
-            t5b::parseHeader(raw, sizeof(raw), h) == t5b::Error::None &&
-            h.pageW == display::screen().w && h.pageH == display::screen().h &&
-            h.pageCount > uint32_t(fromEnd);
-  ok = ok && fseek(f, long(h.pageOffset(h.pageCount - 1 - fromEnd)), SEEK_SET) == 0 &&
-       fread(display::framebuffer(), 1, kPageBytes, f) == size_t(kPageBytes);
+  static zinf::Inflater inflater;
+  FileReader r(f);
+  const bool ok = readHeader(f, h) && h.pageW == display::screen().w &&
+                  h.pageH == display::screen().h && h.pageCount > uint32_t(fromEnd) &&
+                  t5b::readPage(r, h, h.pageCount - 1 - fromEnd, display::framebuffer(),
+                                inflater) == t5b::Error::None;
   fclose(f);
   if (!ok) {
     fprintf(stderr, "%s: no %dx%d sample page\n", path, display::screen().w,
@@ -66,16 +90,12 @@ ui::Bitmap loadCover(const char *path) {
   FILE *f = fopen(path, "rb");
   ui::Bitmap b;
   if (!f) return b;
-  uint8_t raw[t5b::kHeaderSize];
   t5b::Header h;
   t5b::Cover c;
   uint8_t head[t5b::kCoverHeaderSize];
-  fseek(f, 0, SEEK_END);
-  const uint32_t size = uint32_t(ftell(f));
-  fseek(f, 0, SEEK_SET);
-  if (fread(raw, 1, sizeof(raw), f) == sizeof(raw) &&
-      t5b::parseHeader(raw, sizeof(raw), h) == t5b::Error::None &&
-      fseek(f, long(h.fileSize()), SEEK_SET) == 0 && fread(head, 1, sizeof(head), f) == sizeof(head) &&
+  FileReader r(f);
+  const uint32_t size = r.size();
+  if (readHeader(f, h) && r.read(h.pagesEnd, head, sizeof(head)) &&
       t5b::parseCover(h, size, head, sizeof(head), c) == t5b::Error::None && c.present) {
     coverBits.resize(size_t(c.stride) * c.h);
     if (fread(coverBits.data(), 1, coverBits.size(), f) == coverBits.size()) {
@@ -331,7 +351,7 @@ int main(int argc, char **argv) {
 #ifdef BOARD_FIREBEETLE_75
   // the same without a card (reader_firebeetle75_flash, app.cpp showNoBooks())
   char room[48];
-  snprintf(room, sizeof(room), tr(S::NoBooksFlash2), 43u);
+  snprintf(room, sizeof(room), tr(S::NoBooksFlash2), 170u);
   ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksFlash1), room,
               {Button::Next, tr(S::WifiTransfer), nullptr}, {Button::None, nullptr, nullptr});
   save("25-no-books-flash-nl");

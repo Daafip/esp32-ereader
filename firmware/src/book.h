@@ -23,7 +23,7 @@ class Book {
   // The screen it was made for (index into kScreens; the 7.5" has two).
   int screen() const { return screen_; }
 
-  // Reads page n (kPageBytes) into dst.
+  // Reads page n (kPageBytes) into dst, inflating it from a version 2 book.
   bool readPage(uint32_t n, uint8_t *dst);
 
   // Optional cover image (bookprep / the web converter add it for EPUBs).
@@ -42,6 +42,7 @@ class Book {
  private:
   static constexpr int kMaxToc = 2048;  // 8 KB of start pages at most
   fs::File file_;
+  zinf::Inflater inflater_;
   t5b::Header header_;
   t5b::Cover cover_;
   std::vector<uint32_t> starts_;

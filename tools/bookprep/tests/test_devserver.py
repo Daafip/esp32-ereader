@@ -5,6 +5,7 @@ import json
 import threading
 import urllib.error
 import urllib.request
+import zlib
 from pathlib import Path
 
 import pytest
@@ -251,7 +252,8 @@ def test_folders_marks_position_and_pages(server, tmp_path):
     assert post(base, "/api/position", file="Klassiek/boek.t5b", page="1")[0] == 200
     assert info(base)["books"][0]["position"] == 1
     status, page = call(f"{base}/api/page?file=Klassiek/boek.t5b&n=0&k={CODE}")
-    assert (status, len(page)) == (200, 32 * 122)
+    # sent as stored, "Content-Encoding: deflate" (browsers inflate it; urllib doesn't)
+    assert (status, len(zlib.decompress(page))) == (200, 32 * 122)
 
     # moving back to the root removes the empty folder
     assert post(base, "/api/move", file="Klassiek/boek.t5b", folder="")[0] == 200

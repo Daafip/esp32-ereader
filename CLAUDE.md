@@ -12,7 +12,7 @@ Phase 10: a home-built FireBeetle 2 ESP32-C6 + Waveshare 7.5" 800×480 SPI panel
 SD card on the panel's SPI bus). It turns: portrait 480×800 or landscape 800×480
 (Settings → Orientation), two screens `7.5in` / `7.5in-landscape`, a book is made for one.
 Without a card (David's build for now): env `reader_firebeetle75_flash`
-(`BOARD_BOOKS_IN_FLASH`), books in a 2 MB LittleFS partition (~43 pages), no Wi-Fi
+(`BOARD_BOOKS_IN_FLASH`), books in a 2 MB LittleFS partition (~170 compressed pages), no Wi-Fi
 updates. Its button and card pins: "Your wiring" at the top of the board header.
 Phase 11: an Android app (`android/`, Kotlin) that switches that board between the reader
 and ESPHome over a USB-OTG cable (ROM loader protocol as esptool `--no-stub`;
@@ -88,7 +88,10 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
   steps end at a 🧑 checkpoint in `PLAN.md`: stop there and ask David.
 - Diagnostic sketches live in `firmware/diag/<name>/main.cpp`, one PlatformIO env each.
 - Host tool: Python 3.12, ruff (line length 100), pytest. Package in
-  `tools/bookprep/src/bookprep`. `.t5b` spec: `docs/t5b-format.md`.
+  `tools/bookprep/src/bookprep`. `.t5b` spec: `docs/t5b-format.md`. Version 2 (the
+  default) stores each page as a zlib stream behind a page index; the firmware reads
+  versions 1 and 2 through `t5b::readPage()` with its own inflater (`lib/core`, tested
+  against the system zlib, so `fw-test` needs zlib1g-dev).
 - In Python sources, write non-ASCII characters as escapes (`\N{EM DASH}` or a
   backslash-u escape), never as literal invisible characters (`normalize.py` handles
   soft hyphens, zero-width and odd spaces).

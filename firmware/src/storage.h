@@ -53,10 +53,22 @@ uint64_t totalBytes();
 // In the flash: what a new file can take (less a little for LittleFS's own blocks).
 int64_t freeBytes();
 
+// An open file as a t5b::Reader (page reads, index checks).
+class FileReader : public t5b::Reader {
+ public:
+  explicit FileReader(fs::File &f) : f_(f) {}
+  bool read(uint32_t offset, uint8_t *buf, uint32_t len) override;
+  uint32_t size() override { return uint32_t(f_.size()); }
+
+ private:
+  fs::File &f_;
+};
+
 // Checks a header against the board's screens (two on boards that turn); `screen`
 // gets the index of the one the book was made for.
 t5b::Error checkHeader(const t5b::Header &h, uint32_t fileSize, int *screen = nullptr);
-// Reads and checks a book's header (and cover block, if any) for the board's screens.
+// Reads and checks a book's header, page index (version 2) and cover block, if any,
+// for the board's screens.
 t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover = nullptr,
                      int *screen = nullptr);
 

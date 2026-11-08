@@ -250,6 +250,19 @@ work there. `docs/firmware-switcher.md`.
 - [x] Tests (`pixi run android-test`) against a fake ROM loader (NOR flash semantics, reset lines), including the real `reader_firebeetle75_flash` image; `pixi run android-build` -> `out/android/fw-switch.apk` (pixi env `android`: JDK 21, Gradle 9.3; Android SDK from `~/Android/Sdk`)
 - [ ] 🧑 On the board: see the checks at the end of `docs/firmware-switcher.md`
 
+## Compressed pages: `.t5b` version 2 (2026-11-08)
+
+David, on the flash build's 43 pages: "ill add a card later, for now add compression".
+Measured on a 797-page novel (7.5", all pages): PackBits 2.5×, Group5 4.2×, zlib 4.9×
+(column order: worse). zlib it is: the browser has `CompressionStream`, Python has
+`zlib`, and the firmware needs only a small inflater. The flash build now holds about
+170 pages instead of 43; card books shrink as much and send 5× faster.
+
+- [x] Format v2 (`docs/t5b-format.md`): page index after the TOC, each page one zlib stream, cover unchanged; the firmware reads v1 and v2. `lib/core`: `inflater.*` (puff-style, flat output, no window, ~1.8 KB state), `t5b::readIndex/readPage/pageSpan` through a `Reader`; Book, library check, upload check (now the whole `checkBook`), `/api/page` (sends the stored stream, `Content-Encoding: deflate`), ui_preview. No-card "room for ~N pages" counts 10-12 KB a page
+- [x] Writers: `t5b.py` (v2 default, level 9; `prep --uncompressed` for firmware up to 1.3.1), `bookprep.js` (`compressPage`/`assembleT5b`, pages compressed as rendered; the page sizes a book after typesetting and sends exactly the pages that fit; the size line is an estimate from four compressed pages), devserver
+- [x] Tests: inflater against the system zlib (all levels and strategies, stored/fixed/dynamic blocks, input in 1-byte pieces, every truncation, bit flips), a v2 book from the Python writer read by the C++ code, index and page errors; Python v1/v2 and corrupt files; JS parity by content (zlib levels differ); browser tests with card sizes for compressed books. A 797-page novel: 38.3 MB -> 7.9 MB, every page the same through the C++ reader as through Python, 0.3 ms a page on the PC
+- [x] 🧑 Compressed books on the board: David, 2026-11-08: "working"
+
 ---
 
 ## Decisions

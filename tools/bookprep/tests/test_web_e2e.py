@@ -190,21 +190,24 @@ def test_page_shortens_long_file_names(tmp_path, sample_epub):
 
 
 def test_page_refuses_a_book_that_does_not_fit_before_sending(tmp_path, sample_epub):
-    """A full card: the page says so at once instead of after sending everything."""
-    status, dom = upload_from_page(tmp_path, sample_epub, "testboek.epub", card_mb=0.002)
+    """A full card: the page says so instead of sending anything. 1 KB: not even one
+    page fits (one takes ~1.5 KB with header, contents and the 732-byte cover)."""
+    status, dom = upload_from_page(tmp_path, sample_epub, "testboek.epub", card_mb=0.001)
     assert status.startswith("error: Not enough space on the reader"), status
-    assert "2 KB free of 2 KB" in dom  # the storage line
+    assert "1 KB free of 1 KB" in dom  # the storage line
     assert not list((tmp_path / "sd").rglob("*.t5b"))
 
 
 def test_page_sends_the_first_pages_that_fit(tmp_path, sample_epub):
-    """Little room (the FireBeetle 7.5" without a card keeps ~43 pages in its flash):
-    the page offers the first pages that fit, and leaves the original out."""
-    status, _ = upload_from_page(tmp_path, sample_epub, "testboek.epub", card_mb=0.0093)
+    """Little room (the FireBeetle 7.5" without a card keeps a few hundred pages in its
+    flash): the page offers the first pages that fit, and leaves the original out."""
+    # 2149 bytes, less 238 of settings: the first two pages fit (~1.64 KB compressed,
+    # with header, contents and cover), all three (~2.2 KB) don't.
+    status, _ = upload_from_page(tmp_path, sample_epub, "testboek.epub", card_mb=0.00205)
     assert status == "ok", status
     sd = tmp_path / "sd" / "books"
     book = T5BFile(sd / "testboek.t5b")
-    assert book.header.page_count == 1  # 9.5 KB: one 3.9 KB page, one kept for the rest
+    assert book.header.page_count == 2
     assert [e.title for e in book.toc] == ["Hoofdstuk 1"]
     assert not (sd / ".src" / "testboek.epub").exists()
     assert (sd / ".src" / "testboek.json").exists()

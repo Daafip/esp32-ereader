@@ -542,9 +542,11 @@ class Handler(SimpleHTTPRequestHandler):
         n = self.query().get("n", "")
         if not n.isdigit() or int(n) >= book.header.page_count:
             return self.send_json(400, {"error": "bad page"})
-        data = book.page_data(int(n))
+        data = book.page_stored(int(n))  # as transfer.cpp: a compressed page as it is
         self.send_response(200)
         self.send_header("Content-Type", "application/octet-stream")
+        if book.header.compressed:
+            self.send_header("Content-Encoding", "deflate")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

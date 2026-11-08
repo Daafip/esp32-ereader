@@ -156,17 +156,25 @@ t5b::Error checkHeader(const t5b::Header &h, uint32_t fileSize, int *screen) {
   return first;
 }
 
+bool FileReader::read(uint32_t offset, uint8_t *buf, uint32_t len) {
+  // A page's compressed data comes in sequential pieces: seek only when needed.
+  if (f_.position() != offset && !f_.seek(offset)) return false;
+  return f_.read(buf, len) == len;
+}
+
 t5b::Error checkBook(fs::File &f, t5b::Header &h, t5b::Cover *cover, int *screen) {
   uint8_t buf[t5b::kHeaderSize];
   if (!f.seek(0) || f.read(buf, sizeof(buf)) != sizeof(buf)) return t5b::Error::TooShort;
   t5b::Error err = t5b::parseHeader(buf, sizeof(buf), h);
   const uint32_t size = uint32_t(f.size());
   if (err == t5b::Error::None) err = checkHeader(h, size, screen);
+  FileReader reader(f);
+  if (err == t5b::Error::None) err = t5b::readIndex(reader, h);
   if (err != t5b::Error::None) return err;
   t5b::Cover c;
   uint8_t head[t5b::kCoverHeaderSize];
-  const bool more = size > h.fileSize();
-  if (more && !(f.seek(h.fileSize()) && f.read(head, sizeof(head)) == sizeof(head))) {
+  const bool more = size > h.pagesEnd;
+  if (more && !(f.seek(h.pagesEnd) && f.read(head, sizeof(head)) == sizeof(head))) {
     return t5b::Error::SizeMismatch;
   }
   err = t5b::parseCover(h, size, more ? head : nullptr, sizeof(head), c);

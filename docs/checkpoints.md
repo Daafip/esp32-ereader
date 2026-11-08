@@ -189,7 +189,7 @@ has only one: CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), C
    `pixi run fw-flash reader_firebeetle75`. Then `pixi run fw-monitor`. Books: Wi-Fi
    transfer (the page typesets for the orientation the reader is in; without a card
    it offers the first pages that fit), or `pixi run prep book.epub --screen 7.5in`
-   (`--max-pages 40` without a card) and upload the `.t5b` on the page (with a card:
+   (`--max-pages 180` without a card) and upload the `.t5b` on the page (with a card:
    or copy it to `/books`). **Send:** the start-up lines (`flash: ... KB` or
    `card: ... MB`), or what the screen says. The first start of the flash build formats
    the books partition (a few seconds).
@@ -207,6 +207,17 @@ has only one: CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), C
 5. Leave it asleep with a page shown and measure the current in series with the cell
    (FireBeetle alone: 36 µA; the HAT and the card add to it). About → Battery should
    read about the cell voltage.
+
+## Compressed pages (`.t5b` version 2, firmware after 1.3.1)
+
+Books made now are compressed (about 5× smaller); older books still open.
+
+1. Flash the new firmware, send a book from the page (it typesets a compressed one) and
+   read it. **Send:** whether page turns feel as fast as before, and any `book: page N:`
+   line on the serial monitor (a page that didn't inflate).
+2. Open a book from before (version 1) and turn a few pages: it should read as before.
+3. FireBeetle without a card: the no-books screen says about 170 pages. **Send:** how
+   many pages of a real book the page offers to send ("Only the first N of M").
 
 ## Phase 9 features (any board, after Checkpoint 3)
 

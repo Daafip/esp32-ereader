@@ -39,6 +39,9 @@ jobs:
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
+      - name: System zlib (the inflater's tests compare against it)
+        run: dpkg -s zlib1g-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y zlib1g-dev)
+
       - name: Unit tests (lib/core)
         run: pixi run fw-test
 

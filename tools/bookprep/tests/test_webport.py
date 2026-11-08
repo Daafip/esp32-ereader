@@ -229,7 +229,17 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
             [(b.kind, b.text) for b in c.blocks] for c in want.chapters
         ]
 
-    assert base64.b64decode(js["t5b"]) == t5b_path.read_bytes()
+    # The same book, not the same bytes: the browser compresses at zlib's default level,
+    # Python at 9. Header and TOC match byte for byte; the pages once inflated.
+    js_path = tmp_path / "js.t5b"
+    js_path.write_bytes(base64.b64decode(js["t5b"]))
+    js_book, py_book = T5BFile(js_path), T5BFile(t5b_path)
+    assert js_book.header == py_book.header and js_book.header.compressed
+    assert js_book.toc == py_book.toc
+    assert [js_book.page_data(n) for n in range(len(pages))] == pages
+    assert js_book.cover.tobytes() == py_book.cover.tobytes()
+    head = py_book.header.index_offset
+    assert js_path.read_bytes()[:head] == t5b_path.read_bytes()[:head]
     assert [base64.b64decode(e) for e in js["encode"]] == [
         encode_str(t, n) for t, n in encode_cases
     ]

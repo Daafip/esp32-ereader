@@ -665,19 +665,29 @@
     return out;
   }
 
-  // cover: { w, h, bits } (packed like a page) or null: the optional cover block.
-  function writeT5b({ title, author, pageW, pageH, toc, pages, cover = null }) {
-    const pageBytes = strideFor(pageW) * pageH;
+  // A page as a version 2 file stores it: one zlib stream (RFC 1950), as Python's
+  // zlib.compress makes (its level 9 packs a little tighter than the browser's default).
+  async function compressPage(bits) {
+    const stream = new Blob([bits]).stream().pipeThrough(new CompressionStream("deflate"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  // A version 2 .t5b from compressed pages (compressPage): header, TOC, page index (the
+  // file offset of each page, then the end of the last), pages, then the optional
+  // cover block: cover = { w, h, bits } (packed like a page, uncompressed) or null.
+  function assembleT5b({ title, author, pageW, pageH, toc, streams, cover = null }) {
     toc = toc.slice(0, 0xffff);
     const coverBytes = cover ? 12 + strideFor(cover.w) * cover.h : 0;
-    const out = new Uint8Array(HEADER_SIZE + toc.length * TOC_ENTRY_SIZE + pages.length * pageBytes + coverBytes);
+    const indexAt = HEADER_SIZE + toc.length * TOC_ENTRY_SIZE;
+    const pagesAt = indexAt + 4 * (streams.length + 1);
+    const out = new Uint8Array(pagesAt + streams.reduce((n, s) => n + s.length, 0) + coverBytes);
     const dv = new DataView(out.buffer);
     out.set([0x54, 0x35, 0x42, 0x31], 0); // "T5B1"
-    dv.setUint16(4, 1, true);
+    dv.setUint16(4, 2, true); // version 2: compressed pages
     dv.setUint16(6, pageW, true);
     dv.setUint16(8, pageH, true);
     dv.setUint16(10, strideFor(pageW), true);
-    dv.setUint32(12, pages.length, true);
+    dv.setUint32(12, streams.length, true);
     dv.setUint16(16, toc.length, true);
     out.set(encodeStr(title, 64), 18);
     out.set(encodeStr(author, 64), 82);
@@ -687,11 +697,13 @@
       out.set(encodeStr(e.title, 48), p + 4);
       p += TOC_ENTRY_SIZE;
     }
-    for (const page of pages) {
-      if (page.length !== pageBytes) throw new Error("page has the wrong size");
-      out.set(page, p);
-      p += pageBytes;
-    }
+    p = pagesAt;
+    streams.forEach((stream, n) => {
+      dv.setUint32(indexAt + 4 * n, p, true);
+      out.set(stream, p);
+      p += stream.length;
+    });
+    dv.setUint32(indexAt + 4 * streams.length, p, true);
     if (cover) {
       if (cover.bits.length !== strideFor(cover.w) * cover.h) throw new Error("cover has the wrong size");
       out.set([0x54, 0x35, 0x43, 0x56], p); // "T5CV"
@@ -702,6 +714,35 @@
       out.set(cover.bits, p + 12);
     }
     return out;
+  }
+
+  // Bytes of assembleT5b(parts), without building it.
+  function t5bSize({ toc, streams, cover = null }) {
+    return HEADER_SIZE + Math.min(toc.length, 0xffff) * TOC_ENTRY_SIZE + 4 * (streams.length + 1) +
+      streams.reduce((n, s) => n + s.length, 0) + (cover ? 12 + strideFor(cover.w) * cover.h : 0);
+  }
+
+  // The first n pages of a book's parts, with the contents entries that point into them.
+  function firstPages(parts, n) {
+    return { ...parts, streams: parts.streams.slice(0, n), toc: parts.toc.filter((e) => e.startPage < n) };
+  }
+
+  // How many pages from the start fit in `room` bytes as a .t5b (0: not even one).
+  function pagesThatFit(parts, room) {
+    let n = 0;
+    while (n < parts.streams.length && t5bSize(firstPages(parts, n + 1)) <= room) n++;
+    return n;
+  }
+
+  // The same from packed pages: Python's write_t5b.
+  async function writeT5b({ pages, ...book }) {
+    const pageBytes = strideFor(book.pageW) * book.pageH;
+    const streams = [];
+    for (const page of pages) {
+      if (page.length !== pageBytes) throw new Error("page has the wrong size");
+      streams.push(await compressPage(page));
+    }
+    return assembleT5b({ ...book, streams });
   }
 
   // --- 1-bit images: covers and sleep pictures ---------------------------------------
@@ -952,11 +993,12 @@
     return { pages, toc, renderer, geometry: g, lineHeight, screen: sc, withCover: o.cover };
   }
 
-  // Renders every page into a .t5b, yielding to the event loop now and then.
-  async function writeBook(book, layout, onProgress) {
-    const bitmaps = [];
+  // Renders and compresses every page, yielding to the event loop now and then: the
+  // parts of a .t5b (assembleT5b). Only the compressed pages are held.
+  async function bookParts(book, layout, onProgress) {
+    const streams = [];
     for (let n = 0; n < layout.pages.length; n++) {
-      bitmaps.push(layout.renderer.render(layout.pages[n]));
+      streams.push(await compressPage(layout.renderer.render(layout.pages[n])));
       if (n % 25 === 24) {
         if (onProgress) onProgress(n + 1, layout.pages.length);
         await new Promise((r) => setTimeout(r, 0));
@@ -968,10 +1010,15 @@
       try { cover = await coverBitmap(book.cover, layout.screen.coverW, layout.screen.coverH); }
       catch (e) { cover = null; } // an image the browser can't decode: no cover
     }
-    return writeT5b({
+    return {
       title: book.title, author: book.author, pageW: layout.geometry.width,
-      pageH: layout.geometry.height, toc: layout.toc, pages: bitmaps, cover,
-    });
+      pageH: layout.geometry.height, toc: layout.toc, streams, cover,
+    };
+  }
+
+  // The whole book as a .t5b.
+  async function writeBook(book, layout, onProgress) {
+    return assembleT5b(await bookParts(book, layout, onProgress));
   }
 
   // bookprep's file-name slug.
@@ -983,7 +1030,8 @@
   return {
     defaults, screens, screenFor, geometry, lineHeightFor, openZip, resolvePath, htmlToBlocks, extractEpub, extractTxt,
     extract, normalizeText, cleanBook, parsePatterns, languageFallback, Hyphenator, dashBreaks,
-    breakLines, bookItems, paginate, layoutBook, tocEntries, encodeStr, writeT5b, packPixels,
+    breakLines, bookItems, paginate, layoutBook, tocEntries, encodeStr, writeT5b, compressPage, assembleT5b, t5bSize, firstPages,
+    pagesThatFit, bookParts, packPixels,
     createRenderer, unpackToRgba, typeset, writeBook, slug, NBSP, toGray, autocontrast, dither,
     sharpen, adjust, coverBitmap, bionicPrefix,
   };

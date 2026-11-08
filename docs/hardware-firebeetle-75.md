@@ -20,14 +20,14 @@ Status (2026-10-27): the hardware test ran on David's build, and the reader runs
 | DFRobot FireBeetle 2 ESP32-C6 (DFR1075) | 4 MB flash, no PSRAM, 512 KB SRAM, 16 KB RTC memory, one general-purpose SPI bus, Li-ion charger, battery divider on GPIO0. Deep sleep 36 µA (board v1.2) |
 | Waveshare 7.5" e-Paper HAT B/W V2 | 800×480, UC81xx controller (bb_epaper `EP75_800x480_GEN2`), on the e-Paper Driver HAT **Rev2.3** (PWR pin) |
 | 3 × DFRobot Gravity push button (DFR0029) | idle low (pull-down on the module), high when pressed |
-| microSD breakout, 3.3 V | **not in the spec, optional**: without one the books live in the flash (about 43 pages). Take one without a 5 V regulator or level shifter |
+| microSD breakout, 3.3 V | **not in the spec, optional**: without one the books live in the flash (about 170 pages). Take one without a 5 V regulator or level shifter |
 | Li-ion cell with protection | JST-PH 2.0 into the BAT socket |
 
-Why the card: a 7.5" page is 48 KB (pages are stored as bitmaps, `docs/t5b-format.md`),
-so a book is 10-40 MB (a Dutch novel at the default 18 px: 797 pages, 38 MB). The 4 MB
-of flash holds the firmware twice (Wi-Fi updates) and no book; with the firmware once,
-2 MB are left: about 43 pages. Compressed pages wouldn't change that much: deflate
-makes such a page about 10 KB, so that novel would still need 7.8 MB.
+Why the card: a 7.5" page is a 48 KB bitmap, about 10 KB compressed (`.t5b` version 2,
+`docs/t5b-format.md`), so a book is 2-10 MB (a Dutch novel at the default 18 px: 797
+pages, 7.9 MB; 38 MB uncompressed). The 4 MB of flash holds the firmware twice (Wi-Fi
+updates) and no book; with the firmware once, 2 MB are left: about 170 pages, a
+quarter of that novel (43 pages before compression).
 
 ## Wiring
 
@@ -66,7 +66,7 @@ only pins that wake the C6 from deep sleep), stops it with a message.
 - **Books in the flash** (`reader_firebeetle75_flash`, `-DBOARD_BOOKS_IN_FLASH`):
   `partitions-fb75-flash.csv` has one app slot (1.9 MB, as big as one of the card
   build's) and a 2 MB LittleFS partition `books`, formatted at the first start. Same
-  folders as on a card (`storage::files()`). Room for about 43 pages; the page offers
+  folders as on a card (`storage::files()`). Room for about 170 pages; the page offers
   the first pages of a bigger book (and leaves the original out, so no Restyle), and
   `pixi run prep --max-pages N` does the same. With one app slot there is no update
   over Wi-Fi: `/api/info` says `"ota": false` and the page says to flash over USB. Its
