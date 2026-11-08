@@ -10,7 +10,7 @@ build (`reader_firebeetle75_flash`), which has one app slot.
 
 ## Install
 
-Every release from 2.0.1 has the app: `fw-switch-<version>.apk` on the
+Every release from 2.0.3 has the app: `fw-switch-<version>.apk` on the
 [releases page](https://github.com/Daafip/esp32-ereader/releases). Open it on the
 phone and allow installing apps from that source (the browser or the file manager). It
 runs on Android 10 and later, on a phone with USB host (OTG) support.
@@ -58,13 +58,16 @@ installs over the app, and F-Droid users would have to add the repository again.
 
 ```
 pixi run -e android keytool -genkeypair -v -keystore ~/fwswitch.jks -alias fwswitch \
-    -keyalg RSA -keysize 4096 -validity 10000
+    -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Daafip"
 pixi run -e android keytool -genkeypair -v -keystore ~/fwswitch.jks -alias fdroid \
-    -keyalg RSA -keysize 4096 -validity 10000
+    -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Daafip"
 base64 -w0 ~/fwswitch.jks > ~/fwswitch.jks.b64   # the first secret's value
 ```
 
-The keystore is PKCS12, so each key's password is the keystore's. In GitHub: Settings ->
+`-dname` is the certificate's owner, and it is public: every APK and the repository
+index carry it. Nothing checks it (Android and F-Droid trust the key's fingerprint), so
+use a handle, not your name and town; without `-dname` keytool asks for those. The
+keystore is PKCS12, so each key's password is the keystore's. In GitHub: Settings ->
 Secrets and variables -> Actions -> New repository secret:
 
 | Secret | Value |
