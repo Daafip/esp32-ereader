@@ -64,8 +64,14 @@ jobs:
           fi
           pipx install fdroidserver==2.4.5
           echo "$FWSWITCH_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fwswitch.jks"
-          FWSWITCH_KEYSTORE="$RUNNER_TEMP/fwswitch.jks" bash tools/make_fdroid_repo.sh "$apk" out/installer/fdroid
+          rc=0
+          FWSWITCH_KEYSTORE="$RUNNER_TEMP/fwswitch.jks" bash tools/make_fdroid_repo.sh "$apk" out/installer/fdroid || rc=$?
           rm -f "$RUNNER_TEMP/fwswitch.jks"
+          if [ $rc -eq 3 ]; then
+            echo "::notice::the latest release's APK has a debug key: no F-Droid repository until a signed release"
+          elif [ $rc -ne 0 ]; then
+            exit $rc
+          fi
 
       - uses: actions/upload-pages-artifact@v5
         with:
