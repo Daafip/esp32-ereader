@@ -5,10 +5,10 @@ the web page's converter (`firmware/web/bookprep.js`), read by the firmware
 (`lib/core/src/t5b_format.*`). Everything is little-endian. Strings are UTF-8,
 NUL-padded and always NUL-terminated within their field.
 
-**Versions.** Version 2 (2026-11-08, firmware after 1.3.1) stores each page as a zlib
+**Versions.** Version 2 (firmware 2.0.0, 2026-11-08) stores each page as a zlib
 stream behind a page index: about 5 times smaller for text (a 797-page novel on the
 7.5": 38.3 MB in version 1, 7.9 MB in version 2). Version 1 stores the pages
-uncompressed. The firmware reads both; firmware up to 1.3.1 only reads version 1
+uncompressed. The firmware reads both; firmware 1.x only reads version 1
 (`pixi run prep --uncompressed` still writes it). The browser converter always
 matches the firmware that serves it.
 

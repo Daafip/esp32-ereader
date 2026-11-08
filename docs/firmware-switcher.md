@@ -106,8 +106,9 @@ use Android APIs; the tests (`app/src/test`) run the rest against `FakeRom`.
 
 - ESP32-C6 boards on their own USB port only. USB-UART bridges (CH340, CP210x) and
   other chips are refused.
-- No "latest release from GitHub" button yet. The flash build's image isn't in a
-  release yet (`fw-dist` added it after 1.3.1, so the next release brings it).
+- No "latest release from GitHub" button yet. The flash build's image is in the
+  releases from 2.0.0 on (`firebeetle-75-flash-reader-<version>.bin`): download it and
+  choose it in the app.
 
 ## Checks on the real board (🧑)
 

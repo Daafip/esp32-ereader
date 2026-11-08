@@ -208,7 +208,7 @@ has only one: CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), C
    (FireBeetle alone: 36 µA; the HAT and the card add to it). About → Battery should
    read about the cell voltage.
 
-## Compressed pages (`.t5b` version 2, firmware after 1.3.1)
+## Compressed pages (`.t5b` version 2, firmware 2.0.0) — works (2026-11-08)
 
 Books made now are compressed (about 5× smaller); older books still open.
 

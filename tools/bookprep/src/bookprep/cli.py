@@ -75,7 +75,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument(
         "--uncompressed",
         action="store_true",
-        help="uncompressed pages (.t5b version 1), for reader firmware up to 1.3.1",
+        help="uncompressed pages (.t5b version 1), for reader firmware 1.x",
     )
     p.add_argument(
         "--max-pages",

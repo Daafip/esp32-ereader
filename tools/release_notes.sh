@@ -4,9 +4,9 @@
 set -euo pipefail
 v=$1
 cat <<NOTES
-Firmware $v for every supported reader. **Only the LilyGo T5-2.13 (V2.3.1) has been
-tested on hardware;** the T5-4.7" S3, M5PaperS3 and M5Paper builds have not run on a
-board yet, the home-built FireBeetle 7.5" only its hardware test so far
+Firmware $v for every supported reader. **Tested on hardware: the LilyGo T5-2.13
+(V2.3.1) and the home-built FireBeetle 7.5" without a card;** the FireBeetle's card
+build and the T5-4.7" S3, M5PaperS3 and M5Paper builds have not run on a board yet
 (\`docs/checkpoints.md\` lists what to check; reports welcome).
 
 | Board | Flash over USB (at \`0x0\`) | Update over Wi-Fi |
@@ -37,7 +37,9 @@ Diagnostic sketches for the T5-2.13 hardware checkpoints (\`docs/checkpoints.md\
 
 Books: drop an EPUB on the reader's Wi-Fi page (it typesets for the reader's screen),
 or \`pixi run prep book.epub\` (\`--screen 4.7in\` for the 4.7" readers, \`7.5in\` or
-\`7.5in-landscape\` for the FireBeetle). A FireBeetle without a card keeps its books in
-its flash, room for about 43 pages: the page offers the first pages that fit. See
-\`docs/usage.md\`.
+\`7.5in-landscape\` for the FireBeetle). Since 2.0.0 books are compressed (\`.t5b\`
+version 2, about 5 times smaller): they need firmware 2.0.0 or later, and older books
+still open (\`prep --uncompressed\` makes books for 1.x firmware). A FireBeetle without a
+card keeps its books in its flash, room for about 170 pages: the page offers the first
+pages that fit. See \`docs/usage.md\`.
 NOTES

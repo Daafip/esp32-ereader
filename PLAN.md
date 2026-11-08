@@ -250,7 +250,7 @@ work there. `docs/firmware-switcher.md`.
 - [x] Tests (`pixi run android-test`) against a fake ROM loader (NOR flash semantics, reset lines), including the real `reader_firebeetle75_flash` image; `pixi run android-build` -> `out/android/fw-switch.apk` (pixi env `android`: JDK 21, Gradle 9.3; Android SDK from `~/Android/Sdk`)
 - [ ] 🧑 On the board: see the checks at the end of `docs/firmware-switcher.md`
 
-## Compressed pages: `.t5b` version 2 (2026-11-08)
+## Compressed pages: `.t5b` version 2 (2026-11-08, release 2.0.0)
 
 David, on the flash build's 43 pages: "ill add a card later, for now add compression".
 Measured on a 797-page novel (7.5", all pages): PackBits 2.5×, Group5 4.2×, zlib 4.9×

@@ -32,7 +32,7 @@ from pathlib import Path
 from PIL import Image
 
 MAGIC = b"T5B1"
-VERSION = 2  # compressed pages and a page index (firmware after 1.3.1)
+VERSION = 2  # compressed pages and a page index (firmware 2.0.0 and later)
 OLDEST_VERSION = 1  # uncompressed pages
 HEADER = struct.Struct("<4sHHHHIH64s64s")
 TOC_ENTRY = struct.Struct("<I48s")
@@ -198,7 +198,7 @@ def write_t5b(
 ) -> Header:
     """Write a .t5b file. ``pages`` are already-packed bitmaps; ``cover`` a mode-"1" image.
 
-    ``compress=False`` writes version 1 (uncompressed pages), for firmware up to 1.3.1.
+    ``compress=False`` writes version 1 (uncompressed pages), for firmware 1.x.
     """
     toc = toc[:MAX_TOC]
     page_bytes = stride_for(page_w) * page_h
