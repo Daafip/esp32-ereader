@@ -52,7 +52,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
 | Browser converter tests | `pixi run web-test` (Node parity + headless Chromium) |
 | Web page without the reader | `pixi run web-dev` (`--lan` for a phone, `--screen 4.7in`, `--card-mb 5` for a full card) |
-| Android firmware switcher | `pixi run android-build` -> `out/android/fw-switch.apk`; `pixi run android-test` (pixi env `android`; SDK in `~/Android/Sdk`); release build: `pixi run -e android bash tools/android.sh assembleRelease -PappVersion=X.Y.Z` (signing: `docs/firmware-switcher.md`) |
+| Android firmware switcher | `pixi run android-build` -> `out/android/fw-switch.apk`; `pixi run android-test` (pixi env `android`; SDK in `~/Android/Sdk`); release build: `pixi run -e android bash tools/android.sh assembleRelease -PappVersion=X.Y.Z` (signing: `docs/firmware-switcher.md`); F-Droid repo: `tools/make_fdroid_repo.sh <apk> <dir>` (CI, on Pages at `fdroid/repo`; metadata in `android/fdroid/`) |
 
 ## Conventions
 

@@ -6,6 +6,11 @@ v=$1
 # FWSWITCH_SIGNED=1: the APK has the release key (release.yml), so updates install over it
 signing="This build is signed with a debug key: if Android won't install it over an older copy, uninstall that first (the app then forgets its two firmware files)."
 [ -n "${FWSWITCH_SIGNED:-}" ] && signing="Signed with the project's release key: later versions install over it."
+# FDROID_FINGERPRINT (release.yml): the app's F-Droid repository on GitHub Pages
+fdroid=""
+[ -n "${FDROID_FINGERPRINT:-}" ] && fdroid="Or get it, and its updates, through F-Droid: add the repository
+<https://daafip.github.io/esp32-ereader/fdroid/repo?fingerprint=$FDROID_FINGERPRINT>
+(or open <https://daafip.github.io/esp32-ereader/fdroid/repo/> on the phone)."
 cat <<NOTES
 Firmware $v for every supported reader. **Tested on hardware: the LilyGo T5-2.13
 (V2.3.1) and the home-built FireBeetle 7.5" without a card;** the FireBeetle's card
@@ -38,6 +43,7 @@ another chip (ESP32, ESP32-S3, ESP32-C6) is refused, and so is another board's f
 ESPHome on the FireBeetle 7.5" over a USB-C OTG cable, without a PC. Open the file on
 the phone and allow installing apps from that source. See \`docs/firmware-switcher.md\`.
 $signing
+$fdroid
 
 Diagnostic sketches for the T5-2.13 hardware checkpoints (\`docs/checkpoints.md\`):
 \`t5-panel_tester-$v.bin\`, \`t5-button_test-$v.bin\`, \`t5-sd_test-$v.bin\`,

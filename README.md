@@ -53,8 +53,11 @@ firmware files once (the reader's `firebeetle-75-flash-reader-x.x.x.bin` and ESP
 factory image), then tap Install. It resets the board into download mode itself (or
 asks for BOOT + RST when it sleeps), writes only what changed, checks it and restarts
 the board. Android 10 or later, on a phone with USB OTG; build it yourself with
-`pixi run android-build`. How it works, its limits, and how to keep the books in the
-flash across switches: [docs/firmware-switcher.md](docs/firmware-switcher.md).
+`pixi run android-build`. Releases signed with the project's key are also in its own
+F-Droid repository, `https://daafip.github.io/esp32-ereader/fdroid/repo` (the release
+notes give the link with the key's fingerprint), so F-Droid keeps the app up to date.
+How it works, its limits, and how to keep the books in the flash across switches:
+[docs/firmware-switcher.md](docs/firmware-switcher.md).
 
 ## References
 

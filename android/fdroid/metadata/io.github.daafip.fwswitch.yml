@@ -1,0 +1,29 @@
+# F-Droid metadata of the firmware switcher, for the repository that the release
+# workflow publishes on GitHub Pages (tools/make_fdroid_repo.sh). Format:
+# https://f-droid.org/docs/Build_Metadata_Reference/. The icon (io.github.daafip.fwswitch/
+# en-US/icon.png, also the repository's) is ic_launcher_foreground.xml drawn at 512 px:
+# the APK's icon is a vector, which F-Droid can't show.
+Categories:
+  - Connectivity
+  - System
+License: GPL-3.0-or-later
+AuthorName: Daafip
+WebSite: https://github.com/Daafip/esp32-ereader
+SourceCode: https://github.com/Daafip/esp32-ereader/tree/main/android
+IssueTracker: https://github.com/Daafip/esp32-ereader/issues
+Changelog: https://github.com/Daafip/esp32-ereader/releases
+
+Name: Firmware switcher
+Summary: Switch an ESP32-C6 e-reader between its firmware and ESPHome over USB
+Description: |-
+  Puts the e-reader firmware or ESPHome on a FireBeetle 2 ESP32-C6 with a 7.5"
+  e-paper panel (the home-built reader of github.com/Daafip/esp32-ereader) over a
+  USB-C OTG cable, without a PC.
+
+  Choose the two firmware files once (the reader's full image and ESPHome's factory
+  image); then one tap installs either. The app resets the board into download mode
+  itself (or asks for BOOT + RST while it sleeps), writes only what changed, checks
+  it and restarts the board. When both firmwares share a partition table, settings
+  and the books in the flash stay.
+
+  ESP32-C6 boards on their own USB port only. Needs a phone with USB host (OTG).

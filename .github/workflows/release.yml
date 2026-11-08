@@ -59,11 +59,17 @@ jobs:
           FWSWITCH_KEYSTORE_PASSWORD: ${{ secrets.FWSWITCH_KEYSTORE_PASSWORD }}
           FWSWITCH_KEY_ALIAS: ${{ secrets.FWSWITCH_KEY_ALIAS }}
           FWSWITCH_KEY_PASSWORD: ${{ secrets.FWSWITCH_KEY_PASSWORD }}
+          FDROID_KEY_ALIAS: ${{ vars.FDROID_KEY_ALIAS }}
         run: |
           if [ -n "$FWSWITCH_KEYSTORE_B64" ]; then
             echo "$FWSWITCH_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fwswitch.jks"
             export FWSWITCH_KEYSTORE="$RUNNER_TEMP/fwswitch.jks"
             echo "FWSWITCH_SIGNED=1" >> "$GITHUB_ENV"
+            # the F-Droid repository key's fingerprint, for the release notes (not secret)
+            fp=$(pixi run -e android keytool -list -v -keystore "$FWSWITCH_KEYSTORE" \
+                   -storepass:env FWSWITCH_KEYSTORE_PASSWORD -alias "${FDROID_KEY_ALIAS:-fdroid}" \
+                   2>/dev/null | sed -n 's/^.*SHA256: *//p' | tr -d ':' || true)
+            [ -n "$fp" ] && echo "FDROID_FINGERPRINT=$fp" >> "$GITHUB_ENV"
           else
             echo "::warning::no FWSWITCH_KEYSTORE_B64 secret: the APK is signed with a debug key"
           fi
@@ -76,6 +82,22 @@ jobs:
 
       - name: Browser installer
         run: pixi run installer
+
+      - name: F-Droid repository (GitHub Pages, fdroid/repo)
+        # Only with the release key: F-Droid updates need the same signature every time.
+        # A failure here doesn't hold up the firmware release.
+        if: env.FWSWITCH_SIGNED == '1'
+        continue-on-error: true
+        env:
+          FWSWITCH_KEYSTORE_B64: ${{ secrets.FWSWITCH_KEYSTORE_B64 }}
+          FWSWITCH_KEYSTORE_PASSWORD: ${{ secrets.FWSWITCH_KEYSTORE_PASSWORD }}
+          FDROID_KEY_ALIAS: ${{ vars.FDROID_KEY_ALIAS }}
+        run: |
+          pipx install fdroidserver==2.4.5
+          echo "$FWSWITCH_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fwswitch.jks"
+          FWSWITCH_KEYSTORE="$RUNNER_TEMP/fwswitch.jks" pixi run -e android bash tools/make_fdroid_repo.sh \
+            "out/firmware/fw-switch-$VERSION.apk" out/installer/fdroid
+          rm -f "$RUNNER_TEMP/fwswitch.jks"
 
       - uses: actions/upload-pages-artifact@v5
         with:

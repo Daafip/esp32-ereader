@@ -87,7 +87,8 @@ Android app below). Once a card is fitted, flash `reader_firebeetle75` (settings
 the books in the flash don't).
 
 **Switching the FireBeetle to ESPHome and back:** the Android app
-`fw-switch-x.x.x.apk` (in the releases) puts the reader or ESPHome on the board over a
+`fw-switch-x.x.x.apk` (in the releases, or through F-Droid: see
+[firmware-switcher.md](firmware-switcher.md)) puts the reader or ESPHome on the board over a
 USB-C OTG cable, without a PC. Choose the two firmware files once (the reader's
 `firebeetle-75-flash-reader-x.x.x.bin`, ESPHome's factory image), then tap Install. With
 ESPHome's own partition layout every switch erases the books in the flash and both

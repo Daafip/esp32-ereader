@@ -19,6 +19,13 @@ Updating: a release signed with the project's release key installs over the copy
 have. One signed with a debug key (the release notes say which) doesn't: uninstall the
 old app first, and choose the two firmware files again.
 
+**Through F-Droid** (or Droid-ify, Neo Store): releases signed with the release key are
+also in the project's own F-Droid repository on GitHub Pages. Add
+`https://daafip.github.io/esp32-ereader/fdroid/repo` as a repository (F-Droid: Settings
+-> Repositories -> +); the release notes give the link with the key's fingerprint, and
+<https://daafip.github.io/esp32-ereader/fdroid/repo/> shows it as a QR code. F-Droid
+then offers each new release as an update.
+
 ## Build
 
 ```
@@ -34,30 +41,45 @@ and Gradle come from pixi's `android` environment. To install a build, either ru
 and open it. The app's version is the firmware version passed as `-PappVersion`
 (versionCode: 2.0.0 -> 20000); local builds are 0.0.0.
 
-## Release signing (maintainers)
+## Release signing and the F-Droid repository (maintainers)
 
 `.github/workflows/release.yml` builds `fw-switch-<version>.apk` for every release. With
-these repository secrets (Settings -> Secrets and variables -> Actions) it signs it with
-the release key, so each release installs over the last; without them it signs with the
-runner's debug key (a different one every time) and warns.
+the secrets below it signs it with the release key, so each release installs over the
+last, and publishes the F-Droid repository on GitHub Pages (`fdroid/repo`, made by
+`tools/make_fdroid_repo.sh` with fdroidserver; its index is signed with a second key).
+Without them it signs the APK with the runner's debug key (a different one every time),
+warns, and leaves the F-Droid repository out: F-Droid can't update an app whose
+signature changes. `installer.yml` (Pages without a firmware release) makes the
+repository again from the latest release's APK, as Pages is replaced as a whole.
 
-| Secret | Value |
-|---|---|
-| `FWSWITCH_KEYSTORE_B64` | the keystore file, base64 (`base64 -w0 fwswitch.jks`) |
-| `FWSWITCH_KEYSTORE_PASSWORD` | the keystore's password |
-| `FWSWITCH_KEY_ALIAS` | the key's alias (`fwswitch` below) |
-| `FWSWITCH_KEY_PASSWORD` | the key's password |
-
-Make the keystore once, outside the repository, and keep a backup: without it, no later
-release installs over an installed app.
+One keystore holds both keys: `fwswitch` signs the APK, `fdroid` the repository index.
+Make it once, outside the repository, and keep a backup: without it no later release
+installs over the app, and F-Droid users would have to add the repository again.
 
 ```
 pixi run -e android keytool -genkeypair -v -keystore ~/fwswitch.jks -alias fwswitch \
     -keyalg RSA -keysize 4096 -validity 10000
+pixi run -e android keytool -genkeypair -v -keystore ~/fwswitch.jks -alias fdroid \
+    -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 ~/fwswitch.jks > ~/fwswitch.jks.b64   # the first secret's value
 ```
 
-A local release build uses the same key when `FWSWITCH_KEYSTORE` (the file) and the
-three `FWSWITCH_*` passwords/alias are set in the environment.
+The keystore is PKCS12, so each key's password is the keystore's. In GitHub: Settings ->
+Secrets and variables -> Actions -> New repository secret:
+
+| Secret | Value |
+|---|---|
+| `FWSWITCH_KEYSTORE_B64` | the contents of `fwswitch.jks.b64` |
+| `FWSWITCH_KEYSTORE_PASSWORD` | the keystore's password |
+| `FWSWITCH_KEY_ALIAS` | `fwswitch` |
+| `FWSWITCH_KEY_PASSWORD` | the keystore's password again |
+
+A different alias for the repository key: the repository variable `FDROID_KEY_ALIAS`.
+The next release then has a signed APK, the F-Droid repository, and the repository
+link with its fingerprint in the release notes. A local release build uses the key when
+`FWSWITCH_KEYSTORE` (the file) and the other `FWSWITCH_*` values are in the
+environment; `tools/make_fdroid_repo.sh <apk> <dir>` makes the repository locally
+(`pip install fdroidserver`).
 
 ## The two files
 

@@ -1,6 +1,8 @@
 # Publishes the browser installer (https://daafip.github.io/esp32-ereader/) when
 # its page changes on main, with the firmware of the latest release: page fixes go
 # online without a firmware release. New versions are published by release.yml.
+# Pages is replaced as a whole, so the F-Droid repository (fdroid/repo) is made again
+# from the latest release's APK.
 # Runs by hand too (Actions -> installer -> Run workflow).
 name: installer
 
@@ -10,6 +12,8 @@ on:
     paths:
       - installer/**
       - tools/make_installer.py
+      - tools/make_fdroid_repo.sh
+      - android/fdroid/**
       - .github/workflows/installer.yml
   workflow_dispatch:
 
@@ -34,10 +38,34 @@ jobs:
       - name: Firmware of the latest release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download --repo "$GITHUB_REPOSITORY" --pattern '*-reader-*.bin' --dir release
+        run: |
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern '*-reader-*.bin' \
+            --pattern 'fw-switch-*.apk' --dir release
 
       - name: Installer page
         run: python3 tools/make_installer.py --release release --out out/installer
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: F-Droid repository (fdroid/repo)
+        continue-on-error: true
+        env:
+          FWSWITCH_KEYSTORE_B64: ${{ secrets.FWSWITCH_KEYSTORE_B64 }}
+          FWSWITCH_KEYSTORE_PASSWORD: ${{ secrets.FWSWITCH_KEYSTORE_PASSWORD }}
+          FDROID_KEY_ALIAS: ${{ vars.FDROID_KEY_ALIAS }}
+        run: |
+          apk=$(ls release/fw-switch-*.apk 2>/dev/null | head -1)
+          if [ -z "$FWSWITCH_KEYSTORE_B64" ] || [ -z "$apk" ]; then
+            echo "::notice::no release key or no APK in the latest release: no F-Droid repository"
+            exit 0
+          fi
+          pipx install fdroidserver==2.4.5
+          echo "$FWSWITCH_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fwswitch.jks"
+          FWSWITCH_KEYSTORE="$RUNNER_TEMP/fwswitch.jks" bash tools/make_fdroid_repo.sh "$apk" out/installer/fdroid
+          rm -f "$RUNNER_TEMP/fwswitch.jks"
 
       - uses: actions/upload-pages-artifact@v5
         with:
