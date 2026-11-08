@@ -27,7 +27,7 @@
     <string name="step_done">Klaar: %1$s staat op het bord.</string>
     <string name="step_declined">Niets veranderd; het bord herstart.</string>
     <string name="confirm_title">Andere partitietabel</string>
-    <string name="confirm_message">Het flashgeheugen van het bord is anders ingedeeld dan dit image. Installeren schrijft het hele image: de instellingen en de boeken in het flashgeheugen gaan verloren.</string>
+    <string name="confirm_message">Het flashgeheugen van het bord is anders ingedeeld dan dit image. Installeren schrijft het hele image en wist de gegevensgebieden van die indeling: de instellingen en de boeken in het flashgeheugen gaan verloren. Het wissen van de boekenruimte van de lezer duurt ongeveer een halve minuut.</string>
     <string name="confirm_yes">Toch installeren</string>
     <string name="cancel">Annuleren</string>
     <string name="err_bad_image">Geen bruikbaar firmwarebestand: %1$s</string>

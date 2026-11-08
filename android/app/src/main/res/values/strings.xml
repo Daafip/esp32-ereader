@@ -27,7 +27,7 @@
     <string name="step_done">Done: %1$s is on the board.</string>
     <string name="step_declined">Nothing changed; the board restarts.</string>
     <string name="confirm_title">Other partition table</string>
-    <string name="confirm_message">The board\'s flash is laid out differently from this image. Installing it writes the whole image: the settings and the books in the flash are lost.</string>
+    <string name="confirm_message">The board\'s flash is laid out differently from this image. Installing it writes the whole image and erases the data areas of its layout: the settings and the books in the flash are lost. Erasing the reader\'s book space takes about half a minute.</string>
     <string name="confirm_yes">Install anyway</string>
     <string name="cancel">Cancel</string>
     <string name="err_bad_image">Not a usable firmware file: %1$s</string>

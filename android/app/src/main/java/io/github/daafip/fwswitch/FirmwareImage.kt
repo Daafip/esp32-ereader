@@ -228,12 +228,22 @@ object Planner {
     }
 
     /**
-     * Another layout: the whole image (its nvs stretch is blank, so settings start fresh),
-     * plus blanking the nvs partitions it doesn't reach: they hold the old firmware's bytes.
+     * Another layout: the whole image, then every data partition of the new layout the
+     * image doesn't reach is blanked (nvs, the reader's books, coredump, otadata, ...).
+     * The old firmware's bytes lie there, and the layouts overlap: ESPHome keeps its
+     * settings, and the space for its second app, inside the reader's books partition. A
+     * file system that half survives is worse than none: the reader mounted one and found
+     * a damaged book, where an erased partition makes it format a fresh one.
      */
     fun wholeImage(image: FirmwareImage): List<Region> =
         listOf(Region(0, image.size)) +
-            image.partitions.filter { it.isNvs && it.offset >= image.size }.map { Region(it.offset, it.size, blank = true) }
+            image.partitions
+                .filter { it.type == Partition.TYPE_DATA && it.end > image.size }
+                .sortedBy { it.offset }
+                .map {
+                    val from = maxOf(it.offset, image.size)
+                    Region(from, it.end - from, blank = true)
+                }
 
     fun data(image: FirmwareImage, r: Region): ByteArray =
         if (r.blank) ByteArray(r.length) { 0xFF.toByte() } else image.bytes.copyOfRange(r.offset, r.end)

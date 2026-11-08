@@ -57,9 +57,16 @@ table with a factory app and no `otadata`. If it doesn't, use ESPHome's own layo
 (below).
 
 With ESPHome's own layout, the board's table differs from the image's on every switch.
-The app then asks first and writes the whole image. The settings of the firmware you
-install start fresh, and the books in flash are gone: the reader formats its `books`
-partition when it finds no file system there.
+The app then asks first, writes the whole image and erases every data partition of the
+new layout that the image doesn't cover: going to ESPHome its `nvs`, going back to the
+reader its `books` and `coredump` (2 MB: about half a minute). The settings of the
+firmware you install start fresh, and the reader formats an empty `books` partition.
+
+The erase matters because the layouts overlap: ESPHome keeps its `nvs` (0x390000) and
+the space for its second app (0x1D0000) inside the reader's `books` (0x1F0000-0x3F0000).
+Until 2026-11-08 the app only blanked `nvs` partitions; back on the reader, the start of
+the old file system had survived, the reader mounted it, and a book in it was damaged
+("Read error", "file too short").
 
 ## Switching
 
@@ -92,8 +99,8 @@ source (`loader.py`, `targets/esp32c3.py` and `esp32c6.py`, esp-pylib's
 - **Plan:** MD5 of the board's partition table (0x8000, 0xC00 bytes) against the
   image's, or against the other file's when its entries are the same. If they match,
   it writes the image minus its data partitions (`otadata` is still written).
-  Otherwise it writes the whole image, and blanks `nvs` partitions that lie beyond
-  the end of the image.
+  Otherwise it writes the whole image, and blanks the data partitions of the new
+  layout (everything but apps) where they lie beyond the end of the image.
 - **Writing:** zlib level 9, 1 KB blocks (`FLASH_DEFL_BEGIN`/`DATA`; the ROM erases on
   BEGIN), a timeout per block from the bytes it inflates to, and an MD5 read-back
   per stretch. No `FLASH_DEFL_END`, because to the ROM that means "leave the loader".
@@ -116,5 +123,6 @@ use Android APIs; the tests (`app/src/test`) run the rest against `FakeRom`.
 - [ ] Download mode: reset over USB while the reader is awake; BOOT + RST while it sleeps
 - [ ] Reader → ESPHome on the reader's table: settings and books still there after switching back
 - [ ] ESPHome with `partitions: partitions-fb75-flash.csv` builds and runs (factory app, no otadata)
-- [ ] ESPHome's own layout: the app asks first, then whole-image writes both ways
+- [ ] ESPHome's own layout: the app asks first, then whole-image writes both ways; back on
+  the reader the book space is empty (formatted at start-up), no damaged books
 - [ ] How long a switch takes

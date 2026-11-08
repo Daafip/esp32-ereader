@@ -80,9 +80,18 @@ class FirmwareImageTest {
     }
 
     @Test
-    fun plansWholeImageAndBlanksNvsBeyondIt() {
-        val img = TestImages.esphomeOwnTable()
+    fun plansWholeImageAndBlanksDataBeyondIt() {
+        val img = TestImages.esphomeOwnTable() // otadata and phy_init lie inside the image
         assertEquals(listOf(Region(0, img.size), Region(0x390000, 0x70000, blank = true)), Planner.wholeImage(img))
+        val reader = TestImages.reader() // nvs inside; books and coredump beyond
+        assertEquals(
+            listOf(
+                Region(0, reader.size),
+                Region(0x1F0000, 0x200000, blank = true),
+                Region(0x3F0000, 0x10000, blank = true),
+            ),
+            Planner.wholeImage(reader),
+        )
     }
 
     @Test

@@ -110,6 +110,23 @@ class FlasherTest {
         assertEquals(1, rom.hardResets) // back to the reader
     }
 
+    /**
+     * Reader -> ESPHome on its own layout -> reader: ESPHome's settings land inside the
+     * reader's books partition. Coming back, that partition must be erased whole, or the
+     * reader mounts the half-overwritten file system (a damaged book, 2026-11-08).
+     */
+    @Test
+    fun backFromAnotherLayoutErasesTheBooksPartition() {
+        val reader = TestImages.reader()
+        boardWithReader(reader)
+        val esphome = TestImages.esphomeOwnTable()
+        assertTrue(flasher(Recorder(confirm = true)).flash(esphome, listOf(reader)))
+        rom.flash.fill(0x44, 0x390000, 0x392000) // ESPHome ran and saved its settings
+        assertTrue(flasher(Recorder(confirm = true)).flash(reader, listOf(esphome)))
+        assertArrayEquals(reader.bytes, slice(rom.flash, 0, reader.size))
+        assertTrue(slice(rom.flash, 0x1F0000, 0x400000).all { it == 0xFF.toByte() }) // books, coredump
+    }
+
     @Test
     fun otherLayoutWritesWholeImageAndBlanksItsNvs() {
         boardWithReader()
