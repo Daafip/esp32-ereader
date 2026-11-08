@@ -44,9 +44,12 @@ void Book::close() {
 bool Book::readPage(uint32_t n, uint8_t *dst) {
   if (!open_ || n >= header_.pageCount) return false;
   storage::FileReader reader(file_);
-  const t5b::Error err = t5b::readPage(reader, header_, n, dst, inflater_);
-  if (err != t5b::Error::None) Serial.printf("book: page %u: %s\n", unsigned(n), t5b::errorText(err));
-  return err == t5b::Error::None;
+  readError_ = t5b::readPage(reader, header_, n, dst, inflater_);
+  if (readError_ != t5b::Error::None) {
+    Serial.printf("book: %s page %u (v%u): %s\n", path_, unsigned(n), unsigned(header_.version),
+                  t5b::errorText(readError_));
+  }
+  return readError_ == t5b::Error::None;
 }
 
 bool Book::readCover(uint8_t *dst) {

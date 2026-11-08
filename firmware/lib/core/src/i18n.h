@@ -23,6 +23,8 @@ enum class Lang : uint8_t { En, Nl, Count };
   /* footer actions */                                                                     \
   X(Open, "open", "open")                                                                  \
   X(Back, "back", "terug")                                                                 \
+  X(MenuAction, "menu", "menu")                                                            \
+  X(Menu, "Menu", "Menu")                                                                  \
   X(Go, "go", "ga")                                                                        \
   X(Edit, "edit", "wijzig")                                                                \
   X(ShowPage, "show page", "toon pagina")                                                  \

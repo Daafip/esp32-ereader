@@ -223,6 +223,14 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
 
 ## Menu
 
+Without an open book (none yet, or one that couldn't be read), going back from the
+library (hold MENU; touch: long press or the "menu" button) opens a short menu instead:
+Library, Statistics, Wi-Fi transfer, Settings, About and Sleep.
+
+A book that can't be read shows "Read error" with the reason; any button goes back to
+the library, and that book is no longer opened at start-up. Delete it or send it again
+on the Wi-Fi page.
+
 - **Resume**: back to the page.
 - **Chapters**: jump to a chapter; start page on the right, a dot marks the current one.
 - **Bookmarks**: the first row adds or removes a bookmark on the current page, the

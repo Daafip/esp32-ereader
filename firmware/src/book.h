@@ -23,8 +23,10 @@ class Book {
   // The screen it was made for (index into kScreens; the 7.5" has two).
   int screen() const { return screen_; }
 
-  // Reads page n (kPageBytes) into dst, inflating it from a version 2 book.
+  // Reads page n (kPageBytes) into dst, inflating it from a version 2 book. On
+  // failure readError() says why (TooShort: the file couldn't be read).
   bool readPage(uint32_t n, uint8_t *dst);
+  t5b::Error readError() const { return readError_; }
 
   // Optional cover image (bookprep / the web converter add it for EPUBs).
   const t5b::Cover &cover() const { return cover_; }
@@ -49,6 +51,7 @@ class Book {
   char path_[128] = {};
   char stem_[72] = {};
   const char *error_ = "";
+  t5b::Error readError_ = t5b::Error::None;
   uint32_t id_ = 0;
   int screen_ = 0;
   bool open_ = false;

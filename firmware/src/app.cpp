@@ -99,6 +99,13 @@ const S kMainItems[] = {S::Resume,  S::Chapters,   S::Bookmarks,    S::GoTo,
                         S::Library, S::Statistics, S::WifiTransfer, S::Settings,
                         S::About,   S::Lock,       S::Sleep};
 constexpr int kMainCount = sizeof(kMainItems) / sizeof(kMainItems[0]);
+// Without an open book (none yet, or it can't be read): what doesn't need one, so
+// Wi-Fi transfer and Settings stay reachable from the library.
+const S kHomeItems[] = {S::Library, S::Statistics, S::WifiTransfer,
+                        S::Settings, S::About,      S::Sleep};
+constexpr int kHomeCount = sizeof(kHomeItems) / sizeof(kHomeItems[0]);
+const S *mainItems() { return book.isOpen() ? kMainItems : kHomeItems; }
+int mainCount() { return book.isOpen() ? kMainCount : kHomeCount; }
 bool messageOffersWifi = false;  // "No books yet": MENU starts Wi-Fi transfer
 bool messageToLibrary = false;   // "Made for landscape": any key goes back to the library
 int wifiStep = 0;                // QR shown: 0 = automatic, 1 = join Wi-Fi, 2 = open page
@@ -288,6 +295,26 @@ bool drawPage(uint32_t n, int battery) {
   return true;
 }
 
+// A page that can't be read: say why, and let any button go back to the library.
+// The book is forgotten as the last one, or a restart (or a wake) would open it
+// and fail again.
+void showReadError() {
+  const t5b::Error err = book.readError();
+  const char *why = err == t5b::Error::TooShort || err == t5b::Error::None
+                        ? tr(kBooksInFlash ? S::FileDamaged : S::CardRemoved)
+                        : t5b::errorText(err);  // the file's contents, e.g. "corrupt page"
+  Serial.printf("message: %s / %s / %s\n", tr(S::ReadError), book.path(), why);
+  ui::message(ui::Icon::Card, tr(S::ReadError), baseName(book.path()), why,
+              tr(S::BackAnyButton));
+  display::show(Refresh::Full);
+  setScreen(Screen::Message);
+  messageOffersWifi = false;
+  messageToLibrary = true;
+  book.close();
+  rtc.bookPath[0] = '\0';
+  prefs::setLastBook("");
+}
+
 void showReading(Refresh requested) {
   // Big panels (T5-4.7") can't keep the shown image through deep sleep: draw
   // the page that is on the glass again, so this turn can still be partial.
@@ -297,8 +324,7 @@ void showReading(Refresh requested) {
     display::assumeShown();
   }
   if (!drawPage(page, batteryPct)) {
-    showMessage(ui::Icon::Card, tr(S::ReadError), baseName(book.path()),
-                tr(kBooksInFlash ? S::FileDamaged : S::CardRemoved));
+    showReadError();
     return;
   }
   const int chapter = book.chapterForPage(page);
@@ -385,7 +411,7 @@ Refresh menuRefresh() {
 }
 
 void mainItem(int i, ui::Item &it, void *) {
-  const S id = kMainItems[i];
+  const S id = mainItems()[i];
   strlcpy(it.label, tr(id), sizeof(it.label));
   it.chevron = id != S::Resume && id != S::Sleep && id != S::Lock;
   if (id == S::Resume) snprintf(it.detail, sizeof(it.detail), "%d%%", percentRead());
@@ -393,13 +419,15 @@ void mainItem(int i, ui::Item &it, void *) {
 }
 
 void renderMainMenu() {
-  ui::menu(book.header().title, list, mainItem, nullptr, listNext(), menuHint(S::Open), batteryPct);
+  String title = book.isOpen() ? String(book.header().title) : prefs::deviceName();
+  if (!title.length()) title = tr(S::Menu);
+  ui::menu(title.c_str(), list, mainItem, nullptr, listNext(), menuHint(S::Open), batteryPct);
   display::show(menuRefresh());
 }
 
 void openMainMenu() {
   input::setRepeat(true);
-  list.reset(kMainCount, ui::menuRows(), 0);
+  list.reset(mainCount(), ui::menuRows(), 0);
   setScreen(Screen::MainMenu);
   renderMainMenu();
 }
@@ -516,7 +544,11 @@ void renderLibrary() {
   String title = libraryFolder;
   if (!title.length()) title = prefs::deviceName();
   if (!title.length()) title = tr(S::Library);
-  ui::menu(title.c_str(), list, libraryItem, nullptr, listNext(), menuHint(S::Open), batteryPct);
+  // Hold MENU: up a folder, back to the menu, or (no book open) to the short menu.
+  const ui::Hint hint = libraryFolder.length() || book.isOpen()
+                            ? menuHint(S::Open)
+                            : ui::Hint{Button::Menu, tr(S::Open), tr(S::MenuAction)};
+  ui::menu(title.c_str(), list, libraryItem, nullptr, listNext(), hint, batteryPct);
   display::show(menuRefresh());
 }
 
@@ -608,9 +640,14 @@ void openAbout() {
   } else {
     snprintf(v[1], sizeof(v[1]), "%s", tr(S::UsbPower));
   }
-  snprintf(v[2], sizeof(v[2]), "%s", book.header().title);
-  snprintf(v[3], sizeof(v[3]), tr(S::PositionValue), unsigned(page + 1),
-           unsigned(book.pageCount()), book.chapterForPage(page) + 1, book.tocCount());
+  if (book.isOpen()) {
+    snprintf(v[2], sizeof(v[2]), "%s", book.header().title);
+    snprintf(v[3], sizeof(v[3]), tr(S::PositionValue), unsigned(page + 1),
+             unsigned(book.pageCount()), book.chapterForPage(page) + 1, book.tocCount());
+  } else {
+    strlcpy(v[2], "-", sizeof(v[2]));
+    strlcpy(v[3], "-", sizeof(v[3]));
+  }
   char card[16] = "-";
   const int64_t room = storage::freeBytes();
   if (room >= 0) formatBytes(uint64_t(room), card, sizeof(card));
@@ -763,12 +800,21 @@ void readingKey(Key k) {
   }
 }
 
+// Out of the menu: the open book, or the library when there is none.
+void backToBook() {
+  if (book.isOpen()) {
+    resume();
+  } else {
+    openLibrary(libraryFolder);
+  }
+}
+
 void mainMenuKey(Key k) {
   switch (listKey(k)) {
     case ListAction::Moved: renderMainMenu(); break;
-    case ListAction::Back: resume(); break;
+    case ListAction::Back: backToBook(); break;
     case ListAction::Select:
-      switch (kMainItems[list.selected()]) {
+      switch (mainItems()[list.selected()]) {
         case S::Chapters: openChapters(); break;
         case S::Bookmarks: openBookmarks(); break;
         case S::GoTo: openGoTo(); break;
@@ -782,7 +828,7 @@ void mainMenuKey(Key k) {
           resume();
           break;
         case S::Sleep: enterSleep(true);
-        default: resume(); break;
+        default: backToBook(); break;
       }
       break;
     case ListAction::None: break;
@@ -847,10 +893,8 @@ void libraryKey(Key k) {
     case ListAction::Back:
       if (libraryFolder.length()) {
         openLibrary("", libraryFolder);  // up to /books, on this folder
-      } else if (book.isOpen()) {
-        openMainMenu();
       } else {
-        renderLibrary();  // nothing to go back to
+        openMainMenu();  // without a book: the short menu (Wi-Fi transfer, Settings, ...)
       }
       break;
     case ListAction::Select: {
@@ -990,7 +1034,7 @@ void handle(Key k) {
     case Screen::None:
       if (locked && k != Key::MenuLong) break;  // locked: only the unlock gesture
       if (locked) setLocked(false);
-      if (book.isOpen()) resume();
+      backToBook();
       break;
   }
 }

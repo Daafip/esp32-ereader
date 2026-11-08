@@ -262,6 +262,8 @@ Measured on a 797-page novel (7.5", all pages): PackBits 2.5×, Group5 4.2×, zl
 - [x] Writers: `t5b.py` (v2 default, level 9; `prep --uncompressed` for firmware up to 1.3.1), `bookprep.js` (`compressPage`/`assembleT5b`, pages compressed as rendered; the page sizes a book after typesetting and sends exactly the pages that fit; the size line is an estimate from four compressed pages), devserver
 - [x] Tests: inflater against the system zlib (all levels and strategies, stored/fixed/dynamic blocks, input in 1-byte pieces, every truncation, bit flips), a v2 book from the Python writer read by the C++ code, index and page errors; Python v1/v2 and corrupt files; JS parity by content (zlib levels differ); browser tests with card sizes for compressed books. A 797-page novel: 38.3 MB -> 7.9 MB, every page the same through the C++ reader as through Python, 0.3 ms a page on the PC
 - [x] 🧑 Compressed books on the board: David, 2026-11-08: "working"
+- [x] Read error screen (David: "stuck in this menu"): says why (the file's contents, or "may be damaged" / "card removed?" when it can't be read), any button goes back to the library, and the book is no longer the last one (a restart reopened it and failed again)
+- [x] Short menu without an open book (David: "i cant access the menu to activate wifi if a book is corrupt"): hold MENU in the library opens Library, Statistics, Wi-Fi transfer, Settings, About, Sleep (`kHomeItems`); the library's hold hint says "menu"; About shows "-" for the book
 
 ---
 
