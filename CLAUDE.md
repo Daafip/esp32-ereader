@@ -22,7 +22,7 @@ and ESPHome over a USB-OTG cable (ROM loader protocol as esptool `--no-stub`;
 
 Phases 0-5 and 7-9 are written and build (7: T5-4.7" S3, 8: M5PaperS3/M5Paper,
 9: ideas from the Pala One firmware). **The T5-2.13 runs (David's V2.3.1 board,
-2026-10-13, release 1.0.0; 1.1.0 on 2026-10-14; 1.2.0, 1.3.0 and 1.3.1 on 2026-10-20; 2.0.0 on 2026-11-08: FireBeetle 7.5", compressed books)**: panel, one button, SD, Wi-Fi transfer, partial refresh
+2026-10-13, release 1.0.0; 1.1.0 on 2026-10-14; 1.2.0, 1.3.0 and 1.3.1 on 2026-10-20; 2.0.0 on 2026-11-08: FireBeetle 7.5", compressed books; 2.0.1 the same day: the Android app in the release)**: panel, one button, SD, Wi-Fi transfer, partial refresh
 with a custom LUT; results in `docs/hardware.md`. The three 4.7" boards have never
 run. The FireBeetle 7.5" passed its hardware test (`fb75_test`, 2026-10-26); the reader
 runs on it with partial page turns (flash build, no card, 2026-10-27). Its USB port

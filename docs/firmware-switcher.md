@@ -10,7 +10,7 @@ build (`reader_firebeetle75_flash`), which has one app slot.
 
 ## Install
 
-Every release from 2.0.0 has the app: `fw-switch-<version>.apk` on the
+Every release from 2.0.1 has the app: `fw-switch-<version>.apk` on the
 [releases page](https://github.com/Daafip/esp32-ereader/releases). Open it on the
 phone and allow installing apps from that source (the browser or the file manager). It
 runs on Android 10 and later, on a phone with USB host (OTG) support.
