@@ -82,9 +82,17 @@ drag to the page it starts at (it starts at the page shown in the preview, which
 along), and it says which pages fit ("Pages 301–480 of 797"). The part gets its own
 contents and the range in its title ("Title (301–480)"); it goes without the original,
 so there's no Restyle for it. On the PC: `--first-page 301 --max-pages 180`. That build
-has no room for a firmware update over Wi-Fi either:
-update it over USB. Once a card is fitted, flash `reader_firebeetle75` (settings stay,
+has no room for a firmware update over Wi-Fi either: update it over USB (or with the
+Android app below). Once a card is fitted, flash `reader_firebeetle75` (settings stay,
 the books in the flash don't).
+
+**Switching the FireBeetle to ESPHome and back:** the Android app
+`fw-switch-x.x.x.apk` (in the releases) puts the reader or ESPHome on the board over a
+USB-C OTG cable, without a PC. Choose the two firmware files once (the reader's
+`firebeetle-75-flash-reader-x.x.x.bin`, ESPHome's factory image), then tap Install. With
+ESPHome's own partition layout every switch erases the books in the flash and both
+firmwares' settings (the app asks first); built on the reader's layout, both stay. See
+[firmware-switcher.md](firmware-switcher.md).
 
 **On the PC:** `pixi run prep book.epub --out out/ --preview` (`--font`, `--size`, `--mono`,
 `--lang`, `--bionic`, `--no-cover`, ...: `pixi run prep --help`; add `--screen 4.7in` for

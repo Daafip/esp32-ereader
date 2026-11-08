@@ -44,7 +44,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; `reader_t547`, `reader_m5papers3`, `reader_m5paper`; `reader_firebeetle75`, `reader_firebeetle75_flash`, `fb75_test`) |
 | Images for browser/OTA flashing | `pixi run fw-dist` -> `out/firmware/` |
 | Browser installer (keeps NVS) | `pixi run installer` -> `out/installer/` (after `fw-build`) |
-| Release on GitHub | bump `FW_VERSION`, then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images) |
+| Release on GitHub | bump `FW_VERSION`, then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images and `fw-switch-<v>.apk`) |
 | Serial monitor | `pixi run fw-monitor` |
 | Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` (`--screen 4.7in`, `7.5in`, `7.5in-landscape`) |
 | Font comparison | `pixi run font-sheet book.epub --font a.ttf --sizes 11 12 13` |
@@ -52,7 +52,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
 | Browser converter tests | `pixi run web-test` (Node parity + headless Chromium) |
 | Web page without the reader | `pixi run web-dev` (`--lan` for a phone, `--screen 4.7in`, `--card-mb 5` for a full card) |
-| Android firmware switcher | `pixi run android-build` -> `out/android/fw-switch.apk`; `pixi run android-test` (pixi env `android`; SDK in `~/Android/Sdk`) |
+| Android firmware switcher | `pixi run android-build` -> `out/android/fw-switch.apk`; `pixi run android-test` (pixi env `android`; SDK in `~/Android/Sdk`); release build: `pixi run -e android bash tools/android.sh assembleRelease -PappVersion=X.Y.Z` (signing: `docs/firmware-switcher.md`) |
 
 ## Conventions
 

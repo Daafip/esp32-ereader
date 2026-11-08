@@ -3,6 +3,9 @@
 # .github/workflows/release.yml). Usage: tools/release_notes.sh <version>
 set -euo pipefail
 v=$1
+# FWSWITCH_SIGNED=1: the APK has the release key (release.yml), so updates install over it
+signing="This build is signed with a debug key: if Android won't install it over an older copy, uninstall that first (the app then forgets its two firmware files)."
+[ -n "${FWSWITCH_SIGNED:-}" ] && signing="Signed with the project's release key: later versions install over it."
 cat <<NOTES
 Firmware $v for every supported reader. **Tested on hardware: the LilyGo T5-2.13
 (V2.3.1) and the home-built FireBeetle 7.5" without a card;** the FireBeetle's card
@@ -30,6 +33,11 @@ Or with <https://espressif.github.io/esptool-js/>: Flash Address \`0x0\`, the \`
 **Update over Wi-Fi** (reader already running this firmware): Menu → Wi-Fi transfer,
 open the page, "Update firmware", choose the \`-ota.bin\` for your board. A file for
 another chip (ESP32, ESP32-S3, ESP32-C6) is refused, and so is another board's file.
+
+**Android app** \`fw-switch-$v.apk\` (Android 10 or later): puts this reader or
+ESPHome on the FireBeetle 7.5" over a USB-C OTG cable, without a PC. Open the file on
+the phone and allow installing apps from that source. See \`docs/firmware-switcher.md\`.
+$signing
 
 Diagnostic sketches for the T5-2.13 hardware checkpoints (\`docs/checkpoints.md\`):
 \`t5-panel_tester-$v.bin\`, \`t5-button_test-$v.bin\`, \`t5-sd_test-$v.bin\`,

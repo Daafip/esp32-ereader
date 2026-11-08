@@ -6,21 +6,58 @@ firmware again (no Wi-Fi, no second app slot needed), so it works with the flash
 build (`reader_firebeetle75_flash`), which has one app slot.
 
 **Status:** builds, and the flashing logic passes its tests against a fake ROM loader
-(`pixi run android-test`). It has not yet flashed a real board: see the checks at
-the end.
+(`pixi run android-test`). The checks on a real board are at the end.
 
-## Build and install
+## Install
+
+Every release from 2.0.0 has the app: `fw-switch-<version>.apk` on the
+[releases page](https://github.com/Daafip/esp32-ereader/releases). Open it on the
+phone and allow installing apps from that source (the browser or the file manager). It
+runs on Android 10 and later, on a phone with USB host (OTG) support.
+
+Updating: a release signed with the project's release key installs over the copy you
+have. One signed with a debug key (the release notes say which) doesn't: uninstall the
+old app first, and choose the two firmware files again.
+
+## Build
 
 ```
-pixi run android-build      # -> out/android/fw-switch.apk
+pixi run android-build      # -> out/android/fw-switch.apk (debug)
 pixi run android-test       # unit tests on the PC
+pixi run -e android bash tools/android.sh assembleRelease -PappVersion=2.0.0
+                            # -> out/android/fw-switch-release.apk
 ```
 
 It needs the Android SDK (platform 36) in `$ANDROID_HOME` or `~/Android/Sdk`. The JDK
-and Gradle come from pixi's `android` environment. To install the APK, either run
+and Gradle come from pixi's `android` environment. To install a build, either run
 `adb install out/android/fw-switch.apk` with USB debugging on, or copy it to the phone
-and open it (allow "install unknown apps" for the file manager). It runs on
-Android 10 and later, on a phone with USB host (OTG) support.
+and open it. The app's version is the firmware version passed as `-PappVersion`
+(versionCode: 2.0.0 -> 20000); local builds are 0.0.0.
+
+## Release signing (maintainers)
+
+`.github/workflows/release.yml` builds `fw-switch-<version>.apk` for every release. With
+these repository secrets (Settings -> Secrets and variables -> Actions) it signs it with
+the release key, so each release installs over the last; without them it signs with the
+runner's debug key (a different one every time) and warns.
+
+| Secret | Value |
+|---|---|
+| `FWSWITCH_KEYSTORE_B64` | the keystore file, base64 (`base64 -w0 fwswitch.jks`) |
+| `FWSWITCH_KEYSTORE_PASSWORD` | the keystore's password |
+| `FWSWITCH_KEY_ALIAS` | the key's alias (`fwswitch` below) |
+| `FWSWITCH_KEY_PASSWORD` | the key's password |
+
+Make the keystore once, outside the repository, and keep a backup: without it, no later
+release installs over an installed app.
+
+```
+pixi run -e android keytool -genkeypair -v -keystore ~/fwswitch.jks -alias fwswitch \
+    -keyalg RSA -keysize 4096 -validity 10000
+```
+
+A local release build uses the same key when `FWSWITCH_KEYSTORE` (the file) and the
+three `FWSWITCH_*` passwords/alias are set in the environment.
 
 ## The two files
 

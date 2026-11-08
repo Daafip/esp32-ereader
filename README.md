@@ -19,7 +19,8 @@ Flash with platform io, esptools or `pixi run fw-flash`
 | LilyGo T5-4.7" S3 | `t5-47-reader-x.x.x.bin` | `t5-47-reader-x.x.x-ota.bin` | NO - let me know! |
 | M5Stack M5PaperS3 | `m5papers3-reader-x.x.x.bin` | `m5papers3-reader-x.x.x-ota.bin` | NO - let me know! | 
 | M5Stack M5Paper | `m5paper-reader-x.x.x.bin` | `m5paper-reader-x.x.x-ota.bin` | NO - let me know! | 
-| FireBeetle 2 ESP32-C6 + Waveshare 7.5" (home-built) | `firebeetle-75-reader-x.x.x.bin` | `firebeetle-75-reader-x.x.x-ota.bin` | Hardware test only |
+| FireBeetle 2 ESP32-C6 + Waveshare 7.5" (home-built) | `firebeetle-75-reader-x.x.x.bin` | `firebeetle-75-reader-x.x.x-ota.bin` | Not with a card yet |
+| the same without a microSD card | `firebeetle-75-flash-reader-x.x.x.bin` | over USB only | Yes |
 
 The 4.7" boards and the M5 boards have not run this firmware yet: see
 [docs/checkpoints.md](docs/checkpoints.md) for what to check. The 7.5" build is a
@@ -43,6 +44,18 @@ pictures, a square picture beside the book, or the page itself), a status bar th
 bionic reading, English and Dutch menus, and settings, home Wi-Fi and factory reset
 from the phone.
 
+## Android app: switch between the reader and ESPHome
+
+The FireBeetle 7.5" can run ESPHome too (a Home Assistant dashboard, say). The Android
+app `fw-switch-x.x.x.apk` from the [releases](https://github.com/Daafip/esp32-ereader/releases)
+puts either firmware on it over a USB-C OTG cable, no PC needed: choose the two
+firmware files once (the reader's `firebeetle-75-flash-reader-x.x.x.bin` and ESPHome's
+factory image), then tap Install. It resets the board into download mode itself (or
+asks for BOOT + RST when it sleeps), writes only what changed, checks it and restarts
+the board. Android 10 or later, on a phone with USB OTG; build it yourself with
+`pixi run android-build`. How it works, its limits, and how to keep the books in the
+flash across switches: [docs/firmware-switcher.md](docs/firmware-switcher.md).
+
 ## References
 
 Hardware and display drivers:
@@ -59,6 +72,7 @@ Firmware build and flashing:
 - [esptool-js](https://github.com/espressif/esptool-js) (Apache-2.0) by Espressif: the browser installer
 - [esptool-js](https://espressif.github.io/esptool-js/): flashing from the browser
 - [QR Code generator](https://github.com/nayuki/QR-Code-generator) (MIT) by Project Nayuki: the Wi-Fi QR codes
+- [esptool](https://github.com/espressif/esptool) (GPL-2.0-or-later) by Espressif: the ROM loader protocol and reset sequences the Android app speaks, ported from its source
 
 Book conversion:
 
