@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Edge to edge: MainActivity pads the content by the system bars -->
+    <style name="Theme.FwSwitch" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">?android:attr/isLightTheme</item>
+        <item name="android:windowLightNavigationBar">?android:attr/isLightTheme</item>
+    </style>
+
+    <style name="Section">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">24dp</item>
+        <item name="android:textAppearance">?android:attr/textAppearanceMedium</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Body">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:textAppearance">?android:attr/textAppearanceSmall</item>
+    </style>
+</resources>

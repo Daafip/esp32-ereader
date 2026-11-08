@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Firmwarewisselaar</string>
+    <string name="intro">Zet de e-reader of ESPHome op de FireBeetle 7,5\" via een USB-C OTG-kabel.</string>
+    <string name="reader">E-reader</string>
+    <string name="esphome">ESPHome</string>
+    <string name="choose">Bestand kiezen</string>
+    <string name="install_reader">E-reader installeren</string>
+    <string name="install_esphome">ESPHome installeren</string>
+    <string name="reader_hint">Nog geen bestand. Kies het volledige image firebeetle-75-flash-reader-&lt;versie&gt;.bin (pixi run fw-dist).</string>
+    <string name="esphome_hint">Nog geen bestand. Kies het volledige image: firmware.factory.bin (\"Factory format\").</string>
+    <string name="file_reader">%1$s\nE-reader voor %2$s · %3$s</string>
+    <string name="file_other">%1$s\n%2$s %3$s · %4$s</string>
+    <string name="warn_not_reader">Dit bestand is niet de e-reader.</string>
+    <string name="warn_is_reader">Dit bestand is de e-reader.</string>
+    <string name="usb_none">Geen bord op USB.</string>
+    <string name="usb_present">Bord op USB.</string>
+    <string name="last_installed">Laatst geïnstalleerd vanaf deze telefoon: %1$s</string>
+    <string name="help">De USB-poort van het bord staat uit zolang het slaapt. Als de app erom vraagt: houd BOOT ingedrukt, druk op RST, laat BOOT los. Instellingen en boeken blijven staan als de partitietabel van het bord bij het image past.</string>
+    <string name="step_connecting">Verbinden…</string>
+    <string name="step_resetting">Bord herstarten in downloadmodus…</string>
+    <string name="step_waiting">Houd BOOT ingedrukt, druk op RST, laat BOOT los.</string>
+    <string name="step_checking">Bord controleren…</string>
+    <string name="step_writing">Schrijven… %1$d%%</string>
+    <string name="step_verifying">Geschreven gegevens controleren…</string>
+    <string name="step_restarting">Bord herstarten…</string>
+    <string name="step_done">Klaar: %1$s staat op het bord.</string>
+    <string name="step_declined">Niets veranderd; het bord herstart.</string>
+    <string name="confirm_title">Andere partitietabel</string>
+    <string name="confirm_message">Het flashgeheugen van het bord is anders ingedeeld dan dit image. Installeren schrijft het hele image: de instellingen en de boeken in het flashgeheugen gaan verloren.</string>
+    <string name="confirm_yes">Toch installeren</string>
+    <string name="cancel">Annuleren</string>
+    <string name="err_bad_image">Geen bruikbaar firmwarebestand: %1$s</string>
+    <string name="err_no_boot">Het bord kwam niet in downloadmodus. Houd BOOT ingedrukt, druk op RST, laat BOOT los en probeer het opnieuw.</string>
+    <string name="err_usb">USB: %1$s</string>
+    <string name="err_wrong_chip">Verkeerde chip: %1$s</string>
+    <string name="err_rom">De loader van het bord meldde een fout: %1$s</string>
+    <string name="err_timeout">Het bord antwoordt niet meer: %1$s</string>
+    <string name="err_verify">Wat het bord teruglas klopt niet: installeer opnieuw. (%1$s)</string>
+    <string name="err_cancelled">Geannuleerd.</string>
+    <string name="err_other">Mislukt: %1$s</string>
+    <string name="file_too_big">Bestand te groot voor een bord met 4 MB.</string>
+</resources>

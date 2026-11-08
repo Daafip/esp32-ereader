@@ -1,0 +1,119 @@
+# Firmware switcher (Android)
+
+An Android app (`android/`) that puts either the e-reader or ESPHome on the
+FireBeetle 2 ESP32-C6 + 7.5" over a USB-C OTG cable. Every switch writes the chosen
+firmware again (no Wi-Fi, no second app slot needed), so it works with the flash
+build (`reader_firebeetle75_flash`), which has one app slot.
+
+**Status:** builds, and the flashing logic passes its tests against a fake ROM loader
+(`pixi run android-test`). It has not yet flashed a real board: see the checks at
+the end.
+
+## Build and install
+
+```
+pixi run android-build      # -> out/android/fw-switch.apk
+pixi run android-test       # unit tests on the PC
+```
+
+It needs the Android SDK (platform 36) in `$ANDROID_HOME` or `~/Android/Sdk`. The JDK
+and Gradle come from pixi's `android` environment. To install the APK, either run
+`adb install out/android/fw-switch.apk` with USB debugging on, or copy it to the phone
+and open it (allow "install unknown apps" for the file manager). It runs on
+Android 10 and later, on a phone with USB host (OTG) support.
+
+## The two files
+
+The app keeps one file per button. Choose each once, and the app keeps its own copy.
+
+| Button | File |
+|---|---|
+| E-reader | `out/firmware/firebeetle-75-flash-reader-<version>.bin` from `pixi run fw-dist` |
+| ESPHome | the factory image: ESPHome Builder → Install → Manual download → *Factory format*, or `.esphome/build/<name>/.pioenvs/<name>/firmware.factory.bin` after `esphome compile` |
+
+Both must be **full images** (flashed at 0x0: bootloader, partition table, app). The
+app refuses app-only files (`-ota.bin`, `firmware.ota.bin`) and images for other chips.
+
+## Keeping settings and books: ESPHome on the reader's partition table
+
+When the board's partition table is the same as the image's, the app writes only the
+bootloader and the app. The reader's settings (`nvs` at 0x9000) and the books in flash
+(`books` at 0x1F0000) stay, and ESPHome keeps its own settings in the same `nvs`
+under its own namespace. For that, build ESPHome on the reader's table: put a copy
+of `firmware/partitions-fb75-flash.csv` next to the YAML and add:
+
+```yaml
+esp32:
+  board: esp32-c6-devkitc-1
+  flash_size: 4MB
+  partitions: partitions-fb75-flash.csv
+  framework:
+    type: esp-idf
+```
+
+Leave out `ota:`. That table has one app slot, so updating ESPHome over Wi-Fi can't
+work; you update it with the app instead. Not yet tried: whether ESPHome accepts a
+table with a factory app and no `otadata`. If it doesn't, use ESPHome's own layout
+(below).
+
+With ESPHome's own layout, the board's table differs from the image's on every switch.
+The app then asks first and writes the whole image. The settings of the firmware you
+install start fresh, and the books in flash are gone: the reader formats its `books`
+partition when it finds no file system there.
+
+## Switching
+
+1. Connect the board to the phone (USB-C OTG cable or adapter).
+2. Tap **Install e-reader** or **Install ESPHome**.
+3. If the board is awake, the app restarts it into download mode itself. If it
+   sleeps, its USB port is off: the app says so and waits 90 s. Hold **BOOT**, press
+   **RST**, release **BOOT**.
+4. The app writes what differs (parts the board already has are skipped), reads it
+   back (MD5), and restarts the board into the new firmware.
+
+Android asks for USB permission. Tick "always open with this app" in the dialog that
+appears when the board is plugged in, or you will be asked again each time the board
+re-appears on USB.
+
+## How it works
+
+It works as `esptool --no-stub write_flash 0x0 image.bin` does, ported from esptool's
+source (`loader.py`, `targets/esp32c3.py` and `esp32c6.py`, esp-pylib's
+`serial_reset.py`):
+
+- **USB:** Espressif's USB-Serial-JTAG (303A:1001) is a CDC-ACM device. DTR and RTS go
+  out as `SET_CONTROL_LINE_STATE`. Entering download mode uses esptool's
+  USB-Serial-JTAG sequence; restarting holds RTS for 0.2 s.
+- **ROM loader:** SLIP frames; `SYNC`; `GET_SECURITY_INFO` checks for an ESP32-C6
+  (chip id 13), and refuses secure download mode and flash encryption. The RTC
+  watchdog is switched off and the super watchdog set to feed itself (esptool does
+  this over USB-Serial-JTAG, or the chip can reset in the middle of a write). Then
+  `SPI_ATTACH` and `SPI_SET_PARAMS` (flash size from the image header).
+- **Plan:** MD5 of the board's partition table (0x8000, 0xC00 bytes) against the
+  image's, or against the other file's when its entries are the same. If they match,
+  it writes the image minus its data partitions (`otadata` is still written).
+  Otherwise it writes the whole image, and blanks `nvs` partitions that lie beyond
+  the end of the image.
+- **Writing:** zlib level 9, 1 KB blocks (`FLASH_DEFL_BEGIN`/`DATA`; the ROM erases on
+  BEGIN), a timeout per block from the bytes it inflates to, and an MD5 read-back
+  per stretch. No `FLASH_DEFL_END`, because to the ROM that means "leave the loader".
+
+Code: `FirmwareImage.kt` (image, table, plan), `EspLoader.kt` (protocol), `Flasher.kt`
+(the run), `UsbCdcPort.kt` (Android USB), `MainActivity.kt` (screen). Only the last two
+use Android APIs; the tests (`app/src/test`) run the rest against `FakeRom`.
+
+## Limits
+
+- ESP32-C6 boards on their own USB port only. USB-UART bridges (CH340, CP210x) and
+  other chips are refused.
+- No "latest release from GitHub" button yet. The flash build's image isn't in a
+  release yet (`fw-dist` added it after 1.3.1, so the next release brings it).
+
+## Checks on the real board (🧑)
+
+- [ ] The phone sees the board (303A:1001) and the permission dialog works
+- [ ] Download mode: reset over USB while the reader is awake; BOOT + RST while it sleeps
+- [ ] Reader → ESPHome on the reader's table: settings and books still there after switching back
+- [ ] ESPHome with `partitions: partitions-fb75-flash.csv` builds and runs (factory app, no otadata)
+- [ ] ESPHome's own layout: the app asks first, then whole-image writes both ways
+- [ ] How long a switch takes

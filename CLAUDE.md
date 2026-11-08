@@ -14,6 +14,9 @@ SD card on the panel's SPI bus). It turns: portrait 480×800 or landscape 800×4
 Without a card (David's build for now): env `reader_firebeetle75_flash`
 (`BOARD_BOOKS_IN_FLASH`), books in a 2 MB LittleFS partition (~43 pages), no Wi-Fi
 updates. Its button and card pins: "Your wiring" at the top of the board header.
+Phase 11: an Android app (`android/`, Kotlin) that switches that board between the reader
+and ESPHome over a USB-OTG cable (ROM loader protocol as esptool `--no-stub`;
+`docs/firmware-switcher.md`).
 
 ## Current phase
 
@@ -49,6 +52,7 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
 | Browser converter tests | `pixi run web-test` (Node parity + headless Chromium) |
 | Web page without the reader | `pixi run web-dev` (`--lan` for a phone, `--screen 4.7in`, `--card-mb 5` for a full card) |
+| Android firmware switcher | `pixi run android-build` -> `out/android/fw-switch.apk`; `pixi run android-test` (pixi env `android`; SDK in `~/Android/Sdk`) |
 
 ## Conventions
 

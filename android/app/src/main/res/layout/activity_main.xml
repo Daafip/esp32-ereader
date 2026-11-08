@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textAppearance="?android:attr/textAppearanceLarge" />
+
+        <TextView
+            style="@style/Body"
+            android:text="@string/intro" />
+
+        <TextView
+            android:id="@+id/usb"
+            style="@style/Body"
+            android:layout_marginTop="12dp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/last"
+            style="@style/Body" />
+
+        <!-- E-reader -->
+        <TextView
+            style="@style/Section"
+            android:text="@string/reader" />
+
+        <TextView
+            android:id="@+id/readerFile"
+            style="@style/Body" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            tools:ignore="ButtonStyle">
+
+            <Button
+                android:id="@+id/readerInstall"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/install_reader" />
+
+            <Button
+                android:id="@+id/readerChoose"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/choose" />
+        </LinearLayout>
+
+        <!-- ESPHome -->
+        <TextView
+            style="@style/Section"
+            android:text="@string/esphome" />
+
+        <TextView
+            android:id="@+id/esphomeFile"
+            style="@style/Body" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            tools:ignore="ButtonStyle">
+
+            <Button
+                android:id="@+id/esphomeInstall"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/install_esphome" />
+
+            <Button
+                android:id="@+id/esphomeChoose"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/choose" />
+        </LinearLayout>
+
+        <!-- Progress -->
+        <TextView
+            android:id="@+id/step"
+            style="@style/Body"
+            android:layout_marginTop="24dp"
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <ProgressBar
+            android:id="@+id/progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:max="1000"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/cancel"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/cancel"
+            android:visibility="gone" />
+
+        <TextView
+            style="@style/Body"
+            android:layout_marginTop="24dp"
+            android:alpha="0.7"
+            android:text="@string/help" />
+
+        <TextView
+            android:id="@+id/log"
+            style="@style/Body"
+            android:layout_marginTop="16dp"
+            android:alpha="0.7"
+            android:fontFamily="monospace"
+            android:textIsSelectable="true"
+            android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>

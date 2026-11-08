@@ -87,5 +87,22 @@ cmd = "pytest tools/bookprep/tests"
 [tasks.lint]
 cmd = "ruff check tools/bookprep && ruff format --check tools/bookprep"
 
+# The Android firmware switcher (android/) gets its own environment, so the main one
+# stays without a JDK. The Android SDK comes from $ANDROID_HOME or ~/Android/Sdk.
+[feature.android.dependencies]
+openjdk = "21.*"
+gradle = "9.3.*"
+
+[feature.android.tasks.android-build]
+cmd = "bash tools/android.sh assembleDebug"
+description = "Build the firmware switcher app -> out/android/fw-switch.apk"
+
+[feature.android.tasks.android-test]
+cmd = "bash tools/android.sh testDebugUnitTest"
+description = "Unit tests of the switcher's flashing logic (PC, against a fake ROM loader)"
+
+[environments]
+android = { features = ["android"], no-default-feature = true }
+
 [tasks.fmt]
 cmd = "ruff format tools/bookprep && ruff check --fix tools/bookprep"

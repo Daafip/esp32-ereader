@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Firmware switcher</string>
+    <string name="intro">Puts the e-reader or ESPHome on the FireBeetle 7.5\" over a USB-C OTG cable.</string>
+    <string name="reader">E-reader</string>
+    <string name="esphome">ESPHome</string>
+    <string name="choose">Choose file</string>
+    <string name="install_reader">Install e-reader</string>
+    <string name="install_esphome">Install ESPHome</string>
+    <string name="reader_hint">No file yet. Choose the full image firebeetle-75-flash-reader-&lt;version&gt;.bin (pixi run fw-dist).</string>
+    <string name="esphome_hint">No file yet. Choose the full image: firmware.factory.bin (\"Factory format\").</string>
+    <string name="file_reader">%1$s\nE-reader for %2$s · %3$s</string>
+    <string name="file_other">%1$s\n%2$s %3$s · %4$s</string>
+    <string name="warn_not_reader">This file is not the e-reader.</string>
+    <string name="warn_is_reader">This file is the e-reader.</string>
+    <string name="usb_none">No board on USB.</string>
+    <string name="usb_present">Board on USB.</string>
+    <string name="last_installed">Last installed from this phone: %1$s</string>
+    <string name="help">The board\'s USB port is off while it sleeps. When the app asks: hold BOOT, press RST, release BOOT. Settings and books stay when the board\'s partition table matches the image.</string>
+    <string name="step_connecting">Connecting…</string>
+    <string name="step_resetting">Restarting the board into download mode…</string>
+    <string name="step_waiting">Hold BOOT, press RST, release BOOT.</string>
+    <string name="step_checking">Checking the board…</string>
+    <string name="step_writing">Writing… %1$d%%</string>
+    <string name="step_verifying">Checking what was written…</string>
+    <string name="step_restarting">Restarting the board…</string>
+    <string name="step_done">Done: %1$s is on the board.</string>
+    <string name="step_declined">Nothing changed; the board restarts.</string>
+    <string name="confirm_title">Other partition table</string>
+    <string name="confirm_message">The board\'s flash is laid out differently from this image. Installing it writes the whole image: the settings and the books in the flash are lost.</string>
+    <string name="confirm_yes">Install anyway</string>
+    <string name="cancel">Cancel</string>
+    <string name="err_bad_image">Not a usable firmware file: %1$s</string>
+    <string name="err_no_boot">The board didn\'t come into download mode. Hold BOOT, press RST, release BOOT, then try again.</string>
+    <string name="err_usb">USB: %1$s</string>
+    <string name="err_wrong_chip">Wrong chip: %1$s</string>
+    <string name="err_rom">The board\'s loader reported an error: %1$s</string>
+    <string name="err_timeout">The board stopped answering: %1$s</string>
+    <string name="err_verify">What the board read back doesn\'t match: install again. (%1$s)</string>
+    <string name="err_cancelled">Cancelled.</string>
+    <string name="err_other">Failed: %1$s</string>
+    <string name="file_too_big">File too large for a 4 MB board.</string>
+</resources>

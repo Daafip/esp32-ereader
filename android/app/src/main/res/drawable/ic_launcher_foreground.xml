@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two arrows, one each way: switch between two firmwares (108 dp adaptive icon canvas) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/icon_foreground"
+        android:pathData="M30,37 H68 V29 L82,41 L68,53 V45 H30 Z" />
+    <path
+        android:fillColor="@color/icon_foreground"
+        android:pathData="M78,63 H40 V55 L26,67 L40,79 V71 H78 Z" />
+</vector>
