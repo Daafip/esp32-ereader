@@ -26,7 +26,7 @@ from bookprep.layout import (
 )
 from bookprep.normalize import normalize_text
 from bookprep.render import bionic_prefix, dither, sharpen
-from bookprep.t5b import T5BFile, TocEntry, encode_str, pack_page, write_t5b
+from bookprep.t5b import T5BFile, TocEntry, encode_str, pack_page, part_title, write_t5b
 from bookprep.webassets import export_hyphenation, hyphenation_index
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -151,6 +151,12 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
         ["\N{EM DASH}x", 3],
     ]
     slugs = ["Max Havelaar (1860)", "***", "Mijn boek!"]
+    part_titles = [
+        ["Max Havelaar", 301, 480],
+        ["\N{LATIN SMALL LETTER E WITH ACUTE}" * 40, 1, 170],
+        ["Een lange titel " * 4, 1, 2],
+        ["", 5, 9],
+    ]
     aliases = hyphenation_index()["aliases"]
     languages = ["nl", "nl-NL", "en", "en-US", "en-AU", "EN_gb", "de", "de-CH", "fr-BE", "it", ""]
 
@@ -188,6 +194,7 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
         "sharpen": {"w": gw, "h": gh, "gray": gray},
         "encode": encode_cases,
         "slug": slugs,
+        "partTitles": part_titles,
         "lineHeights": [[size, f] for size in range(9, 23) for f in (1.0, 1.1, 1.2, 1.3, 1.45)],
         "zip": {"path": str(sample_epub)},
     }
@@ -244,6 +251,7 @@ def test_port_matches_python(tmp_path, sample_epub, mono):
         encode_str(t, n) for t, n in encode_cases
     ]
     assert js["slug"] == [slug(s) for s in slugs]
+    assert js["partTitles"] == [part_title(*c) for c in part_titles]
     assert js["bionic"] == [bionic_prefix(w) for w in BIONIC_WORDS]
     assert js["sharpen"] == sharp
     for case, got in zip(dither_cases, js["dither"], strict=True):

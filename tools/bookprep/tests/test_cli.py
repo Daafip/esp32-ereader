@@ -35,7 +35,7 @@ def test_no_cover_and_bionic(sample_epub, tmp_path, font_path):
 
 
 def test_max_pages_keeps_the_first_pages(sample_epub, tmp_path, font_path):
-    """A FireBeetle 7.5" without a card has room for about 43 pages."""
+    """A FireBeetle 7.5" without a card has room for about 170 pages."""
     full, part = tmp_path / "full", tmp_path / "part"
     assert main([str(sample_epub), "--out", str(full)]) == 0
     assert main([str(sample_epub), "--out", str(part), "--max-pages", "1"]) == 0
@@ -43,6 +43,23 @@ def test_max_pages_keeps_the_first_pages(sample_epub, tmp_path, font_path):
     assert a.header.page_count > 1 and b.header.page_count == 1
     assert b.page_image(0).tobytes() == a.page_image(0).tobytes()
     assert [e.title for e in b.toc] == ["Hoofdstuk 1"]  # chapter 2 starts later
+    assert b.header.title == "Testboek (1\N{EN DASH}1)"
+
+
+def test_first_page_sends_a_part_from_the_middle(sample_epub, tmp_path, font_path):
+    """--first-page: the part's own contents (the chapter it starts in at page 0)."""
+    full, part = tmp_path / "full", tmp_path / "part"
+    assert main([str(sample_epub), "--out", str(full)]) == 0
+    a = T5BFile(full / "testboek.t5b")
+    assert a.header.page_count == 3 and [e.start_page for e in a.toc] == [0, 2]
+    assert main([str(sample_epub), "--out", str(part), "--first-page", "2"]) == 0
+    b = T5BFile(part / "testboek.t5b")
+    assert b.header.title == "Testboek (2\N{EN DASH}3)"
+    assert [b.page_image(n).tobytes() for n in range(2)] == [
+        a.page_image(n).tobytes() for n in (1, 2)
+    ]
+    assert [(e.start_page, e.title) for e in b.toc] == [(0, "Hoofdstuk 1"), (1, "Hoofdstuk 2")]
+    assert main([str(sample_epub), "--out", str(part), "--first-page", "9"]) == 2
 
 
 def test_end_to_end_txt_and_overrides(tmp_path, font_path):

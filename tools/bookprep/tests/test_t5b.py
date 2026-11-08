@@ -14,6 +14,7 @@ from bookprep.t5b import (
     encode_str,
     pack_header,
     pack_page,
+    part_title,
     unpack_header,
     unpack_page,
     write_t5b,
@@ -159,6 +160,15 @@ def test_corrupt_index_and_page_rejected(tmp_path):
     with pytest.raises(ValueError, match="page 0"):
         book.page_data(0)
     assert book.page_data(1) == three_pages()[1]
+
+
+def test_part_title_keeps_the_range():
+    assert part_title("Max Havelaar", 301, 480) == "Max Havelaar (301\N{EN DASH}480)"
+    long = part_title("\N{LATIN SMALL LETTER E WITH ACUTE}" * 40, 1, 170)  # 80 bytes of title
+    assert long.endswith(" (1\N{EN DASH}170)")
+    assert len(long.encode("utf-8")) <= 63  # fits the field with its NUL
+    assert encode_str(long, 64).rstrip(b"\0").decode("utf-8") == long  # nothing cut off
+    assert part_title("Een lange titel " * 4, 1, 2).count("  ") == 0  # no space before "("
 
 
 def test_unknown_version_rejected():

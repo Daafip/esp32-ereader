@@ -30,7 +30,7 @@ from .render import (
     render_page,
     with_status_bar,
 )
-from .t5b import TocEntry, pack_page, write_t5b
+from .t5b import TocEntry, pack_page, part_title, write_t5b
 
 DEFAULT_LANG = "nl"
 
@@ -80,7 +80,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument(
         "--max-pages",
         type=int,
-        help='only the first N pages (a FireBeetle 7.5" without a card holds about 43)',
+        help='at most N pages (a FireBeetle 7.5" without a card holds about 170)',
+    )
+    p.add_argument(
+        "--first-page",
+        type=int,
+        help="start at page N (1-based) of the typeset book: a part of it, with --max-pages",
     )
     p.add_argument("--title", help="override the title")
     p.add_argument("--author", help="override the author")
@@ -170,9 +175,15 @@ def main(argv: list[str] | None = None) -> int:
     if not pages:
         print("error: the book has no text", file=sys.stderr)
         return 1
-    if args.max_pages and len(pages) > args.max_pages:
-        print(f"note: only the first {args.max_pages} of {len(pages)} pages (--max-pages)")
-        pages = pages[: args.max_pages]
+    first = (args.first_page or 1) - 1
+    end = min(len(pages), first + args.max_pages) if args.max_pages else len(pages)
+    if not 0 <= first < len(pages):
+        print(f"error: --first-page {first + 1}: the book has {len(pages)} pages", file=sys.stderr)
+        return 2
+    if first > 0 or end < len(pages):  # a part: its own contents, the range in its title
+        print(f"note: pages {first + 1}-{end} of {len(pages)} (--first-page, --max-pages)")
+        title = part_title(title, first + 1, end)
+        pages = pages[first:end]
 
     render_opts = RenderOptions(
         line_height, threshold=args.threshold, mono=args.mono, bionic=args.bionic

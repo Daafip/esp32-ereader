@@ -216,6 +216,28 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 </dialog>
 <input type="file" id="fontfile" accept=".ttf,.otf,.woff,.woff2" hidden>
 
+<!-- a book too big for the reader (no card): which part to send -->
+<dialog id="part">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="grow"><div class="title" data-t="partTitle">Send a part</div></div>
+      <button class="close" id="part-close" aria-label="Close">×</button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint" id="part-why"></p>
+      <div class="controls">
+        <label class="field select wide" id="f-part-chapter"><span data-t="chapter">Chapter</span><select id="part-chapter"></select></label>
+        <label class="field wide"><span data-t="startAt">Start at page</span><input type="range" id="part-slider" min="1" value="1"></label>
+      </div>
+      <p class="stats" id="part-range"></p>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn quiet" id="part-cancel" data-t="cancel">Cancel</button>
+      <button class="btn" id="part-send" data-t="send">Send</button>
+    </div>
+  </div>
+</dialog>
+
 <!-- a book on the reader: its pages, bookmarks, search -->
 <dialog id="reader">
   <div class="sheet">
@@ -348,7 +370,9 @@ const T = {
     uploadFailed: "Upload failed: {0}", fontFailed: "Could not add the font: {0}",
     storage: "Storage", storageLine: "{0} free of {1}",
     noSpace: "Not enough space on the reader: this needs {0} and {1} is free. Delete books or pictures to make room.",
-    onlyFirst: "Only the first {0} of {1} pages fit on the reader. Send those?",
+    partTitle: "Send a part", chapter: "Chapter", startAt: "Start at page", cancel: "Cancel", send: "Send",
+    partWhy: "The whole book ({0} pages) doesn't fit on the reader. Choose where the part that fits starts.",
+    partRange: "Pages {0}–{1} of {2} ({3} pages)", partNone: "Not even this page fits.",
     nl_NL: "Dutch", en_GB: "English (UK)", en_US: "English (US)", fr: "French",
     pageOf: "{0} / {1}", bookmarkHere: "Bookmark this page", removeBookmark: "Remove bookmark", bookmarks: "Bookmarks",
     noMarks: "No bookmarks yet.", search: "Search in the book", find: "Find",
@@ -406,7 +430,9 @@ const T = {
     uploadFailed: "Versturen mislukt: {0}", fontFailed: "Kan het lettertype niet toevoegen: {0}",
     storage: "Opslag", storageLine: "{0} vrij van {1}",
     noSpace: "Niet genoeg ruimte op de lezer: dit is {0} en er is {1} vrij. Verwijder boeken of afbeeldingen om ruimte te maken.",
-    onlyFirst: "Alleen de eerste {0} van {1} pagina's passen op de lezer. Die versturen?",
+    partTitle: "Een deel versturen", chapter: "Hoofdstuk", startAt: "Beginnen bij pagina", cancel: "Annuleren", send: "Versturen",
+    partWhy: "Het hele boek ({0} pagina's) past niet op de lezer. Kies waar het deel begint dat wel past.",
+    partRange: "Pagina's {0}–{1} van {2} ({3} pagina's)", partNone: "Zelfs deze pagina past niet.",
     nl_NL: "Nederlands", en_GB: "Engels (VK)", en_US: "Engels (VS)", fr: "Frans",
     pageOf: "{0} / {1}", bookmarkHere: "Bladwijzer op deze pagina", removeBookmark: "Bladwijzer weghalen", bookmarks: "Bladwijzers",
     noMarks: "Nog geen bladwijzers.", search: "Zoeken in het boek", find: "Zoek",
@@ -986,8 +1012,46 @@ function busy(text, fraction) {
   if (text !== null) { $("#busy-text").textContent = text; $("#busy-bar").style.width = (fraction || 0) * 100 + "%"; }
 }
 
-// The book typeset and compressed, as the parts of a .t5b (B.assembleT5b): the first
-// pages can be kept when the whole book doesn't fit (a reader without a card).
+// Tests: send a part without asking, from this page (0-based), see the #typeset hook.
+let unattendedStart = null;
+
+// A book too big for the reader (no card): choose where the part that fits starts,
+// from the page shown in the preview. Resolves to { start, count } or null.
+function choosePart(parts, room) {
+  const total = parts.streams.length;
+  const slider = $("#part-slider"), chapter = $("#part-chapter");
+  let start = unattendedStart ?? Math.min(current.page || 0, total - 1);
+  slider.max = total;
+  chapter.replaceChildren(new Option(t("startAt") + " 1", 0),
+    ...parts.toc.map((e) => new Option(`${e.title} (${e.startPage + 1})`, e.startPage)));
+  $("#part-why").textContent = t("partWhy", total);
+  let count = 0;
+  const show = () => {
+    count = B.pagesThatFit(parts, room, start);
+    slider.value = start + 1;
+    setPage(start);  // the preview above the dialog shows where the part starts
+    let pick = 0;  // the chapter the start lies in
+    parts.toc.forEach((e, i) => { if (e.startPage <= start) pick = i + 1; });
+    chapter.selectedIndex = pick;
+    $("#part-range").textContent = count ? t("partRange", start + 1, start + count, total, count) : t("partNone");
+    $("#part-send").disabled = !count;
+  };
+  return new Promise((resolve) => {
+    const dlg = $("#part");
+    const done = (value) => { dlg.close(); resolve(value); };
+    slider.oninput = () => { start = +slider.value - 1; show(); };
+    chapter.onchange = () => { start = +chapter.value; show(); };
+    $("#part-send").onclick = () => { if (count) done({ start, count }); };
+    $("#part-cancel").onclick = $("#part-close").onclick = () => done(null);
+    dlg.oncancel = (e) => { e.preventDefault(); done(null); };
+    show();
+    dlg.showModal();
+    if (unattendedStart !== null) count ? $("#part-send").click() : done(null);
+  });
+}
+
+// The book typeset and compressed, as the parts of a .t5b (B.assembleT5b): a part of
+// it can be sent when the whole book doesn't fit (a reader without a card).
 async function buildParts() {
   await relayout();
   return B.bookParts(current.book, current.layout, (n, total) => busy(t("typesettingN", n, total), n / total));
@@ -1017,16 +1081,16 @@ $("#s-upload").addEventListener("click", async () => {
     busy(t("typesetting"), 0);
     let parts = await buildParts();
     // Too big (a reader without a card has room for a few hundred pages): leave out the
-    // original first, then offer the pages that fit. Without the original, the reader
-    // can't restyle it: that would typeset the whole book again.
+    // original first, then let the user choose the part that fits. Without the
+    // original, the reader can't restyle it: that would typeset the whole book again.
     if (info.total > 0 && B.t5bSize(parts) + (original ? original.size : 0) + meta.size > info.free) {
       original = null;
-      const pages = parts.streams.length;
-      const fit = B.pagesThatFit(parts, info.free - meta.size);
-      if (fit >= 1 && fit < pages) {
+      const room = info.free - meta.size;
+      if (B.t5bSize(parts) > room && B.pagesThatFit(parts, room) >= 1) {
         busy(null);
-        if (!confirm(t("onlyFirst", fit, pages))) return;
-        parts = B.firstPages(parts, fit);
+        const part = await choosePart(parts, room);
+        if (!part) return;
+        parts = B.partOf(parts, part.start, part.count);
       }
     }
     const bytes = B.assembleT5b(parts);
@@ -1488,18 +1552,20 @@ applyLang();
   syncClock();
   checkLatest().catch(() => {});  // no internet (the reader's own network): the button asks again
   // development hooks (used by the tests):
-  //   #typeset=<url>[&upload]   the typeset sheet for a file on this server [and upload it]
+  //   #typeset=<url>[&upload[&start=<n>]]  the typeset sheet for a file on this server [and
+  //                             upload it; a part that fits, from page n (1-based), if too big]
   //   #reader=<book>[&find=<q>] a book's sheet [and search it: body data-hits = count]
   //   #settings                 the settings sheet
   //   #editor=<url>             the picture editor with an image from this server
   //   #update                   install the latest release (body data-update = the result)
-  const hook = location.hash.match(/^#typeset=([^&]+)(&upload)?$/);
+  const hook = location.hash.match(/^#typeset=([^&]+)(&upload)?(?:&start=(\d+))?$/);
   if (hook) {
     const url = decodeURIComponent(hook[1]);
     await openSheet({ name: url.split("/").pop(), bytes: await (await fetch(url)).arrayBuffer(), onReader: false });
     if (hook[2]) {
       window.alert = (m) => console.log(m);  // unattended: the result is in body data-upload
       window.confirm = () => true;
+      unattendedStart = hook[3] ? +hook[3] - 1 : 0;
       $("#s-upload").click();
     }
   }

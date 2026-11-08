@@ -77,9 +77,12 @@ while it uploads.
 
 **A FireBeetle 7.5" without a card** (`reader_firebeetle75_flash`) keeps its books in
 its flash: room for about 170 pages (a 7.5" page is about 10 KB compressed), enough to
-try it out. When a book doesn't fit, the page offers to send its first pages ("Only the
-first 180 of 797 pages fit"), without the original, so there's no Restyle for it. On the
-PC: `--max-pages 180`. That build has no room for a firmware update over Wi-Fi either:
+try it out. When a book doesn't fit, the page asks which part to send: pick a chapter or
+drag to the page it starts at (it starts at the page shown in the preview, which follows
+along), and it says which pages fit ("Pages 301–480 of 797"). The part gets its own
+contents and the range in its title ("Title (301–480)"); it goes without the original,
+so there's no Restyle for it. On the PC: `--first-page 301 --max-pages 180`. That build
+has no room for a firmware update over Wi-Fi either:
 update it over USB. Once a card is fitted, flash `reader_firebeetle75` (settings stay,
 the books in the flash don't).
 

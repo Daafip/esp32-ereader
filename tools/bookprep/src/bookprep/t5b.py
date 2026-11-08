@@ -111,6 +111,15 @@ def encode_str(text: str, size: int) -> bytes:
     return data.ljust(size, b"\0")
 
 
+def part_title(title: str, first: int, last: int) -> str:
+    """The title of a part of a book, "Title (301-480)" with an en dash: shortened to
+    fit the 64-byte field with the range kept. bookprep.js: partTitle()."""
+    suffix = f" ({first}\N{EN DASH}{last})"
+    room = max(TITLE_BYTES - 1 - len(suffix.encode("utf-8")), 0)
+    head = encode_str(title, room + 1).rstrip(b"\0").decode("utf-8")
+    return head.rstrip() + suffix
+
+
 def decode_str(data: bytes) -> str:
     return data.split(b"\0", 1)[0].decode("utf-8")
 

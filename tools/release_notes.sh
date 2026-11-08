@@ -40,6 +40,6 @@ or \`pixi run prep book.epub\` (\`--screen 4.7in\` for the 4.7" readers, \`7.5in
 \`7.5in-landscape\` for the FireBeetle). Since 2.0.0 books are compressed (\`.t5b\`
 version 2, about 5 times smaller): they need firmware 2.0.0 or later, and older books
 still open (\`prep --uncompressed\` makes books for 1.x firmware). A FireBeetle without a
-card keeps its books in its flash, room for about 170 pages: the page offers the first
-pages that fit. See \`docs/usage.md\`.
+card keeps its books in its flash, room for about 170 pages: of a bigger book the page
+sends the part you choose. See \`docs/usage.md\`.
 NOTES

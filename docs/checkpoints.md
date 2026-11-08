@@ -188,7 +188,7 @@ has only one: CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), C
 1. Without a card: `pixi run fw-flash reader_firebeetle75_flash`; with one:
    `pixi run fw-flash reader_firebeetle75`. Then `pixi run fw-monitor`. Books: Wi-Fi
    transfer (the page typesets for the orientation the reader is in; without a card
-   it offers the first pages that fit), or `pixi run prep book.epub --screen 7.5in`
+   it asks which part to send), or `pixi run prep book.epub --screen 7.5in`
    (`--max-pages 180` without a card) and upload the `.t5b` on the page (with a card:
    or copy it to `/books`). **Send:** the start-up lines (`flash: ... KB` or
    `card: ... MB`), or what the screen says. The first start of the flash build formats

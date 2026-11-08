@@ -124,7 +124,9 @@ def test_browser_settings_change_layout(tmp_path, sample_epub, font_path):
     assert big["pages"] >= 3
 
 
-def upload_from_page(tmp_path: Path, epub: Path, name: str, **server) -> tuple[str, str]:
+def upload_from_page(
+    tmp_path: Path, epub: Path, name: str, hash_extra: str = "", **server
+) -> tuple[str, str]:
     """The real page against the dev server: open `epub` under file name `name`,
     typeset it and press "Upload to reader". Returns (body data-upload, the DOM)."""
     from urllib.parse import quote
@@ -136,6 +138,7 @@ def upload_from_page(tmp_path: Path, epub: Path, name: str, **server) -> tuple[s
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         url = f"http://127.0.0.1:{srv.server_address[1]}/?k=1234#typeset={quote(name)}&upload"
+        url += hash_extra
         dom = subprocess.run(
             [chromium(), "--headless=new", "--disable-gpu", "--no-first-run",
              "--virtual-time-budget=60000", "--dump-dom", url],
@@ -208,9 +211,23 @@ def test_page_sends_the_first_pages_that_fit(tmp_path, sample_epub):
     sd = tmp_path / "sd" / "books"
     book = T5BFile(sd / "testboek.t5b")
     assert book.header.page_count == 2
+    assert book.header.title == "Testboek (1\N{EN DASH}2)"
     assert [e.title for e in book.toc] == ["Hoofdstuk 1"]
     assert not (sd / ".src" / "testboek.epub").exists()
     assert (sd / ".src" / "testboek.json").exists()
+
+
+def test_page_sends_a_part_from_where_you_choose(tmp_path, sample_epub):
+    """The part may start anywhere: from page 2, pages 2-3 fit in the same room. The
+    part has its own contents: the chapter it starts in at page 0."""
+    status, _ = upload_from_page(
+        tmp_path, sample_epub, "testboek.epub", card_mb=0.00205, hash_extra="&start=2"
+    )
+    assert status == "ok", status
+    book = T5BFile(tmp_path / "sd" / "books" / "testboek.t5b")
+    assert book.header.title == "Testboek (2\N{EN DASH}3)"
+    assert book.header.page_count == 2
+    assert [(e.start_page, e.title) for e in book.toc] == [(0, "Hoofdstuk 1"), (1, "Hoofdstuk 2")]
 
 
 def test_page_says_to_update_over_usb_without_an_update_slot(tmp_path):

@@ -48,6 +48,7 @@ out.sharpen = Array.from(B.sharpen(cases.sharpen.gray, cases.sharpen.w, cases.sh
 
 out.encode = cases.encode.map(([text, size]) => Buffer.from(B.encodeStr(text, size)).toString("base64"));
 out.slug = cases.slug.map((s) => B.slug(s));
+out.partTitles = cases.partTitles.map(([title, first, last]) => B.partTitle(title, first, last));
 out.lineHeights = cases.lineHeights.map(([size, spacing]) => B.lineHeightFor(size, spacing));
 out.screens = B.screens;
 

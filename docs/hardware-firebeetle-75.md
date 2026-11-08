@@ -66,9 +66,9 @@ only pins that wake the C6 from deep sleep), stops it with a message.
 - **Books in the flash** (`reader_firebeetle75_flash`, `-DBOARD_BOOKS_IN_FLASH`):
   `partitions-fb75-flash.csv` has one app slot (1.9 MB, as big as one of the card
   build's) and a 2 MB LittleFS partition `books`, formatted at the first start. Same
-  folders as on a card (`storage::files()`). Room for about 170 pages; the page offers
-  the first pages of a bigger book (and leaves the original out, so no Restyle), and
-  `pixi run prep --max-pages N` does the same. With one app slot there is no update
+  folders as on a card (`storage::files()`). Room for about 170 pages; of a bigger book
+  the page sends the part you choose (from a chapter or any page; the original stays
+  out, so no Restyle), and `pixi run prep --first-page S --max-pages N` does the same. With one app slot there is no update
   over Wi-Fi: `/api/info` says `"ota": false` and the page says to flash over USB. Its
   board tag is `firebeetle-75-flash`, so the card build refuses its image over Wi-Fi.
   Switching builds keeps the settings (nvs at the same place) but not the books.

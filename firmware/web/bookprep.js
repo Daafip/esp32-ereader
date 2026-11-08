@@ -722,15 +722,33 @@
       streams.reduce((n, s) => n + s.length, 0) + (cover ? 12 + strideFor(cover.w) * cover.h : 0);
   }
 
-  // The first n pages of a book's parts, with the contents entries that point into them.
-  function firstPages(parts, n) {
-    return { ...parts, streams: parts.streams.slice(0, n), toc: parts.toc.filter((e) => e.startPage < n) };
+  // A book's title with the pages a part holds, "Title (301–480)", in the 64-byte
+  // field: the title is shortened, the range kept. Python: part_title().
+  function partTitle(title, first, last) {
+    const suffix = ` (${first}\u2013${last})`;
+    const room = 63 - new TextEncoder().encode(suffix).length;
+    const bytes = new TextEncoder().encode(title);
+    let n = Math.min(bytes.length, Math.max(room, 0));
+    while (n > 0 && n < bytes.length && (bytes[n] & 0xc0) === 0x80) n--;
+    return new TextDecoder().decode(bytes.subarray(0, n)).trimEnd() + suffix;
   }
 
-  // How many pages from the start fit in `room` bytes as a .t5b (0: not even one).
-  function pagesThatFit(parts, room) {
+  // Pages start .. start + n - 1 of a book's parts (bookParts): a book of its own, with
+  // the contents worked out for those pages (as the Python tool's --first-page does)
+  // and the range in its title.
+  function partOf(parts, start, n) {
+    const end = Math.min(parts.streams.length, start + n);
+    const layoutPages = parts.layoutPages.slice(start, end);
+    return {
+      ...parts, title: partTitle(parts.title, start + 1, end), streams: parts.streams.slice(start, end),
+      layoutPages, toc: tocEntries(parts.chapters, layoutPages),
+    };
+  }
+
+  // How many pages from page `start` (0-based) fit in `room` bytes as a .t5b (0: none).
+  function pagesThatFit(parts, room, start = 0) {
     let n = 0;
-    while (n < parts.streams.length && t5bSize(firstPages(parts, n + 1)) <= room) n++;
+    while (start + n < parts.streams.length && t5bSize(partOf(parts, start, n + 1)) <= room) n++;
     return n;
   }
 
@@ -990,7 +1008,7 @@
     };
     const pages = layoutBook(book.chapters, renderer.measure, g, layoutOpts, o.hyphenate ? hyphenator : null);
     const toc = tocEntries(book.chapters, pages);
-    return { pages, toc, renderer, geometry: g, lineHeight, screen: sc, withCover: o.cover };
+    return { pages, toc, chapters: book.chapters, renderer, geometry: g, lineHeight, screen: sc, withCover: o.cover };
   }
 
   // Renders and compresses every page, yielding to the event loop now and then: the
@@ -1013,6 +1031,7 @@
     return {
       title: book.title, author: book.author, pageW: layout.geometry.width,
       pageH: layout.geometry.height, toc: layout.toc, streams, cover,
+      chapters: layout.chapters, layoutPages: layout.pages,  // for partOf()
     };
   }
 
@@ -1030,8 +1049,8 @@
   return {
     defaults, screens, screenFor, geometry, lineHeightFor, openZip, resolvePath, htmlToBlocks, extractEpub, extractTxt,
     extract, normalizeText, cleanBook, parsePatterns, languageFallback, Hyphenator, dashBreaks,
-    breakLines, bookItems, paginate, layoutBook, tocEntries, encodeStr, writeT5b, compressPage, assembleT5b, t5bSize, firstPages,
-    pagesThatFit, bookParts, packPixels,
+    breakLines, bookItems, paginate, layoutBook, tocEntries, encodeStr, writeT5b, compressPage, assembleT5b, t5bSize, partTitle,
+    partOf, pagesThatFit, bookParts, packPixels,
     createRenderer, unpackToRgba, typeset, writeBook, slug, NBSP, toGray, autocontrast, dither,
     sharpen, adjust, coverBitmap, bionicPrefix,
   };
