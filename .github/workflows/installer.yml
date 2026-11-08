@@ -27,7 +27,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A commit with a release tag is deployed by release.yml. Pages keeps the first
+  # deployment of a commit: deployed here first (with the previous release), the
+  # release's own site never went live (2.0.2: pushed together with its tag).
+  release-commit:
+    runs-on: ubuntu-24.04
+    outputs:
+      tagged: ${{ steps.tags.outputs.tagged }}
+    steps:
+      - id: tags
+        run: |
+          sleep 20  # a tag pushed right after the branch
+          if git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" 'refs/tags/v*' | grep -q "^$GITHUB_SHA"; then
+            echo "::notice::$GITHUB_SHA is a release: release.yml deploys Pages"
+            echo "tagged=true" >> "$GITHUB_OUTPUT"
+          fi
+
   installer:
+    needs: release-commit
+    if: needs.release-commit.outputs.tagged != 'true'
     runs-on: ubuntu-24.04
     environment:
       name: github-pages

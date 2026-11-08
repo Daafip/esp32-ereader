@@ -117,6 +117,9 @@ jobs:
     # A separate job: if Pages isn't switched on, only this job fails, not the release.
     needs: firmware
     runs-on: ubuntu-24.04
+    concurrency:  # one Pages deployment at a time, with installer.yml
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
