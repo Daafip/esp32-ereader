@@ -270,7 +270,7 @@ Measured on a 797-page novel (7.5", all pages): PackBits 2.5×, Group5 4.2×, zl
 - [x] Short menu without an open book (David: "i cant access the menu to activate wifi if a book is corrupt"): hold MENU in the library opens Library, Statistics, Wi-Fi transfer, Settings, About, Sleep (`kHomeItems`); the library's hold hint says "menu"; About shows "-" for the book
 - [x] A part from anywhere (David: "it only asks to store part of the book, but always at the start, make it adjustable"): the page's "Send a part" dialog (chapter list + slider, the preview follows, live "Pages X–Y of N"), `partOf()` gives the part its own contents (`tocEntries` on its pages) and a title with the range (`partTitle`, Python `part_title`); `prep --first-page S`. Tests: CLI, parity, a browser test sending pages 2–3
 
-## Phase 12 — Book server: a Home Assistant add-on (2026-11-11)
+## Phase 12 — Book server: a Home Assistant add-on (2026-11-11, release 2.1.0)
 
 David: "make a similar ha addon [to COPS], which reads epubs from
 /mnt/ha_share/calibre-dedrm/books and serves these to a user from the ereader ...
