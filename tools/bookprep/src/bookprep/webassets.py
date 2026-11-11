@@ -63,10 +63,17 @@ class FontSpec:
     axes: tuple[tuple[str, float], ...] = ()
     licence_file: tuple[str, str] = ("", "")  # google/fonts path or URL, sha256
     as_is: bool = False  # serve the downloaded WOFF2 unchanged (no subset)
+    # where an "env:" font comes from outside the pixi env (the book server's Docker
+    # image): a google/fonts path or URL and its SHA-256, rendering the same
+    fallback: tuple[str, str] = ("", "")
 
 
 FONTS = [
-    FontSpec("ubuntu", "Ubuntu", "Ubuntu Font Licence 1.0", "env:Ubuntu-R.ttf"),
+    FontSpec(
+        "ubuntu", "Ubuntu", "Ubuntu Font Licence 1.0", "env:Ubuntu-R.ttf",
+        fallback=("ufl/ubuntu/Ubuntu-Regular.ttf",
+                  "3128df86a31805618436d0ae5651ba4285d0c9de0a39057d025f64ee33bceb64"),
+    ),
     FontSpec(
         "literata", "Literata", "SIL OFL 1.1", "ofl/literata/Literata%5Bopsz,wght%5D.ttf",
         "b41138c9373112f32abb589cc22e8674b06ed4048b0c513be922bdd26f274440",
@@ -148,6 +155,8 @@ def font_source(spec: FontSpec, cache: Path) -> Path:
         for base in (Path(sys.prefix) / "fonts", Path(sys.prefix) / "Library" / "fonts"):
             if (base / spec.source[4:]).exists():
                 return base / spec.source[4:]
+        if spec.fallback[0]:
+            return pinned_download(*spec.fallback, cache)
         raise FileNotFoundError(spec.source)
     return pinned_download(spec.source, spec.sha256, cache)
 

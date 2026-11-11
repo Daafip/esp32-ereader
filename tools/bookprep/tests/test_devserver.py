@@ -294,3 +294,30 @@ def test_settings_name_wifi_time_pictures_reset(server, tmp_path):
     assert post(base, "/api/reset", confirm="erase")[0] == 200
     data = info(base)
     assert (data["books"], data["name"], data["lang"]) == ([], "", "en")
+
+
+def test_book_server_address(server):
+    base, _ = server
+    assert info(base)["bookServer"] == ""
+    assert post(base, "/api/bookserver", address=" http://192.168.68.101:8484/ ")[0] == 200
+    assert info(base)["bookServer"] == "http://192.168.68.101:8484/"
+    status, body = post(base, "/api/bookserver", address="https://ha.example.org")
+    assert status == 400 and "8484" in json.loads(body)["error"]
+    assert call(f"{base}/api/bookserver?k={CODE}", "DELETE")[0] == 200
+    assert info(base)["bookServer"] == ""
+
+
+@pytest.mark.parametrize(("text", "parsed"), [
+    ("192.168.68.101", ("192.168.68.101", 8484, "")),  # no scheme: the add-on's port
+    (" http://192.168.68.101:8484/ ", ("192.168.68.101", 8484, "")),
+    ("HTTP://homeassistant.local/t5//", ("homeassistant.local", 80, "/t5")),
+    ("nas:9000", ("nas", 9000, "")),
+    *((bad, None) for bad in ("", "https://host", "ftp://host", "http://", ":8484", "host:",
+                              "host:0", "host:65536", "host:80x", "ho st", "host?x=1",
+                              "http://host/a b", "host/p?q", "http://h\N{LATIN SMALL LETTER E WITH ACUTE}st")),
+])  # fmt: skip
+def test_book_server_addresses_match_the_firmware(text, parsed):
+    # the same cases as test_catalog_address in firmware/test/test_core/test_main.cpp
+    from bookprep.devserver import parse_book_server
+
+    assert parse_book_server(text) == parsed

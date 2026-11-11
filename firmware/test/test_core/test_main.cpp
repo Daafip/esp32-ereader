@@ -9,6 +9,7 @@
 #include "board_tag.h"
 #include "bookmarks.h"
 #include "button.h"
+#include "catalog.h"
 #include "golden_book_v2.h"
 #include "golden_header.h"
 #include "i18n.h"
@@ -1104,6 +1105,93 @@ void test_rtc_time() {
   TEST_ASSERT_FALSE(decodeRtc(notBcd, back));
 }
 
+
+// --- catalog (book server) ----------------------------------------------------
+
+void test_catalog_address() {
+  catalog::Address a;
+  TEST_ASSERT_TRUE(catalog::parseAddress("192.168.68.101", a));
+  TEST_ASSERT_EQUAL_STRING("192.168.68.101", a.host);
+  TEST_ASSERT_EQUAL(8484, a.port);  // no scheme: the add-on's port
+  TEST_ASSERT_EQUAL_STRING("", a.base);
+  TEST_ASSERT_TRUE(catalog::parseAddress(" http://192.168.68.101:8484/ ", a));
+  TEST_ASSERT_EQUAL_STRING("192.168.68.101", a.host);
+  TEST_ASSERT_EQUAL(8484, a.port);
+  TEST_ASSERT_EQUAL_STRING("", a.base);
+  TEST_ASSERT_TRUE(catalog::parseAddress("HTTP://homeassistant.local/t5//", a));
+  TEST_ASSERT_EQUAL_STRING("homeassistant.local", a.host);
+  TEST_ASSERT_EQUAL(80, a.port);  // http:// without a port
+  TEST_ASSERT_EQUAL_STRING("/t5", a.base);
+  TEST_ASSERT_TRUE(catalog::parseAddress("nas:9000", a));
+  TEST_ASSERT_EQUAL(9000, a.port);
+  const char *bad[] = {"", "https://host", "ftp://host", "http://", ":8484", "host:",
+                       "host:0", "host:65536", "host:80x", "ho st", "host?x=1",
+                       "http://host/a b", "host/p?q", "http://h\xC3\xA9st"};
+  for (const char *b : bad) TEST_ASSERT_FALSE_MESSAGE(catalog::parseAddress(b, a), b);
+}
+
+void test_catalog_url_encode() {
+  char out[32];
+  TEST_ASSERT_TRUE(catalog::urlEncode("7.5in-landscape_~", out, sizeof(out)));
+  TEST_ASSERT_EQUAL_STRING("7.5in-landscape_~", out);
+  TEST_ASSERT_TRUE(catalog::urlEncode("a b&c=\xC3\xA9", out, sizeof(out)));
+  TEST_ASSERT_EQUAL_STRING("a%20b%26c%3D%C3%A9", out);
+  char small[5];  // "ab%20" needs 6 with its NUL
+  TEST_ASSERT_FALSE(catalog::urlEncode("ab cd", small, sizeof(small)));
+  TEST_ASSERT_EQUAL_STRING("ab", small);  // cut before an escape that doesn't fit
+}
+
+void test_catalog_split_fields() {
+  char line[] = "book\tfced97\tHet geheime leven\tGuillaume Musso\tHet.t5b\r\n";
+  char *f[5];
+  TEST_ASSERT_EQUAL(5, catalog::splitFields(line, f, 5));
+  TEST_ASSERT_EQUAL_STRING("book", f[0]);
+  TEST_ASSERT_EQUAL_STRING("Het geheime leven", f[2]);
+  TEST_ASSERT_EQUAL_STRING("Het.t5b", f[4]);
+  char two[] = "error\tbad\tthing";
+  TEST_ASSERT_EQUAL(2, catalog::splitFields(two, f, 2));
+  TEST_ASSERT_EQUAL_STRING("bad\tthing", f[1]);  // the last keeps further tabs
+  char empty[] = "\n";
+  TEST_ASSERT_EQUAL(1, catalog::splitFields(empty, f, 5));
+  TEST_ASSERT_EQUAL_STRING("", f[0]);
+  char header[] = "T5BOOKS\t1\n";
+  catalog::splitFields(header, f, 5);
+  TEST_ASSERT_EQUAL_STRING("T5BOOKS", f[0]);
+}
+
+void test_catalog_http_lines() {
+  int code = 0;
+  TEST_ASSERT_TRUE(catalog::parseStatus("HTTP/1.0 200 OK", code));
+  TEST_ASSERT_EQUAL(200, code);
+  TEST_ASSERT_TRUE(catalog::parseStatus("HTTP/1.1 409 Conflict\r", code));
+  TEST_ASSERT_EQUAL(409, code);
+  TEST_ASSERT_TRUE(catalog::parseStatus("HTTP/1.0 404", code));
+  TEST_ASSERT_FALSE(catalog::parseStatus("HTTP/2 200", code));
+  TEST_ASSERT_FALSE(catalog::parseStatus("T5BOOKS\t1", code));
+  TEST_ASSERT_FALSE(catalog::parseStatus("HTTP/1.0 20", code));
+  uint32_t len = 0;
+  TEST_ASSERT_TRUE(catalog::parseContentLength("Content-Length: 1999241", len));
+  TEST_ASSERT_EQUAL_UINT32(1999241, len);
+  TEST_ASSERT_TRUE(catalog::parseContentLength("content-length:12\r", len));
+  TEST_ASSERT_EQUAL_UINT32(12, len);
+  TEST_ASSERT_FALSE(catalog::parseContentLength("Content-Type: text/plain", len));
+  TEST_ASSERT_FALSE(catalog::parseContentLength("Content-Length: x", len));
+  TEST_ASSERT_FALSE(catalog::parseContentLength("Content-Length: 99999999999", len));
+}
+
+void test_catalog_parts_and_room() {
+  TEST_ASSERT_TRUE(catalog::isPartTitle("Dieren eten (152\xE2\x80\x93" "297)", 152, 297));
+  TEST_ASSERT_FALSE(catalog::isPartTitle("Dieren eten (152\xE2\x80\x93" "297)", 1, 151));
+  TEST_ASSERT_FALSE(catalog::isPartTitle("Dieren eten (152-297)", 152, 297));  // en dash only
+  TEST_ASSERT_FALSE(catalog::isPartTitle(" (1\xE2\x80\x93" "2)", 1, 2));  // only the range
+  TEST_ASSERT_FALSE(catalog::isPartTitle("Dieren eten", 1, 2));
+  TEST_ASSERT_EQUAL_UINT32(0, catalog::downloadRoom(-1, 5000));  // unknown
+  TEST_ASSERT_EQUAL_UINT32(2000000 + 100000 - catalog::kRoomMargin,
+                           catalog::downloadRoom(2000000, 100000));
+  TEST_ASSERT_EQUAL_UINT32(1, catalog::downloadRoom(1000, 0));  // known: nothing fits
+  TEST_ASSERT_EQUAL_UINT32(0xFFFFFFFFu, catalog::downloadRoom(int64_t(64) << 30, 0));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_golden_header_from_python_writer);
@@ -1156,5 +1244,10 @@ int main() {
   RUN_TEST(test_safe_file_name_extensions);
   RUN_TEST(test_wifi_qr_payload);
   RUN_TEST(test_credentials);
+  RUN_TEST(test_catalog_address);
+  RUN_TEST(test_catalog_url_encode);
+  RUN_TEST(test_catalog_split_fields);
+  RUN_TEST(test_catalog_http_lines);
+  RUN_TEST(test_catalog_parts_and_room);
   return UNITY_END();
 }

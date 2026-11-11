@@ -229,6 +229,16 @@ Status listAllBooks(std::vector<BookEntry> &out, size_t max) {
   return s == Status::NoCard || s == Status::NoBooksDir ? s : Status::NoBooks;
 }
 
+String bookDirFor(const String &fileName) {
+  std::vector<BookEntry> books;
+  listAllBooks(books);
+  for (const BookEntry &b : books) {
+    const int slash = b.path.lastIndexOf('/');
+    if (b.path.substring(slash + 1) == fileName) return b.path.substring(0, slash);
+  }
+  return kBooksDir;
+}
+
 String stemOf(const String &pathOrName) {
   String name = pathOrName.substring(pathOrName.lastIndexOf('/') + 1);
   const int dot = name.lastIndexOf('.');

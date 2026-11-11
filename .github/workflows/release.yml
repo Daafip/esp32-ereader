@@ -30,11 +30,17 @@ jobs:
           path: ~/.platformio
           key: platformio-${{ hashFiles('firmware/platformio.ini') }}
 
-      - name: Tag matches FW_VERSION
+      - name: Tag matches FW_VERSION and the add-on's version
         run: |
           version=$(sed -n 's/.*-DFW_VERSION=\\"\([^\\]*\)\\".*/\1/p' firmware/platformio.ini)
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match FW_VERSION $version"
+            exit 1
+          fi
+          # the book server add-on downloads bookprep from this tag (homeassistant/t5books)
+          addon=$(sed -n 's/^version: "\(.*\)"/\1/p' homeassistant/t5books/config.yaml)
+          if [ "v$addon" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the add-on's version $addon"
             exit 1
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"

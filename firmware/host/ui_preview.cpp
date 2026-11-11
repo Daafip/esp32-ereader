@@ -340,6 +340,39 @@ int main(int argc, char **argv) {
   ui::menu("Davids reader", list, rowItem, (void *)kShelf, kNext, kOpen, 72);
   save("22-library-folders");
 
+  // --- book server (app.cpp: Menu -> Book server) ---
+  const bool wide = display::screen().w >= 700;  // the author beside the title (app.cpp)
+  const Row kServerTop[] = {
+      {tr(S::Newest), "", true, false},
+      {tr(S::Authors), "", true, false},
+      {tr(S::Titles), "", true, false},
+  };
+  list.reset(3, ui::menuRows(), 0);
+  ui::menu(tr(S::BookServer), list, rowItem, (void *)kServerTop, kNext, kOpen, 72);
+  save("28-server-top");
+  const Row kServerBooks[] = {
+      {"Het geheime leven van schrijvers", wide ? "Guillaume Musso" : "", false, false},
+      {"Het boek van de Baltimores", wide ? "Jo\xC3\xABl Dicker" : "", false, true},
+      {"Dieren eten", wide ? "Jonathan Safran Foer" : "", false, false},
+      {"Gids voor de kantoorjungle", wide ? "Japke-d. Bouma" : "", false, false},
+      {"Je hebt w\xC3\xA9l iets te verbergen", wide ? "Maurits Martijn, Dimitri To\xE2\x80\xA6" : "",
+       false, false},
+      {"Mrs Dalloway", wide ? "Virginia Woolf" : "", false, true},
+  };
+  list.reset(6, ui::menuRows(), 2);
+  ui::menu(tr(S::Newest), list, rowItem, (void *)kServerBooks, kNext, kOpen, 72);
+  save("29-server-newest");
+  ui::valueEditor(tr(S::Typesetting), "42%", "Dieren eten", 42, {Button::None, nullptr, nullptr},
+                  {Button::Menu, "back", nullptr}, 72);
+  save("30-server-typesetting");
+  ui::valueEditor(tr(S::Downloading), "60%", "1.2 MB of 1.9 MB", 60,
+                  {Button::None, nullptr, nullptr}, {Button::None, nullptr, nullptr}, 72);
+  save("31-server-downloading");
+  ui::message(ui::Icon::Book, tr(S::Downloaded), "Dieren eten (1\xE2\x80\x93" "151)",
+              "Jonathan Safran Foer", {Button::Next, tr(S::ReadAction), nullptr},
+              {Button::Menu, tr(S::MoreAction), nullptr});
+  save("32-server-downloaded");
+
   setLanguage(Lang::Nl);
   list.reset(kSettingCount, ui::menuRows(), 0);
   ui::menu(tr(S::Settings), list, settingItem, nullptr, kNext,
@@ -356,6 +389,34 @@ int main(int argc, char **argv) {
               {Button::Next, tr(S::WifiTransfer), nullptr}, {Button::None, nullptr, nullptr});
   save("25-no-books-flash-nl");
 #endif
+  // book server screens in Dutch (the longest texts)
+  char part[3][48];
+  snprintf(part[0], sizeof(part[0]), tr(S::PagesRange), 1u, 151u);
+  snprintf(part[1], sizeof(part[1]), tr(S::PagesRange), 152u, 297u);
+  snprintf(part[2], sizeof(part[2]), tr(S::PagesRange), 298u, 468u);
+  const Row kParts[] = {
+      {part[0], "1.9 MB", false, true},
+      {part[1], "1.9 MB", false, false},
+      {part[2], "2.1 MB", false, false},
+  };
+  list.reset(3, ui::menuRows(), 1);
+  ui::menu(tr(S::ChooseAPart), list, rowItem, (void *)kParts, kNext,
+           {Button::Menu, tr(S::Open), tr(S::Back)}, 72);
+  save("33-server-parts-nl");
+  ui::message(ui::Icon::Warning, tr(S::NoHomeWifi), tr(S::SetOnPage1), tr(S::SetOnPage2),
+              tr(S::BackAnyButton));
+  save("34-server-no-wifi-nl");
+  ui::message(ui::Icon::Warning, tr(S::ServerUnreachable), "192.168.68.101:8484", tr(S::NoAnswer),
+              tr(S::BackAnyButton));
+  save("35-server-unreachable-nl");
+  char waiting[48];
+  snprintf(waiting, sizeof(waiting), tr(S::AheadInLine), 2u);
+  ui::valueEditor(tr(S::Typesetting), "0%", waiting, 0, {Button::None, nullptr, nullptr},
+                  {Button::Menu, tr(S::Back), nullptr}, 72);
+  save("36-server-waiting-nl");
+  ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksLine1), tr(S::NoBooksLine2),
+              {Button::Next, tr(S::WifiTransfer), nullptr}, {Button::Menu, tr(S::BookServer), nullptr});
+  save("37-no-books-server-nl");
   setLanguage(Lang::En);
   return 0;
 }

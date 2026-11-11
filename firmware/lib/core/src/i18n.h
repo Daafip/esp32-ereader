@@ -152,7 +152,39 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(FileDamaged, "The file may be damaged", "Het bestand is misschien beschadigd")         \
   X(NoFlash, "No book storage", "Geen boekenopslag")                                       \
   X(NoFlashLine1, "Flash this firmware again", "Flash deze firmware opnieuw")              \
-  X(NoFlashLine2, "over USB", "via USB")
+  X(NoFlashLine2, "over USB", "via USB")                                                  \
+  /* book server (Home Assistant add-on; src/bookserver.h) */                              \
+  X(BookServer, "Book server", "Boekenserver")                                             \
+  X(Newest, "Newest", "Nieuwste")                                                          \
+  X(Authors, "Authors", "Auteurs")                                                         \
+  X(Titles, "Titles A\xE2\x80\x93Z", "Titels A\xE2\x80\x93Z")                              \
+  X(ChooseProfile, "Choose a profile", "Kies een profiel")                                 \
+  X(Connecting, "Connecting...", "Verbinden...")                                           \
+  X(NoServerSet, "No book server set", "Geen boekenserver ingesteld")                      \
+  X(SetOnPage1, "Enter it on the reader's page:", "Vul het in op de pagina van de lezer:")  \
+  X(SetOnPage2, "Wi-Fi transfer, then Settings", "Wifi-overdracht, dan Instellingen")      \
+  X(BadAddress, "Bad book server address", "Ongeldig adres van de boekenserver")           \
+  X(NoHomeWifi, "No home Wi-Fi set", "Geen wifi thuis ingesteld")                          \
+  X(WifiNotJoined, "No Wi-Fi connection", "Geen wifiverbinding")                           \
+  X(OutOfReach, "Is the network in reach?", "Is het netwerk binnen bereik?")               \
+  X(ServerUnreachable, "Book server unreachable", "Boekenserver onbereikbaar")             \
+  X(NoAnswer, "no answer", "geen antwoord")                                                \
+  X(Typesetting, "Typesetting", "Opmaken")                                                 \
+  X(AheadInLine, "%u ahead in the queue", "%u voor in de wachtrij")                        \
+  X(Downloading, "Downloading", "Downloaden")                                              \
+  X(BytesOf, "%s of %s", "%s van %s")                                                      \
+  X(Downloaded, "Downloaded", "Gedownload")                                                \
+  X(ReadAction, "read", "lees")                                                            \
+  X(MoreAction, "more", "meer")                                                            \
+  X(ChooseAPart, "Too big: choose a part", "Te groot: kies een deel")                      \
+  X(PagesRange, "Pages %u\xE2\x80\x93%u", "Pagina's %u\xE2\x80\x93%u")                     \
+  X(NotEnoughRoom, "Not enough space", "Niet genoeg ruimte")                               \
+  X(RoomFree, "%s free on the reader", "%s vrij op de lezer")                              \
+  X(CannotTypeset, "Could not typeset it", "Opmaken mislukt")                              \
+  X(DownloadFailed, "Download failed", "Downloaden mislukt")                               \
+  X(ConnectionLost, "connection lost", "verbinding verbroken")                             \
+  X(CannotWrite, "cannot write the file", "kan het bestand niet schrijven")                \
+  X(TookTooLong, "took too long", "duurde te lang")
 
 enum class S : uint16_t {
 #define T5_STRING_ID(id, en, nl) id,

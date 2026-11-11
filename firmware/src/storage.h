@@ -79,6 +79,10 @@ Status listLibrary(const char *folder, std::vector<BookEntry> &out, size_t max =
 // Every book in every folder (web page).
 Status listAllBooks(std::vector<BookEntry> &out, size_t max = 400);
 
+// Where a book of this file name ("x.t5b") is: "/books" or "/books/<folder>", or
+// "/books" if there is none. A new copy (restyled, downloaded again) goes there.
+String bookDirFor(const String &fileName);
+
 // "Folder/x.t5b" -> "x" (bookmarks and originals are keyed by the stem).
 String stemOf(const String &pathOrName);
 

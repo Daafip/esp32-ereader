@@ -56,4 +56,12 @@ version 2, about 5 times smaller): they need firmware 2.0.0 or later, and older 
 still open (\`prep --uncompressed\` makes books for 1.x firmware). A FireBeetle without a
 card keeps its books in its flash, room for about 170 pages: of a bigger book the page
 sends the part you choose. See \`docs/usage.md\`.
+
+**Book server for Home Assistant:** the add-on *T5 book server* keeps your EPUB library
+and typesets it per profile (screen, font, size), set in Home Assistant; the reader
+downloads books itself over the home Wi-Fi, Menu → Book server (books too big for it
+come in parts that fit). In Home Assistant: Settings → Add-ons → Add-on store → ⋮ →
+Repositories, add <https://github.com/Daafip/esp32-ereader>, install *T5 book server*,
+then enter the address from its log on the reader's page (⚙ Settings → Book server).
+See \`docs/book-server.md\`.
 NOTES

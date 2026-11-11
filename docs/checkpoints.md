@@ -244,3 +244,24 @@ Untested features from the Pala One ideas (`PLAN.md` Phase 9). Each is quick to 
 8. **Page features:** home Wi-Fi from ⚙ Settings (the reader joins it next time),
    name, folders (upload into one, move a book), Open + search + "Read from here",
    restyle keeps bookmarks, factory reset (wipes the card's books and the settings).
+
+## Book server (Phase 12: Home Assistant add-on)
+
+Needs the add-on running (`docs/book-server.md` → "Installing the add-on") and home
+Wi-Fi on the reader.
+
+1. **Address:** the add-on's log shows `Address for the reader ...`; enter it on the
+   reader's page (⚙ Settings → Book server). A wrong one: "Book server unreachable",
+   any key back.
+2. **Lists:** Menu → Book server: profiles (if several for the screen), Newest /
+   Authors / Titles A–Z; scroll past the first 40 books (the reader fetches more);
+   books already on the reader have a dot.
+3. **A book:** "Typesetting" counts up (hold MENU: back to the list, the add-on goes
+   on), "Downloading", "Downloaded": NEXT opens it at page 1, MENU back to the list.
+   Download it again with another profile: replaced, position moved along.
+4. **FireBeetle 7.5" without a card:** a novel offers "Too big: choose a part"; part 1,
+   read a little, then part 2: it replaces part 1 (removed first for the room), the
+   list then starts on part 3 with a dot on part 2, each part has its own position.
+5. **Sleep:** idle in the lists until the sleep screen; Wi-Fi off (current back to
+   normal), the book reopens on the next press.
+6. Dutch: any text cut off on the T5-2.13 (ui-preview 33-37 say it fits)?

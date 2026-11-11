@@ -295,6 +295,14 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         </div>
         <div class="row"><span class="grow hint" id="wifi-saved"></span><button type="button" class="btn small quiet" id="wifi-forget" data-t="forget">Forget</button><button class="btn small" data-t="save">Save</button></div>
       </form>
+      <h3 data-t="bookServer">Book server</h3>
+      <p class="hint" data-t="bookServerHint"></p>
+      <form id="set-server">
+        <div class="controls">
+          <label class="field"><span data-t="serverAddress">Address</span><input type="text" id="server-address" maxlength="96" autocomplete="off" inputmode="url" placeholder="http://192.168.1.10:8484"></label>
+        </div>
+        <div class="row"><span class="grow hint" id="server-saved"></span><button type="button" class="btn small quiet" id="server-forget" data-t="forget">Forget</button><button class="btn small" data-t="save">Save</button></div>
+      </form>
       <h3 data-t="factoryReset">Factory reset</h3>
       <p class="hint" data-t="factoryResetHint"></p>
       <button class="btn small danger" id="reset" data-t="eraseAll">Erase everything</button>
@@ -384,6 +392,9 @@ const T = {
     readerSettings: "On the reader", homeWifi: "Home Wi-Fi",
     homeWifiHint: "The reader joins this network the next time you start Wi-Fi transfer, and makes its own network if it can't. The password stays on the reader.",
     network: "Network name", password: "Password", wifiSaved: "Saved: {0}", wifiNone: "None saved: the reader makes its own network.",
+    bookServer: "Book server",
+    bookServerHint: "Books from the T5 book server add-on in Home Assistant, typeset for this reader: on the reader, Menu → Book server (over the home Wi-Fi above). Its address is in the add-on's log, like http://192.168.1.10:8484.",
+    serverAddress: "Address", serverSaved: "Saved: {0}", serverNone: "None saved.",
     forget: "Forget", factoryReset: "Factory reset",
     factoryResetHint: "Erases all books, originals, bookmarks, pictures, fonts and settings on the reader.",
     eraseAll: "Erase everything", resetConfirm1: "Erase everything on the reader?", resetConfirm2: "Type ERASE to confirm.",
@@ -444,6 +455,9 @@ const T = {
     readerSettings: "Op de lezer", homeWifi: "Wifi thuis",
     homeWifiHint: "De lezer gebruikt dit netwerk de volgende keer dat je wifi-overdracht start, en maakt anders zijn eigen netwerk. Het wachtwoord blijft op de lezer.",
     network: "Netwerknaam", password: "Wachtwoord", wifiSaved: "Bewaard: {0}", wifiNone: "Niets bewaard: de lezer maakt zijn eigen netwerk.",
+    bookServer: "Boekenserver",
+    bookServerHint: "Boeken van de add-on T5 book server in Home Assistant, opgemaakt voor deze lezer: op de lezer Menu → Boekenserver (via de wifi thuis hierboven). Het adres staat in het logboek van de add-on, zoals http://192.168.1.10:8484.",
+    serverAddress: "Adres", serverSaved: "Bewaard: {0}", serverNone: "Niets bewaard.",
     forget: "Vergeten", factoryReset: "Fabrieksinstellingen",
     factoryResetHint: "Wist alle boeken, originelen, bladwijzers, afbeeldingen, lettertypes en instellingen op de lezer.",
     eraseAll: "Alles wissen", resetConfirm1: "Alles op de lezer wissen?", resetConfirm2: "Typ WISSEN om te bevestigen.",
@@ -533,7 +547,7 @@ function fitCanvas(canvas, sc = screen()) {
 // --- reader API -------------------------------------------------------------------
 
 const demoData = {
-  version: "demo", board: "t5-213", lang, name: "", homeWifi: "", locked: false, battery: 72, free: 7.2e9, total: 7.9e9, fonts: [], pictures: [],
+  version: "demo", board: "t5-213", lang, name: "", homeWifi: "", bookServer: "", locked: false, battery: 72, free: 7.2e9, total: 7.9e9, fonts: [], pictures: [],
   screen: B.screenFor(params.get("screen") || "t5-213"), // demo of another reader: ?screen=4.7in
   stats: { pages: 3412, seconds: 220320, daysRead: 41, streak: 6, bestStreak: 14, todayPages: 23, todaySeconds: 1860, clock: true },
   books: [
@@ -1256,6 +1270,8 @@ async function openSettings() {
   $("#wifi-ssid").value = info.homeWifi || "";
   $("#wifi-pass").value = "";
   $("#wifi-saved").textContent = info.homeWifi ? t("wifiSaved", info.homeWifi) : t("wifiNone");
+  $("#server-address").value = info.bookServer || "";
+  $("#server-saved").textContent = info.bookServer ? t("serverSaved", info.bookServer) : t("serverNone");
   $("#settings").showModal();
   try {
     const { settings } = await api("/api/settings");
@@ -1301,6 +1317,24 @@ $("#wifi-forget").addEventListener("click", async () => {
     info.homeWifi = "";
     $("#wifi-ssid").value = "";
     $("#wifi-saved").textContent = t("wifiNone");
+  } catch (err) { alert(err.message); }
+});
+$("#set-server").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const address = $("#server-address").value.trim();
+  if (!address) return;
+  try {
+    await api("/api/bookserver", form({ address }));
+    info.bookServer = address;
+    $("#server-saved").textContent = t("serverSaved", address);
+  } catch (err) { alert(err.message); }
+});
+$("#server-forget").addEventListener("click", async () => {
+  try {
+    await api("/api/bookserver", { method: "DELETE" });
+    info.bookServer = "";
+    $("#server-address").value = "";
+    $("#server-saved").textContent = t("serverNone");
   } catch (err) { alert(err.message); }
 });
 $("#reset").addEventListener("click", async () => {

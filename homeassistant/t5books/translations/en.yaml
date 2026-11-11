@@ -1,0 +1,33 @@
+configuration:
+  library:
+    name: Library folder
+    description: >-
+      Folder with your EPUB and TXT books, subfolders included (a Calibre library
+      inside it is skipped: its books are copies). /share and /media are readable.
+  profiles:
+    name: Profiles
+    description: >-
+      How books are typeset, one entry per reader: a name the reader shows, its
+      screen (t5-213, 4.7in, 7.5in, 7.5in-landscape), and optionally font, size (px),
+      line_spacing, margin, indent, paragraph_spacing, justify, hyphenate, language,
+      weight (70 lighter to 210 bolder), bionic, cover, chapter_break. A screen
+      without a profile gets a default one. See the Documentation tab.
+    fields:
+      name:
+        name: Name
+      screen:
+        name: Screen
+      font:
+        name: Font
+      size:
+        name: Size (px)
+  prepare_newest:
+    name: Prepare the newest books
+    description: >-
+      Typeset this many of the newest books for every profile ahead of time, so
+      they download at once. 0: only when a reader asks.
+  cache_mb:
+    name: Cache size (MB)
+    description: Typeset books are kept until the cache is this big (the oldest go first).
+network:
+  8484/tcp: Book server (the reader, and a page for a browser)

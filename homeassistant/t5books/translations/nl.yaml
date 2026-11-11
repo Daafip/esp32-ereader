@@ -1,0 +1,33 @@
+configuration:
+  library:
+    name: Bibliotheekmap
+    description: >-
+      Map met je EPUB- en TXT-boeken, ook in submappen (een Calibre-bibliotheek
+      daarin wordt overgeslagen: dat zijn kopieën). /share en /media zijn leesbaar.
+  profiles:
+    name: Profielen
+    description: >-
+      Hoe boeken worden opgemaakt, één per lezer: een naam die de lezer toont, het
+      scherm (t5-213, 4.7in, 7.5in, 7.5in-landscape), en eventueel font, size (px),
+      line_spacing, margin, indent, paragraph_spacing, justify, hyphenate, language,
+      weight (70 lichter tot 210 vetter), bionic, cover, chapter_break. Een scherm
+      zonder profiel krijgt een standaardprofiel. Zie het tabblad Documentatie.
+    fields:
+      name:
+        name: Naam
+      screen:
+        name: Scherm
+      font:
+        name: Lettertype
+      size:
+        name: Grootte (px)
+  prepare_newest:
+    name: Nieuwste boeken voorbereiden
+    description: >-
+      Zet zoveel van de nieuwste boeken vooraf klaar voor elk profiel, zodat ze
+      meteen downloaden. 0: alleen als een lezer erom vraagt.
+  cache_mb:
+    name: Cachegrootte (MB)
+    description: Opgemaakte boeken blijven bewaard tot de cache zo groot is (de oudste gaan eerst).
+network:
+  8484/tcp: Boekenserver (de lezer, en een pagina voor een browser)

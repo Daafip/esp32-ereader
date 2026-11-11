@@ -1,3 +1,4 @@
+import itertools
 import struct
 import zlib
 
@@ -203,3 +204,72 @@ def test_short_file_rejected(tmp_path):
     path.write_bytes(b"T5B1 short")
     with pytest.raises(ValueError, match="too short"):
         T5BFile(path)
+
+
+# --- parts of a stored book (book server) ----------------------------------------------
+
+
+def _book_with_chapters(tmp_path, count=12, cover=True):
+    """A version 2 book: pages that compress differently, chapters at 0, 3, 7."""
+    from PIL import ImageDraw
+
+    from bookprep.t5b import TocEntry, pack_page, write_t5b
+
+    pages = []
+    for n in range(count):
+        img = Image.new("1", (250, 122), 1)
+        ImageDraw.Draw(img).rectangle((0, 0, 20 * n, 10 + 9 * n), fill=0)
+        pages.append(pack_page(img))
+    toc = [TocEntry(0, "Een"), TocEntry(3, "Twee"), TocEntry(7, "Drie")]
+    path = tmp_path / "book.t5b"
+    write_t5b(path, title="Boek", author="A", page_w=250, page_h=122, toc=toc, pages=pages,
+              cover=Image.new("1", (40, 60), 0) if cover else None)  # fmt: skip
+    return T5BFile(path)
+
+
+def test_part_toc_carries_the_chapter_it_opens_in():
+    from bookprep.t5b import TocEntry, part_toc
+
+    toc = [TocEntry(0, "Een"), TocEntry(3, "Twee"), TocEntry(7, "Drie")]
+    assert part_toc(toc, 0, 12) == toc
+    assert part_toc(toc, 4, 8) == [TocEntry(0, "Twee"), TocEntry(3, "Drie")]
+    assert part_toc(toc, 3, 5) == [TocEntry(0, "Twee")]  # starts on a chapter
+    assert part_toc(toc, 8, 12) == [TocEntry(0, "Drie")]
+    assert part_toc([TocEntry(2, "Later")], 0, 2) == []  # before the first chapter
+
+
+def test_write_part_keeps_pages_as_stored_with_its_own_title_and_cover(tmp_path):
+    from bookprep.t5b import part_size, write_part
+
+    book = _book_with_chapters(tmp_path)
+    out = tmp_path / "part.t5b"
+    header = write_part(book, out, 4, 9)
+    part = T5BFile(out)
+    assert header.title == "Boek (5\N{EN DASH}9)" == part.header.title
+    assert part.header.page_count == 5
+    assert [part.page_stored(n) for n in range(5)] == [book.page_stored(4 + n) for n in range(5)]
+    assert [(e.start_page, e.title) for e in part.toc] == [(0, "Twee"), (3, "Drie")]
+    assert part.cover is not None and part.cover.size == (40, 60)
+    assert out.stat().st_size == part_size(book, 4, 9)
+    whole = tmp_path / "whole.t5b"
+    write_part(book, whole, 0, 12)  # the whole book keeps its title
+    assert T5BFile(whole).header.title == "Boek"
+    assert whole.read_bytes() == book.path.read_bytes()
+
+
+def test_plan_parts_covers_the_book_in_pieces_that_fit(tmp_path):
+    from bookprep.t5b import part_size, plan_parts
+
+    for cover in (True, False):
+        book = _book_with_chapters(tmp_path, cover=cover)
+        whole = book.path.stat().st_size
+        assert plan_parts(book, whole) == [(0, 12)]
+        one_page = max(part_size(book, n, n + 1) for n in range(12))  # one a part
+        for room in (whole - 1, (whole + one_page) // 2, one_page):
+            parts = plan_parts(book, room)
+            assert parts[0][0] == 0 and parts[-1][1] == 12
+            assert all(a[1] == b[0] for a, b in itertools.pairwise(parts))
+            assert all(part_size(book, a, b) <= room for a, b in parts)
+            # each part as big as fits: one more page would not
+            assert all(part_size(book, a, b + 1) > room for a, b in parts[:-1])
+        assert plan_parts(book, 100) == []  # not even one page

@@ -14,6 +14,7 @@
 
 #include "board.h"
 #include "board_tag.h"
+#include "catalog.h"
 #include "bookmarks.h"
 #include "display.h"
 #include "i18n.h"
@@ -113,8 +114,6 @@ size_t upFill = 0;
 int upStatus = 200;
 String upError;
 char upTitle[t5b::kTitleBytes + 1];
-uint32_t upPages = 0;
-uint32_t upId = 0;  // t5b::bookId of the uploaded book (raw header title, like the library)
 
 // Firmware update (OTA into the other app slot), then restart.
 int fwStatus = 200;
@@ -209,12 +208,7 @@ String bookDirFor(const String &name) {
     if (!folder.length()) return storage::kBooksDir;
     return isSafeFolderName(folder.c_str()) ? String(storage::kBooksDir) + "/" + folder : String();
   }
-  std::vector<storage::BookEntry> books;
-  storage::listAllBooks(books);
-  for (const storage::BookEntry &b : books) {
-    if (name == baseName(b.path.c_str())) return b.path.substring(0, b.path.lastIndexOf('/'));
-  }
-  return storage::kBooksDir;
+  return storage::bookDirFor(name);
 }
 
 // --- handlers ---------------------------------------------------------------------
@@ -278,6 +272,7 @@ void handleInfo() {
   addString(out, "lang", language() == Lang::Nl ? "nl" : "en");
   addString(out, "name", prefs::deviceName().c_str());
   addString(out, "homeWifi", prefs::homeSsid().c_str());  // never the password
+  addString(out, "bookServer", prefs::bookServer().c_str());
   addBool(out, "locked", prefs::locked());
   // This reader's screen now: the page typesets books for it (see bookprep.js,
   // screens). The 7.5" turns (Settings -> Orientation): portrait or landscape.
@@ -394,23 +389,6 @@ bool flushUpload() {
   return ok;
 }
 
-// Validates the finished temp file as a book for one of the board's screens (the
-// 7.5" has two), as the library will: header, page index, cover. Fills upTitle.
-bool validateUpload() {
-  fs::File f = storage::files().open(upTmp, FILE_READ);
-  t5b::Header h;
-  const t5b::Error err = f ? storage::checkBook(f, h) : t5b::Error::TooShort;
-  if (f) f.close();
-  if (err != t5b::Error::None) {
-    failUpload(400, t5b::errorText(err));
-    return false;
-  }
-  strlcpy(upTitle, h.title[0] ? h.title : baseName(upFinal.c_str()), sizeof(upTitle));
-  upPages = h.pageCount;
-  upId = t5b::bookId(h.title, h.pageCount);
-  return true;
-}
-
 void handleUploadData() {
   HTTPUpload &up = server.upload();
   switch (up.status) {
@@ -420,7 +398,6 @@ void handleUploadData() {
       upFill = 0;
       upTmp = "";
       upTitle[0] = '\0';
-      upPages = 0;
       if (!authorized()) return failUpload(403, "wrong code");
       upKind = findKind(server.hasArg("kind") ? server.arg("kind") : String("book"));
       if (!upKind) return failUpload(400, "unknown kind");
@@ -479,7 +456,6 @@ void handleUploadData() {
         if (stored != up.totalSize) return failUpload(507, kCardFull);
       }
       const bool isBook = upKind == &kBookKind;
-      if (isBook && !validateUpload()) return;
       if (upKind == &kPictureKind && up.totalSize != size_t(kPageBytes) &&
           up.totalSize != size_t(kSquareBytes)) {
         char why[80];
@@ -489,34 +465,24 @@ void handleUploadData() {
                  unsigned(kSquareSide), unsigned(kSquareBytes));
         return failUpload(400, why);
       }
-      // Replacing a book (restyled): carry the reading position over in proportion.
-      uint32_t oldMark = 0, oldPages = 0;
-      if (isBook) {
-        fs::File old = storage::files().open(upFinal, FILE_READ);
-        uint8_t head[t5b::kHeaderSize];
-        t5b::Header oh;
-        if (old && old.read(head, sizeof(head)) == sizeof(head) &&
-            t5b::parseHeader(head, sizeof(head), oh) == t5b::Error::None) {
-          oldPages = oh.pageCount;
-          oldMark = prefs::bookmark(t5b::bookId(oh.title, oh.pageCount));
-        }
-        if (old) old.close();
-      }
-      storage::files().remove(upFinal);
-      if (!storage::files().rename(upTmp, upFinal)) {
-        return failUpload(500, "could not store the file");
-      }
-      if (isBook && oldPages && oldPages != upPages) {  // restyled: positions move along
-        if (oldMark) prefs::setBookmark(upId, remapPage(oldMark, oldPages, upPages));
-        PageList marks;
-        storage::readMarks(stemOf(upFinal), oldPages, marks);
-        marks.remap(oldPages, upPages);
-        storage::writeMarks(stemOf(upFinal), marks);
-      }
       if (!isBook) {
+        storage::files().remove(upFinal);
+        if (!storage::files().rename(upTmp, upFinal)) {
+          return failUpload(500, "could not store the file");
+        }
         state.lastActivityMs = millis();
         break;
       }
+      // A book for one of the board's screens (the 7.5" has two); a restyle replaces
+      // the old one, its reading position moving along.
+      t5b::Header h;
+      const char *why = "";
+      switch (installBook(upTmp, upFinal, KeepPosition::Always, h, why)) {
+        case Install::Ok: break;
+        case Install::Invalid: return failUpload(400, why);
+        case Install::CannotStore: return failUpload(500, why);
+      }
+      strlcpy(upTitle, h.title[0] ? h.title : baseName(upFinal.c_str()), sizeof(upTitle));
       char event[80];
       snprintf(event, sizeof(event), tr(S::Received), upTitle);
       Serial.printf("upload done: %s (%u bytes)\n", upFinal.c_str(), unsigned(up.totalSize));
@@ -808,6 +774,24 @@ void handleHomeWifi() {
   sendJson(200, "{}");
 }
 
+// POST address=: the book server (Menu -> Book server; bookserver.h). DELETE: forget.
+void handleBookServer() {
+  if (!authorized()) return sendError(403, "wrong code");
+  if (server.method() == HTTP_DELETE) {
+    prefs::setBookServer("");
+  } else {
+    String address = server.arg("address");
+    address.trim();
+    catalog::Address parsed;
+    if (address.length() > 96 || !catalog::parseAddress(address.c_str(), parsed)) {
+      return sendError(400, "not an address like http://192.168.1.10:8484");
+    }
+    prefs::setBookServer(address.c_str());
+  }
+  touch();
+  sendJson(200, "{}");
+}
+
 // POST epoch=&tz=: the phone's clock (for the reading statistics' days).
 void handleTime() {
   if (!authorized()) return sendError(403, "wrong code");
@@ -898,6 +882,8 @@ void addRoutes() {
   server.on("/api/name", HTTP_POST, handleName);
   server.on("/api/wifi", HTTP_POST, handleHomeWifi);
   server.on("/api/wifi", HTTP_DELETE, handleHomeWifi);
+  server.on("/api/bookserver", HTTP_POST, handleBookServer);
+  server.on("/api/bookserver", HTTP_DELETE, handleBookServer);
   server.on("/api/time", HTTP_POST, handleTime);
   server.on("/api/picture", HTTP_DELETE, handleDeletePicture);
   server.on("/api/reset", HTTP_POST, handleReset);
@@ -907,35 +893,20 @@ void addRoutes() {
   routesAdded = true;
 }
 
-// Home Wi-Fi: entered on the page (NVS), else include/secrets.h, else none.
 bool joinHomeNetwork() {
-  String ssid = prefs::homeSsid();
-  String pass = prefs::homePassword();
-#ifdef WIFI_SSID
-  if (!ssid.length()) {
-    ssid = WIFI_SSID;
-    pass = WIFI_PASSWORD;
+  char ssid[33];
+  if (!joinHomeWifi(ssid, sizeof(ssid))) {
+    if (ssid[0]) Serial.printf("home Wi-Fi %s not reachable, starting own network\n", ssid);
+    return false;
   }
-#endif
-  if (!ssid.length()) return false;
-  WiFi.mode(WIFI_STA);
-  WiFi.setHostname(kHostname);
-  WiFi.begin(ssid.c_str(), pass.c_str());
-  const uint32_t start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < kJoinTimeoutMs) delay(100);
-  if (WiFi.status() == WL_CONNECTED) {
-    state.ownNetwork = false;
-    strlcpy(state.ssid, ssid.c_str(), sizeof(state.ssid));
-    strlcpy(state.address, WiFi.localIP().toString().c_str(), sizeof(state.address));
-    if (MDNS.begin(kHostname)) {
-      MDNS.addService("http", "tcp", 80);
-      snprintf(state.hostname, sizeof(state.hostname), "%s.local", kHostname);
-    }
-    return true;
+  state.ownNetwork = false;
+  strlcpy(state.ssid, ssid, sizeof(state.ssid));
+  strlcpy(state.address, WiFi.localIP().toString().c_str(), sizeof(state.address));
+  if (MDNS.begin(kHostname)) {
+    MDNS.addService("http", "tcp", 80);
+    snprintf(state.hostname, sizeof(state.hostname), "%s.local", kHostname);
   }
-  Serial.printf("home Wi-Fi %s not reachable, starting own network\n", ssid.c_str());
-  WiFi.disconnect(true);
-  return false;
+  return true;
 }
 
 void startOwnNetwork() {
@@ -958,6 +929,73 @@ void startOwnNetwork() {
 }
 
 }  // namespace
+
+// Home Wi-Fi: entered on the page (NVS), else include/secrets.h, else none.
+bool joinHomeWifi(char *ssidOut, size_t ssidSize) {
+  String ssid = prefs::homeSsid();
+  String pass = prefs::homePassword();
+#ifdef WIFI_SSID
+  if (!ssid.length()) {
+    ssid = WIFI_SSID;
+    pass = WIFI_PASSWORD;
+  }
+#endif
+  strlcpy(ssidOut, ssid.c_str(), ssidSize);
+  if (!ssid.length()) return false;
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(kHostname);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  const uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < kJoinTimeoutMs) delay(100);
+  if (WiFi.status() == WL_CONNECTED) return true;
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  return false;
+}
+
+Install installBook(const String &tmp, const String &finalPath, KeepPosition keep,
+                    t5b::Header &h, const char *&why) {
+  fs::File f = storage::files().open(tmp, FILE_READ);
+  const t5b::Error err = f ? storage::checkBook(f, h) : t5b::Error::TooShort;
+  if (f) f.close();
+  if (err != t5b::Error::None) {
+    storage::files().remove(tmp);
+    why = t5b::errorText(err);
+    return Install::Invalid;
+  }
+  // The book it replaces, if any: its position, bookmarks and title.
+  uint32_t oldMark = 0, oldPages = 0;
+  t5b::Header oh;
+  {
+    fs::File old = storage::files().open(finalPath, FILE_READ);
+    uint8_t head[t5b::kHeaderSize];
+    if (old && old.read(head, sizeof(head)) == sizeof(head) &&
+        t5b::parseHeader(head, sizeof(head), oh) == t5b::Error::None) {
+      oldPages = oh.pageCount;
+      oldMark = prefs::bookmark(t5b::bookId(oh.title, oh.pageCount));
+    }
+    if (old) old.close();
+  }
+  storage::files().remove(finalPath);
+  if (!storage::files().rename(tmp, finalPath)) {
+    storage::files().remove(tmp);
+    why = "could not store the file";
+    return Install::CannotStore;
+  }
+  const bool sameBook = keep == KeepPosition::Always || strcmp(oh.title, h.title) == 0;
+  if (oldPages && oldPages != h.pageCount && sameBook) {  // restyled: positions move along
+    // raw header title, like the library
+    const uint32_t id = t5b::bookId(h.title, h.pageCount);
+    if (oldMark) prefs::setBookmark(id, remapPage(oldMark, oldPages, h.pageCount));
+    PageList marks;
+    storage::readMarks(stemOf(finalPath), oldPages, marks);
+    marks.remap(oldPages, h.pageCount);
+    storage::writeMarks(stemOf(finalPath), marks);
+  } else if (oldPages && !sameBook) {
+    storage::writeMarks(stemOf(finalPath), PageList());  // another part: its own marks
+  }
+  return Install::Ok;
+}
 
 bool start(int batteryPct) {
   battery = batteryPct;

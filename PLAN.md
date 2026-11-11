@@ -270,6 +270,22 @@ Measured on a 797-page novel (7.5", all pages): PackBits 2.5×, Group5 4.2×, zl
 - [x] Short menu without an open book (David: "i cant access the menu to activate wifi if a book is corrupt"): hold MENU in the library opens Library, Statistics, Wi-Fi transfer, Settings, About, Sleep (`kHomeItems`); the library's hold hint says "menu"; About shows "-" for the book
 - [x] A part from anywhere (David: "it only asks to store part of the book, but always at the start, make it adjustable"): the page's "Send a part" dialog (chapter list + slider, the preview follows, live "Pages X–Y of N"), `partOf()` gives the part its own contents (`tocEntries` on its pages) and a title with the range (`partTitle`, Python `part_title`); `prep --first-page S`. Tests: CLI, parity, a browser test sending pages 2–3
 
+## Phase 12 — Book server: a Home Assistant add-on (2026-11-11)
+
+David: "make a similar ha addon [to COPS], which reads epubs from
+/mnt/ha_share/calibre-dedrm/books and serves these to a user from the ereader ...
+The choices for font, size, etc. should be device based in the config in ha, the user
+from the ereader can just choose which profile and download an ebook."
+`docs/book-server.md`.
+
+- [x] Server `bookprep/bookserver.py` (`pixi run book-server`): profiles from the options (screen + bookprep's options; a screen without one gets a default), conversion with bookprep in a subprocess (one at a time, `nice`, progress from `prep --progress`), cache per profile key (options, font contents, a hash of bookprep's code), LRU within `cache_mb`, newest books typeset ahead (`prepare_newest`). Plain-text API for the reader (`T5BOOKS<TAB>1`, tab-separated records): profiles, books (newest / title / author, paged), authors, prepare (busy % / ready / error, parts that fit `room`), download (whole or a part). A page for browsers with download links
+- [x] Library `bookprep/library.py`: EPUB/TXT in the folder and below, metadata from Calibre's `<stem>.opf` / `metadata.opf` / the EPUB, "added" from `calibre:timestamp`; a Calibre library nested inside is skipped (David's folder has the DeDRM exports plus `library/` with copies); file names as the page makes them
+- [x] Parts without typesetting again: `t5b.part_toc/part_size/write_part/plan_parts` (stored page streams, own contents, `part_title`, cover)
+- [x] Add-on `homeassistant/t5books/` (+ `repository.yaml`): `python:3.12-slim`, pinned packages, bundled fonts as static TTF at build (`--fetch-fonts`; Ubuntu from google/fonts, renders the same as conda's), `/share` and `/media` read-only, port 8484, the reader's address in the log (Supervisor API), watchdog, webui, en/nl translations, DOCS.md. bookprep from the release tag, or bundled by `pixi run ha-addon` (local add-on). Built and run with Docker here against David's library: identical `.t5b` to the CLI's. release.yml checks the add-on's version against the tag
+- [x] Reader: Menu → Book server (also the short menu; MENU on "No books yet"): home Wi-Fi, profile, Newest / Authors / Titles A–Z (windowed lists), typesetting progress, download with progress, parts list (dot on the part on the reader, starts on the next), "Downloaded: read / more". `src/bookserver.cpp` (HTTP/1.0 client, mDNS for .local), `lib/core/src/catalog.*` (address, replies, HTTP lines, part titles, room; tested), `transfer::installBook` shared with uploads (position moves along only for the same title on a download), `storage::bookDirFor`. Address on the page (⚙ Settings → Book server, `/api/bookserver`, devserver mirror, tests) or `BOOK_SERVER` in secrets.h. Strings en/nl; ui-preview screens 28–37
+- [ ] 🧑 Install the add-on on David's Home Assistant (local: `pixi run ha-addon`), set the profiles, enter the address on the reader's page
+- [ ] 🧑 On the boards: see "Checks on the board" in `docs/book-server.md` (FireBeetle 7.5" flash build: parts)
+
 ---
 
 ## Decisions

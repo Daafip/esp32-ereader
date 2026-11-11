@@ -92,6 +92,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--preview", action="store_true", help="write preview PNGs + contact sheet")
     p.add_argument("--preview-pages", type=int, default=10)
     p.add_argument("--preview-start", type=int, default=0, help="first page to preview (0-based)")
+    p.add_argument(
+        "--progress",
+        action="store_true",
+        help='print "progress <0..1>" lines while working (for the book server)',
+    )
     p.add_argument("--version", action="version", version=f"bookprep {__version__}")
     return p.parse_args(argv)
 
@@ -138,6 +143,11 @@ def chapter_title_at(toc: list[TocEntry], page: int) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    def progress(done: float) -> None:
+        if args.progress:
+            print(f"progress {done:.3f}", flush=True)
+
     font_path = args.font or default_font()
     if font_path is None or not font_path.exists():
         print("error: no font; pass --font path/to/font.ttf", file=sys.stderr)
@@ -152,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     title = args.title or book.title
     author = args.author if args.author is not None else book.author
 
+    progress(0.05)
     lang = args.lang or raw.language or DEFAULT_LANG
     hyphenator = None if args.no_hyphenate else Hyphenator(lang)
     if hyphenator is not None and hyphenator.lang is None:
@@ -188,7 +199,13 @@ def main(argv: list[str] | None = None) -> int:
     render_opts = RenderOptions(
         line_height, threshold=args.threshold, mono=args.mono, bionic=args.bionic
     )
-    images = [render_page(page, font, geometry, render_opts) for page in pages]
+    progress(0.25)  # rendering takes about two thirds of the time, writing the rest
+    images = []
+    for n, page in enumerate(pages):
+        images.append(render_page(page, font, geometry, render_opts))
+        if n % 10 == 9:
+            progress(0.25 + 0.65 * (n + 1) / len(pages))
+    progress(0.9)
     toc = toc_entries(book.chapters, pages)
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -239,6 +256,7 @@ def main(argv: list[str] | None = None) -> int:
         "characters:",
         *(fallback.report() or ["  all characters present in the font"]),
     ]
+    progress(1.0)
     report_path = args.out / f"{stem}.report.txt"
     report_path.write_text("\n".join(report) + "\n", encoding="utf-8")
     print("\n".join(report[:10]))

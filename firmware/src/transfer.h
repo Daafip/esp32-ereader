@@ -7,7 +7,10 @@
 // whenever this mode isn't running.
 #pragma once
 
+#include <Arduino.h>
 #include <stdint.h>
+
+#include "t5b_format.h"
 
 namespace transfer {
 
@@ -33,5 +36,21 @@ void loop();  // call often while running
 const Info &info();
 // True once after anything shown on the screen changed (client joined, upload).
 bool takeChanged();
+
+// Joins the home Wi-Fi (entered on the page, else secrets.h). `ssid` gets its name
+// ("" if none is set). False: none set, or not reachable (Wi-Fi is off again).
+// Also used by the book server (bookserver.cpp).
+bool joinHomeWifi(char *ssid, size_t ssidSize);
+
+// A book written to `tmp` (uploaded, or downloaded from the book server) becomes
+// `finalPath`. It is checked as the library checks it (Invalid: `why` says what is
+// wrong, tmp is gone), then replaces a book of that name. The reading position and
+// bookmarks of the replaced book move along in proportion: always (a restyle from
+// the page), or only when the title is the same (SameTitle: a download, where the
+// next part of a book replaces the last and must start at its own beginning).
+enum class Install : uint8_t { Ok, Invalid, CannotStore };
+enum class KeepPosition : uint8_t { Always, SameTitle };
+Install installBook(const String &tmp, const String &finalPath, KeepPosition keep,
+                    t5b::Header &h, const char *&why);
 
 }  // namespace transfer

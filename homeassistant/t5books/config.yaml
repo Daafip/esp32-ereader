@@ -1,0 +1,59 @@
+# T5 book server: Home Assistant add-on (docs/book-server.md). Its version is the
+# release it belongs to: bump it with FW_VERSION (release.yml checks the tag).
+name: T5 book server
+version: "2.1.0"
+slug: t5_book_server
+description: >-
+  Your EPUB library for the T5 e-reader: typeset per profile (screen, font, size)
+  and downloaded by the reader itself over Wi-Fi (Menu, Book server).
+url: https://github.com/Daafip/esp32-ereader/tree/main/homeassistant/t5books
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+# read-only: /network/info and /addons/self/info, to log the address for the reader
+hassio_api: true
+map:
+  - share:ro
+  - media:ro
+# The reader needs a plain http://<HA-IP>:8484 on the home network (no ingress: it
+# can't log in to Home Assistant).
+ports:
+  8484/tcp: 8484
+ports_description:
+  8484/tcp: Book server (the reader, and a page for a browser)
+webui: "http://[HOST]:[PORT:8484]/"
+watchdog: "http://[HOST]:[PORT:8484]/health"
+backup_exclude:
+  - "cache"
+  - "cache/*"
+options:
+  library: /share/calibre-dedrm/books
+  profiles:
+    - name: Literata 18
+      screen: 7.5in
+      font: Literata
+      size: 18
+  prepare_newest: 5
+  cache_mb: 2000
+schema:
+  library: str
+  profiles:
+    - name: str
+      screen: "list(t5-213|4.7in|7.5in|7.5in-landscape)"
+      font: "str?"
+      size: "int(6,96)?"
+      line_spacing: "float(1,3)?"
+      margin: "int(0,200)?"
+      indent: "int(0,200)?"
+      paragraph_spacing: "int(0,100)?"
+      justify: "bool?"
+      hyphenate: "bool?"
+      language: "str?"
+      weight: "int(70,210)?"
+      bionic: "bool?"
+      cover: "bool?"
+      chapter_break: "bool?"
+  prepare_newest: "int(0,100)"
+  cache_mb: "int(100,100000)"

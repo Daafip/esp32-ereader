@@ -125,7 +125,8 @@ reader opens that page when you press done on it.
 
 ## Wi-Fi transfer (books from a browser)
 
-Menu → **Wi-Fi transfer**, or any press on the "No books yet" screen.
+Menu → **Wi-Fi transfer**, or any press on the "No books yet" screen (MENU there
+starts the book server instead, when one is set: see "Book server").
 
 1. **Join the Wi-Fi**: scan the QR code with your phone, or join `T5-Reader-XXXX`
    with the password on the screen (it stays the same, so laptops can remember it).
@@ -169,6 +170,24 @@ into it and leaves Wi-Fi mode. If anything goes wrong, install over USB as above
 **Factory reset:** ⚙ Settings → Factory reset → "Erase everything", then type ERASE.
 It deletes all books, originals, bookmarks, pictures and fonts from the card, and all
 settings, positions, statistics and the home Wi-Fi from the reader, then restarts.
+
+## Book server (books from Home Assistant)
+
+With the *T5 book server* add-on in Home Assistant (`docs/book-server.md`), the reader
+gets books by itself: Menu → **Book server**. The add-on holds your EPUB library and
+typesets each book for this reader; its configuration has the profiles (font, size,
+...), so on the reader you only choose a profile (if its screen has several) and a book.
+
+Once, on the page (⚙ Settings): **Home Wi-Fi**, and **Book server** with the address
+the add-on shows in its log (like `http://192.168.68.101:8484`).
+
+Then Menu → Book server: **Newest**, **Authors** or **Titles A–Z**, and a book (a dot:
+already on the reader). The reader shows how far the typesetting is (hold MENU to
+stop waiting), downloads the book, and offers **read** (NEXT) or **more** (MENU). A
+book too big for the room left comes in **parts** that fit ("Pages 152–297"): each
+part replaces the last, and the list starts on the next one. That is how a FireBeetle
+7.5" without a card reads a whole novel. Hold MENU in the lists to go back; at the top
+it turns Wi-Fi off and returns to the library.
 
 ## Buttons
 
@@ -237,7 +256,7 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
 
 Without an open book (none yet, or one that couldn't be read), going back from the
 library (hold MENU; touch: long press or the "menu" button) opens a short menu instead:
-Library, Statistics, Wi-Fi transfer, Settings, About and Sleep.
+Library, Book server, Statistics, Wi-Fi transfer, Settings, About and Sleep.
 
 A book that can't be read shows "Read error" with the reason; any button goes back to
 the library, and that book is no longer opened at start-up. Delete it or send it again
@@ -257,6 +276,7 @@ on the Wi-Fi page.
   3 minutes, so a reader left open doesn't add up. Days need the clock, which the
   Wi-Fi page sets; the T5 boards lose it when the battery runs empty or on a reset
   (then open the page once), the M5 boards keep it in their clock chip.
+- **Book server**: books from Home Assistant, see above.
 - **Wi-Fi transfer**: see above.
 - **Settings** (select changes the value; the page's ⚙ Settings has the same list):
   - *Sleep screen*: what shows while the reader sleeps: **book** (title, author,

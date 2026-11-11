@@ -51,6 +51,16 @@ void setHomeWifi(const char *ssid, const char *password) {
   store.putString("homePass", password ? password : "");
 }
 
+String bookServer() { return store.getString("bookServer", ""); }
+
+void setBookServer(const char *address) {
+  if (!address || !*address) {
+    store.remove("bookServer");
+  } else {
+    store.putString("bookServer", address);
+  }
+}
+
 String deviceName() { return store.getString("name", ""); }
 void setDeviceName(const char *name) { store.putString("name", name); }
 

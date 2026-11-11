@@ -77,6 +77,14 @@ description = "Embed the web page, converter, fonts and hyphenation data into th
 cmd = "python -m bookprep.webassets --out out/web-dev/www && python -m bookprep.devserver"
 description = "Run the reader's web page locally with a fake SD card (add --lan for phone access)"
 
+[tasks.book-server]
+cmd = "python -m bookprep.bookserver"
+description = "Book server for the reader (Menu -> Book server): pixi run book-server --library ~/Books [--options profiles.json]"
+
+[tasks.ha-addon]
+cmd = "bash tools/make_ha_addon.sh"
+description = "The book server as a local Home Assistant add-on with this bookprep -> out/ha-addon/t5books/ (or: pixi run ha-addon /path/to/addons)"
+
 [tasks.web-test]
 cmd = "pytest tools/bookprep/tests/test_webport.py tools/bookprep/tests/test_web_e2e.py tools/bookprep/tests/test_devserver.py"
 description = "Browser-converter parity (Node) and end-to-end (headless Chromium) tests"

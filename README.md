@@ -44,6 +44,17 @@ pictures, a square picture beside the book, or the page itself), a status bar th
 bionic reading, English and Dutch menus, and settings, home Wi-Fi and factory reset
 from the phone.
 
+## Books from Home Assistant: the book server add-on
+
+The add-on *T5 book server* keeps your EPUB library (a folder, e.g. the one the Calibre
+DeDRM add-on fills) and typesets books for the reader per profile: screen, font, size,
+spacing, set in Home Assistant. The reader downloads them itself over the home Wi-Fi,
+Menu → **Book server**: newest, by author or by title, with a progress bar while the
+server typesets. A book too big for the room left comes in parts that fit, so even a
+FireBeetle 7.5" without a card reads a whole novel. Add this repository under Settings
+→ Add-ons → Add-on store → Repositories, or install it as a local add-on with
+`pixi run ha-addon`. How: [docs/book-server.md](docs/book-server.md).
+
 ## Android app: switch between the reader and ESPHome
 
 The FireBeetle 7.5" can run ESPHome too (a Home Assistant dashboard, say). The Android

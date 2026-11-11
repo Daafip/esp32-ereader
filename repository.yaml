@@ -1,0 +1,6 @@
+# Home Assistant add-on repository: Settings -> Add-ons -> Add-on store -> ⋮ ->
+# Repositories -> https://github.com/Daafip/esp32-ereader. The add-on itself is in
+# homeassistant/t5books/ (docs/book-server.md).
+name: T5 e-reader
+url: https://github.com/Daafip/esp32-ereader
+maintainer: David

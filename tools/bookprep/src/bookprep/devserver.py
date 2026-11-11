@@ -106,6 +106,26 @@ def is_safe_name(name: str, exts: tuple[str, ...]) -> bool:
     return not re.search(r'[\x00-\x1f\x7f/\\:"*?<>|]', name)
 
 
+def parse_book_server(text: str) -> tuple[str, int, str] | None:
+    """(host, port, path) of a book server address, or None: catalog::parseAddress() in
+    firmware/lib/core/src/catalog.cpp. No scheme: the add-on's port 8484; http://: 80."""
+    text = text.strip(" ")
+    port = 8484
+    if text[:7].lower() == "http://":
+        text, port = text[7:], 80
+    elif "://" in text:
+        return None
+    m = re.fullmatch(r"([A-Za-z0-9._-]+)(?::([0-9]+))?(/[^\x00-\x20?#]*)?", text)
+    if not m or len(m.group(1)) > 63:
+        return None
+    if m.group(2) is not None:
+        port = int(m.group(2))
+        if not 1 <= port <= 65535:
+            return None
+    base = (m.group(3) or "").rstrip("/")
+    return (m.group(1), port, base) if len(base) < 48 else None
+
+
 def is_safe_folder(name: str) -> bool:
     """isSafeFolderName() in web_util.cpp."""
     if not 1 <= len(name.encode()) <= 32 or name.startswith(".") or name.endswith(" "):
@@ -283,7 +303,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.read_form()
         routes = {"/api/move": self.move, "/api/marks": self.marks, "/api/position": self.position,
                   "/api/settings": self.settings, "/api/name": self.name, "/api/wifi": self.wifi,
-                  "/api/time": self.set_time, "/api/reset": self.reset}  # fmt: skip
+                  "/api/bookserver": self.book_server, "/api/time": self.set_time,
+                  "/api/reset": self.reset}  # fmt: skip
         if path in routes:
             return routes[path]()
         return self.send_json(404, {"error": "not found"})
@@ -321,6 +342,11 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/wifi":
             state = self.state()
             state["wifi"] = {}
+            self.save_state(state)
+            return self.send_json(200, {})
+        if path == "/api/bookserver":
+            state = self.state()
+            state.pop("bookServer", None)
             self.save_state(state)
             return self.send_json(200, {})
         return self.send_json(404, {"error": "not found"})
@@ -369,6 +395,7 @@ class Handler(SimpleHTTPRequestHandler):
             "version": "dev", "board": BOARD_FOR_SCREEN.get(sc.id, sc.id),
             "lang": "nl" if state["settings"].get("language") == 1 else "en",
             "name": state["name"], "homeWifi": state["wifi"].get("ssid", ""), "locked": False,
+            "bookServer": state.get("bookServer", ""),
             "screen": screen, "battery": -1, "total": total, "free": free, "ota": self.ota,
             "stats": stats, "books": books, "fonts": fonts, "pictures": pictures,
             **({"updateSite": self.update_site} if self.update_site else {}),
@@ -591,6 +618,18 @@ class Handler(SimpleHTTPRequestHandler):
             )
         state = self.state()
         state["wifi"] = {"ssid": ssid}  # the dev server never keeps the password
+        self.save_state(state)
+        return self.send_json(200, {})
+
+    def book_server(self):
+        """POST address=: the book server the reader downloads from (Menu -> Book server)."""
+        if not self.authorized():
+            return None
+        address = self.query().get("address", "").strip(" ")
+        if len(address.encode()) > 96 or parse_book_server(address) is None:
+            return self.send_json(400, {"error": "not an address like http://192.168.1.10:8484"})
+        state = self.state()
+        state["bookServer"] = address
         self.save_state(state)
         return self.send_json(200, {})
 

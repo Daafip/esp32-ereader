@@ -30,6 +30,11 @@ String homeSsid();
 String homePassword();
 void setHomeWifi(const char *ssid, const char *password);  // empty ssid: forget
 
+// The book server's address, entered on the page ("" = none; then secrets.h's
+// BOOK_SERVER, see bookserver.h).
+String bookServer();
+void setBookServer(const char *address);  // empty: forget
+
 // Shown as the library title ("" = default).
 String deviceName();
 void setDeviceName(const char *name);

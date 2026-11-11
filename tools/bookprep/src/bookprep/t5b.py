@@ -312,3 +312,79 @@ class T5BFile:
 
     def page_image(self, n: int) -> Image.Image:
         return unpack_page(self.page_data(n), self.header.page_w, self.header.page_h)
+
+
+# --- parts of a stored book (book server: a book too big for the reader) -------------
+
+
+def part_toc(toc: list[TocEntry], first: int, end: int) -> list[TocEntry]:
+    """The contents of pages first..end-1 of a book, numbered from the part's first
+    page: the chapters that start inside it, after the one it opens in (as
+    cli.toc_entries() gives for the typeset part)."""
+    inside = [TocEntry(e.start_page - first, e.title) for e in toc if first <= e.start_page < end]
+    before = [e for e in toc if e.start_page < first]
+    if before and not (inside and inside[0].start_page == 0):
+        inside.insert(0, TocEntry(0, before[-1].title))
+    return inside
+
+
+def part_size(book: T5BFile, first: int, end: int) -> int:
+    """Bytes of the file write_part() makes for pages first..end-1."""
+    if not book.header.compressed:
+        raise ValueError("parts need a compressed (version 2) book")
+    toc = part_toc(book.toc, first, end)
+    pages = book.index[end] - book.index[first]
+    cover = (
+        COVER_HEADER.size + book.cover.height * stride_for(book.cover.width) if book.cover else 0
+    )
+    return (
+        HEADER.size
+        + len(toc) * TOC_ENTRY.size
+        + (end - first + 1) * INDEX_ENTRY.size
+        + pages
+        + cover
+    )
+
+
+def write_part(book: T5BFile, path: Path, first: int, end: int) -> Header:
+    """Pages first..end-1 of a version 2 book as a book of their own: the pages as
+    stored (no new compression), its own contents, the range in the title
+    ("Title (171-340)", 1-based) and the cover."""
+    if not 0 <= first < end <= book.header.page_count:
+        raise ValueError(f"pages {first}..{end - 1} out of range 0..{book.header.page_count - 1}")
+    if not book.header.compressed:
+        raise ValueError("parts need a compressed (version 2) book")
+    h = book.header
+    toc = part_toc(book.toc, first, end)
+    title = part_title(h.title, first + 1, end) if (first, end) != (0, h.page_count) else h.title
+    header = Header(h.page_w, h.page_h, end - first, len(toc), title, h.author, VERSION)
+    with open(book.path, "rb") as src:
+        src.seek(book.index[first])
+        pages = src.read(book.index[end] - book.index[first])
+    with open(path, "wb") as f:
+        f.write(pack_header(header))
+        for entry in toc:
+            f.write(pack_toc_entry(entry))
+        shift = header.pages_offset - book.index[first]
+        for offset in book.index[first : end + 1]:
+            f.write(INDEX_ENTRY.pack(offset + shift))
+        f.write(pages)
+        if book.cover is not None:
+            f.write(pack_cover(book.cover))
+    return header
+
+
+def plan_parts(book: T5BFile, room: int) -> list[tuple[int, int]]:
+    """Consecutive parts (first, end) of the whole book, each as big as fits in `room`
+    bytes; [] if not even a single page fits."""
+    parts = []
+    first, count = 0, book.header.page_count
+    while first < count:
+        if part_size(book, first, first + 1) > room:
+            return []
+        end = first + 1
+        while end < count and part_size(book, first, end + 1) <= room:
+            end += 1
+        parts.append((first, end))
+        first = end
+    return parts

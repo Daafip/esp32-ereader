@@ -17,6 +17,9 @@ updates. Its button and card pins: "Your wiring" at the top of the board header.
 Phase 11: an Android app (`android/`, Kotlin) that switches that board between the reader
 and ESPHome over a USB-OTG cable (ROM loader protocol as esptool `--no-stub`;
 `docs/firmware-switcher.md`).
+Phase 12: a book server, a Home Assistant add-on (`homeassistant/t5books/`, running
+`bookprep/bookserver.py`): the reader downloads books typeset per profile itself
+(Menu → Book server; `docs/book-server.md`).
 
 ## Current phase
 
@@ -44,13 +47,15 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 | Flash one env | `pixi run fw-flash reader` (`calibration`, `panel_tester`, `button_test`, `sd_test`; `reader_t547`, `reader_m5papers3`, `reader_m5paper`; `reader_firebeetle75`, `reader_firebeetle75_flash`, `fb75_test`) |
 | Images for browser/OTA flashing | `pixi run fw-dist` -> `out/firmware/` |
 | Browser installer (keeps NVS) | `pixi run installer` -> `out/installer/` (after `fw-build`) |
-| Release on GitHub | bump `FW_VERSION`, then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images and `fw-switch-<v>.apk`) |
+| Release on GitHub | bump `FW_VERSION` and `version` in `homeassistant/t5books/config.yaml` (release.yml checks both), then `git tag vX.Y.Z && git push origin vX.Y.Z` (`.github/workflows/release.yml` builds and attaches the images and `fw-switch-<v>.apk`) |
 | Serial monitor | `pixi run fw-monitor` |
 | Convert a book | `pixi run prep book.epub --font X.ttf --out out/ --preview` (`--screen 4.7in`, `7.5in`, `7.5in-landscape`) |
 | Font comparison | `pixi run font-sheet book.epub --font a.ttf --sizes 11 12 13` |
 | Regenerate generated headers | `pixi run devpages` (test_pages.h), `pixi run ui-fonts` (fonts/), `pixi run web` (web_assets.h from `firmware/web/`) |
 | Host tests / lint | `pixi run test`, `pixi run lint`, `pixi run fmt` |
 | Browser converter tests | `pixi run web-test` (Node parity + headless Chromium) |
+| Book server (PC) | `pixi run book-server --library ~/Books [--options profiles.json]` (the add-on's options; port 8484) |
+| Home Assistant add-on | `pixi run ha-addon [addons-dir]` -> `out/ha-addon/t5books/` with this bookprep (local add-on); `docker build out/ha-addon/t5books` to try it |
 | Web page without the reader | `pixi run web-dev` (`--lan` for a phone, `--screen 4.7in`, `--card-mb 5` for a full card) |
 | Android firmware switcher | `pixi run android-build` -> `out/android/fw-switch.apk`; `pixi run android-test` (pixi env `android`; SDK in `~/Android/Sdk`); release build: `pixi run -e android bash tools/android.sh assembleRelease -PappVersion=X.Y.Z` (signing: `docs/firmware-switcher.md`); F-Droid repo: `tools/make_fdroid_repo.sh <apk> <dir>` (CI, on Pages at `fdroid/repo`; metadata in `android/fdroid/`) |
 
@@ -95,6 +100,11 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 - In Python sources, write non-ASCII characters as escapes (`\N{EM DASH}` or a
   backslash-u escape), never as literal invisible characters (`normalize.py` handles
   soft hyphens, zero-width and odd spaces).
+- The book server's text protocol (`bookprep/bookserver.py`) is parsed by
+  `lib/core/src/catalog.*` and `src/bookserver.cpp`: change them together. The add-on
+  (`homeassistant/t5books/`) gets bookprep from the release tag of its version, or
+  bundled by `pixi run ha-addon`. No other file in the repo may be called
+  `config.yaml`/`.yml`/`.json`: the Supervisor takes each one for an add-on.
 - `firmware/web/bookprep.js` is a port of the Python `bookprep`: change both together
   and run `pixi run web-test`. `bookprep/devserver.py` mirrors the firmware's web API in
   `firmware/src/transfer.cpp`: change both together. Re-embed with `pixi run web`.
