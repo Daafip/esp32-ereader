@@ -167,6 +167,15 @@ right one; another board's file is refused). The reader checks the image, restar
 into it and leaves Wi-Fi mode. If anything goes wrong, install over USB as above.
 (A FireBeetle 7.5" without a card can't update this way: the page says so.)
 
+**Backup of the settings:** ⚙ Settings → Backup → "Save to file" downloads
+`reader-settings-<board>-<date>.json`: the reader's name and settings, the home
+network with its password, the book server's address and the browser's typesetting
+choices (size, margins, ... per screen). "Restore from file" puts them back, for
+example after flashing the reader with its settings erased, or on another reader (a
+setting that one doesn't have is left out). The Wi-Fi password is readable in the file:
+keep the file to yourself. Books, bookmarks, reading positions and pictures are not in
+it.
+
 **Factory reset:** ⚙ Settings → Factory reset → "Erase everything", then type ERASE.
 It deletes all books, originals, bookmarks, pictures and fonts from the card, and all
 settings, positions, statistics and the home Wi-Fi from the reader, then restarts.

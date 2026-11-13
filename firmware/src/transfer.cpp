@@ -757,9 +757,23 @@ void handleName() {
 }
 
 // POST ssid=&password=: home Wi-Fi for the next Wi-Fi transfer (DELETE: forget).
-// The password is stored on the reader only and never sent back.
+// GET: the network with its password, for the settings backup the user saves on the
+// page (David: "wifi password and ssid also included"). Nothing else sends the
+// password: /api/info has the name only.
 void handleHomeWifi() {
   if (!authorized()) return sendError(403, "wrong code");
+  if (server.method() == HTTP_GET) {
+    char esc[63 * 6 + 1];  // the longest password, every byte as a six-character escape
+    jsonEscape(prefs::homePassword().c_str(), esc, sizeof(esc));
+    String out = "{";
+    addString(out, "ssid", prefs::homeSsid().c_str());
+    addKey(out, "password");
+    out += kQuote;
+    out += esc;
+    out += kQuote;
+    out += '}';
+    return sendJson(200, out);
+  }
   if (server.method() == HTTP_DELETE) {
     prefs::setHomeWifi("", "");
   } else {
@@ -880,6 +894,7 @@ void addRoutes() {
   server.on("/api/settings", HTTP_GET, handleSettings);
   server.on("/api/settings", HTTP_POST, handleSettings);
   server.on("/api/name", HTTP_POST, handleName);
+  server.on("/api/wifi", HTTP_GET, handleHomeWifi);
   server.on("/api/wifi", HTTP_POST, handleHomeWifi);
   server.on("/api/wifi", HTTP_DELETE, handleHomeWifi);
   server.on("/api/bookserver", HTTP_POST, handleBookServer);

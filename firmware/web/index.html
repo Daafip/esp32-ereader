@@ -271,7 +271,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   </div>
 </dialog>
 
-<!-- reader settings, name, home Wi-Fi, factory reset -->
+<!-- reader settings, name, home Wi-Fi, book server, backup, factory reset -->
 <dialog id="settings">
   <div class="sheet">
     <div class="sheet-head">
@@ -303,6 +303,11 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         </div>
         <div class="row"><span class="grow hint" id="server-saved"></span><button type="button" class="btn small quiet" id="server-forget" data-t="forget">Forget</button><button class="btn small" data-t="save">Save</button></div>
       </form>
+      <h3 data-t="backup">Backup</h3>
+      <p class="hint" data-t="backupHint"></p>
+      <div class="row" style="justify-content:flex-end"><button type="button" class="btn small quiet" id="backup-restore" data-t="restoreFile">Restore from file</button><button type="button" class="btn small" id="backup-save" data-t="saveFile">Save to file</button></div>
+      <p class="hint" id="backup-note"></p>
+      <input type="file" id="backup-file" accept=".json,application/json" hidden>
       <h3 data-t="factoryReset">Factory reset</h3>
       <p class="hint" data-t="factoryResetHint"></p>
       <button class="btn small danger" id="reset" data-t="eraseAll">Erase everything</button>
@@ -390,11 +395,16 @@ const T = {
     position: "Reading position: page {0}", loadingPage: "Loading page…",
     settings: "Settings", readerName: "Name", namePlaceholder: "Shown above the library", save: "Save", saved: "Saved",
     readerSettings: "On the reader", homeWifi: "Home Wi-Fi",
-    homeWifiHint: "The reader joins this network the next time you start Wi-Fi transfer, and makes its own network if it can't. The password stays on the reader.",
+    homeWifiHint: "The reader joins this network the next time you start Wi-Fi transfer, and makes its own network if it can't. The password stays on the reader; only a backup file (below) has it.",
     network: "Network name", password: "Password", wifiSaved: "Saved: {0}", wifiNone: "None saved: the reader makes its own network.",
     bookServer: "Book server",
     bookServerHint: "Books from the T5 book server add-on in Home Assistant, typeset for this reader: on the reader, Menu → Book server (over the home Wi-Fi above). Its address is in the add-on's log, like http://192.168.1.10:8484.",
     serverAddress: "Address", serverSaved: "Saved: {0}", serverNone: "None saved.",
+    backup: "Backup",
+    backupHint: "A file with the settings on this sheet, to put them back later (after flashing the reader, for example): the reader's name and settings, the home network with its password, the book server's address and this browser's typesetting choices. No books, bookmarks or pictures. The Wi-Fi password is readable in the file: keep it to yourself.",
+    saveFile: "Save to file", restoreFile: "Restore from file", restoreBad: "Not a settings file of the reader.",
+    restoreDone: "Restored.", restoreSkipped: "Restored, except {0} that this reader doesn't have.",
+    restoreWifi: "Enter the password of {0} and press Save: the file doesn't have it.",
     forget: "Forget", factoryReset: "Factory reset",
     factoryResetHint: "Erases all books, originals, bookmarks, pictures, fonts and settings on the reader.",
     eraseAll: "Erase everything", resetConfirm1: "Erase everything on the reader?", resetConfirm2: "Type ERASE to confirm.",
@@ -453,11 +463,16 @@ const T = {
     position: "Leespositie: pagina {0}", loadingPage: "Pagina laden…",
     settings: "Instellingen", readerName: "Naam", namePlaceholder: "Staat boven de bibliotheek", save: "Bewaren", saved: "Bewaard",
     readerSettings: "Op de lezer", homeWifi: "Wifi thuis",
-    homeWifiHint: "De lezer gebruikt dit netwerk de volgende keer dat je wifi-overdracht start, en maakt anders zijn eigen netwerk. Het wachtwoord blijft op de lezer.",
+    homeWifiHint: "De lezer gebruikt dit netwerk de volgende keer dat je wifi-overdracht start, en maakt anders zijn eigen netwerk. Het wachtwoord blijft op de lezer; alleen een reservekopie (hieronder) bevat het.",
     network: "Netwerknaam", password: "Wachtwoord", wifiSaved: "Bewaard: {0}", wifiNone: "Niets bewaard: de lezer maakt zijn eigen netwerk.",
     bookServer: "Boekenserver",
     bookServerHint: "Boeken van de add-on T5 book server in Home Assistant, opgemaakt voor deze lezer: op de lezer Menu → Boekenserver (via de wifi thuis hierboven). Het adres staat in het logboek van de add-on, zoals http://192.168.1.10:8484.",
     serverAddress: "Adres", serverSaved: "Bewaard: {0}", serverNone: "Niets bewaard.",
+    backup: "Reservekopie",
+    backupHint: "Een bestand met de instellingen op dit blad, om ze later terug te zetten (bijvoorbeeld na het flashen van de lezer): de naam en de instellingen van de lezer, het thuisnetwerk met zijn wachtwoord, het adres van de boekenserver en de opmaakkeuzes van deze browser. Geen boeken, bladwijzers of afbeeldingen. Het wifi-wachtwoord staat leesbaar in het bestand: houd het voor jezelf.",
+    saveFile: "Opslaan als bestand", restoreFile: "Terugzetten uit bestand", restoreBad: "Geen instellingenbestand van de lezer.",
+    restoreDone: "Teruggezet.", restoreSkipped: "Teruggezet, op {0} na die deze lezer niet kent.",
+    restoreWifi: "Vul het wachtwoord van {0} in en druk op Bewaren: het staat niet in het bestand.",
     forget: "Vergeten", factoryReset: "Fabrieksinstellingen",
     factoryResetHint: "Wist alle boeken, originelen, bladwijzers, afbeeldingen, lettertypes en instellingen op de lezer.",
     eraseAll: "Alles wissen", resetConfirm1: "Alles op de lezer wissen?", resetConfirm2: "Typ WISSEN om te bevestigen.",
@@ -1272,7 +1287,8 @@ async function openSettings() {
   $("#wifi-saved").textContent = info.homeWifi ? t("wifiSaved", info.homeWifi) : t("wifiNone");
   $("#server-address").value = info.bookServer || "";
   $("#server-saved").textContent = info.bookServer ? t("serverSaved", info.bookServer) : t("serverNone");
-  $("#settings").showModal();
+  $("#backup-note").textContent = "";
+  if (!$("#settings").open) $("#settings").showModal();
   try {
     const { settings } = await api("/api/settings");
     $("#set-list").innerHTML = settings.map((s) => `
@@ -1337,6 +1353,93 @@ $("#server-forget").addEventListener("click", async () => {
     $("#server-saved").textContent = t("serverNone");
   } catch (err) { alert(err.message); }
 });
+// Backup: the settings of this sheet in a file, and back from it. The home network
+// comes with its password (GET /api/wifi, asked for only here); the typesetting
+// choices (size, margins, ... per screen) are this browser's.
+const kBackupType = "t5-reader-settings";
+const kTypesetPrefix = "t5:settings";
+
+async function backupData() {
+  const { settings } = await api("/api/settings");
+  const wifi = await api("/api/wifi");  // demo: {}
+  const typeset = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith(kTypesetPrefix)) typeset[k] = JSON.parse(localStorage.getItem(k));
+    }
+  } catch (e) { /* private mode, or not ours */ }
+  return {
+    type: kBackupType, version: 1, saved: new Date().toISOString(), board: info.board, firmware: info.version,
+    name: info.name || "", homeWifi: wifi.ssid || "", homeWifiPassword: wifi.password || "", bookServer: info.bookServer || "",
+    settings: Object.fromEntries(settings.map((s) => [s.key, s.value])),  // option numbers, as the reader stores them
+    typeset,
+  };
+}
+
+// Puts back what the file has and this reader knows; what is empty in the file stays
+// as it is. Returns how many settings were left out, and the home network to set by
+// hand: a file without its password.
+async function restoreBackup(data) {
+  if (!data || data.type !== kBackupType || !data.settings || typeof data.settings !== "object") throw new Error(t("restoreBad"));
+  const { settings } = await api("/api/settings");
+  const now = Object.fromEntries(settings.map((s) => [s.key, s]));
+  let skipped = 0;
+  for (const [k, v] of Object.entries(data.settings)) {
+    const s = now[k];
+    if (!s || !Number.isInteger(v) || v < 0 || v >= s.options.length) { skipped++; continue; }
+    if (v !== s.value) await api("/api/settings", form({ key: k, value: v }));
+  }
+  if (typeof data.name === "string" && data.name && data.name !== info.name) await api("/api/name", form({ name: data.name }));
+  if (typeof data.bookServer === "string" && data.bookServer && data.bookServer !== info.bookServer) {
+    await api("/api/bookserver", form({ address: data.bookServer }));
+  }
+  if (data.typeset && typeof data.typeset === "object") {
+    for (const [k, v] of Object.entries(data.typeset)) {
+      if (!k.startsWith(kTypesetPrefix) || !v || typeof v !== "object") continue;
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ }
+    }
+  }
+  let wifi = "";
+  if (typeof data.homeWifi === "string" && data.homeWifi) {
+    if (typeof data.homeWifiPassword === "string") await api("/api/wifi", form({ ssid: data.homeWifi, password: data.homeWifiPassword }));
+    else if (data.homeWifi !== info.homeWifi) wifi = data.homeWifi;
+  }
+  return { skipped, wifi };
+}
+
+async function restoreFrom(text) {
+  let data = null;
+  try { data = JSON.parse(text); } catch (e) { /* not JSON: refused below */ }
+  const { skipped, wifi } = await restoreBackup(data);
+  await refresh();  // the language may have changed
+  await openSettings();
+  $("#backup-note").textContent = skipped ? t("restoreSkipped", skipped) : t("restoreDone");
+  if (wifi) {
+    $("#wifi-ssid").value = wifi;
+    $("#wifi-saved").textContent = t("restoreWifi", wifi);
+    $("#wifi-pass").focus();
+  }
+  return { skipped, wifi };
+}
+
+$("#backup-save").addEventListener("click", async () => {
+  try {
+    const text = JSON.stringify(await backupData(), null, 2);
+    const name = `reader-settings-${info.board || "reader"}-${new Date().toISOString().slice(0, 10)}.json`;
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([text], { type: "application/json" })), download: name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (err) { alert(err.message); }
+});
+$("#backup-restore").addEventListener("click", () => $("#backup-file").click());
+$("#backup-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";  // the same file can be chosen again
+  if (!file) return;
+  try { await restoreFrom(await file.text()); } catch (err) { alert(err.message); }
+});
+
 $("#reset").addEventListener("click", async () => {
   if (!confirm(t("resetConfirm1"))) return;
   if ((prompt(t("resetConfirm2")) || "").trim().toUpperCase() !== t("resetWord")) return;
@@ -1590,6 +1693,9 @@ applyLang();
   //                             upload it; a part that fits, from page n (1-based), if too big]
   //   #reader=<book>[&find=<q>] a book's sheet [and search it: body data-hits = count]
   //   #settings                 the settings sheet
+  //   #backup                   body data-backup = the settings backup (JSON)
+  //   #restore=<url>            restore a backup file on this server (body data-restore,
+  //                             and data-backup = the backup as it is afterwards)
   //   #editor=<url>             the picture editor with an image from this server
   //   #update                   install the latest release (body data-update = the result)
   const hook = location.hash.match(/^#typeset=([^&]+)(&upload)?(?:&start=(\d+))?$/);
@@ -1616,6 +1722,15 @@ applyLang();
     }
   }
   if (location.hash === "#settings") await openSettings();
+  if (location.hash === "#backup") document.body.dataset.backup = JSON.stringify(await backupData());
+  const restoreHook = location.hash.match(/^#restore=(.+)$/);
+  if (restoreHook) {
+    try {
+      const r = await restoreFrom(await (await fetch(decodeURIComponent(restoreHook[1]))).text());
+      document.body.dataset.restore = `ok: ${r.skipped} skipped, wifi ${r.wifi}, ${$("#backup-note").textContent}`;
+      document.body.dataset.backup = JSON.stringify(await backupData());
+    } catch (err) { document.body.dataset.restore = "error: " + err.message; }
+  }
   if (location.hash === "#update") {
     window.confirm = () => true;  // unattended
     await installLatest();

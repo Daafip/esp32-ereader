@@ -335,3 +335,84 @@ def test_page_installs_the_latest_release(tmp_path):
     assert status, dom[-800:]
     assert html.unescape(status.group(1)).startswith("sub ok: Updated."), status.group(1)
     assert (tmp_path / "firmware" / "t5-reader-9.9.0-ota.bin").read_bytes() == app
+
+
+def test_page_saves_and_restores_the_settings(tmp_path):
+    """Settings -> Backup: the file has the reader's settings, name, home network with
+    its password and book server, and puts them back on an erased reader."""
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    from bookprep.devserver import make_server
+
+    srv = make_server(
+        tmp_path, "1234", port=0, fonts=False, screen="7.5in", update_site="/updates/"
+    )
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+    def post(path: str, **fields: str) -> None:
+        urlopen(
+            Request(f"{base}{path}?k=1234", urlencode(fields).encode(), method="POST"), timeout=10
+        )
+
+    def get(path: str) -> dict:
+        with urlopen(f"{base}{path}?k=1234", timeout=10) as r:
+            return json.loads(r.read())
+
+    def body_data(hash_: str, *names: str) -> list[str]:
+        dom = subprocess.run(
+            [chromium(), "--headless=new", "--disable-gpu", "--no-first-run",
+             "--virtual-time-budget=60000", "--dump-dom", f"{base}/?k=1234#{hash_}"],
+            capture_output=True, text=True, timeout=300, check=True,
+        ).stdout  # fmt: skip
+        found = [re.search(rf'<body[^>]*data-{name}="([^"]*)"', dom) for name in names]
+        assert all(found), dom[-800:]
+        return [html.unescape(f.group(1)) for f in found]
+
+    try:
+        post("/api/settings", key="statusBar", value="2")
+        post("/api/settings", key="idleMinutes", value="4")
+        post("/api/settings", key="flip", value="1")
+        post("/api/name", name="Leeshoek")
+        post("/api/wifi", ssid="Thuis", password="geheim123")
+        post("/api/bookserver", address="http://192.168.1.10:8484")
+        backup = json.loads(body_data("backup", "backup")[0])
+        assert backup["type"] == "t5-reader-settings" and backup["board"] == "firebeetle-75"
+        assert (backup["name"], backup["homeWifi"]) == ("Leeshoek", "Thuis")
+        assert backup["homeWifiPassword"] == "geheim123"
+        assert backup["bookServer"] == "http://192.168.1.10:8484"
+        assert backup["settings"]["statusBar"] == 2 and backup["settings"]["idleMinutes"] == 4
+
+        post("/api/reset", confirm="erase")
+        assert get("/api/info")["name"] == ""
+        # as saved, plus a setting this reader doesn't have, a value out of range and
+        # this browser's typesetting choices
+        backup["settings"] |= {"notASetting": 1, "sleepScreen": 99}
+        backup["typeset"] = {"t5:settings:7.5in": {"size": 21}, "other": {"x": 1}}
+        (tmp_path / "www" / "backup.json").write_text(json.dumps(backup))
+        result, after = body_data("restore=backup.json", "restore", "backup")
+        note = "Restored, except 2 that this reader doesn't have."
+        assert result == f"ok: 2 skipped, wifi , {note}", result
+        assert json.loads(after)["typeset"] == {"t5:settings:7.5in": {"size": 21}}
+        info = get("/api/info")
+        assert (info["name"], info["bookServer"]) == ("Leeshoek", "http://192.168.1.10:8484")
+        assert get("/api/wifi") == {"ssid": "Thuis", "password": "geheim123"}
+        assert info["homeWifi"] == "Thuis" and "geheim123" not in json.dumps(info)
+        now = {s["key"]: s["value"] for s in get("/api/settings")["settings"]}
+        restored = {k: now[k] for k in ("statusBar", "idleMinutes", "flip", "sleepScreen")}
+        assert restored == {"statusBar": 2, "idleMinutes": 4, "flip": 1, "sleepScreen": 0}
+
+        # a file without the password (made by hand): the page asks for it
+        post("/api/reset", confirm="erase")
+        del backup["homeWifiPassword"]
+        (tmp_path / "www" / "backup.json").write_text(json.dumps(backup))
+        result = body_data("restore=backup.json", "restore")[0]
+        assert result.startswith("ok: 2 skipped, wifi Thuis, "), result
+        assert get("/api/info")["homeWifi"] == ""
+
+        (tmp_path / "www" / "other.json").write_text('{"type": "something else"}')
+        refused = body_data("restore=other.json", "restore")[0]
+        assert refused == "error: Not a settings file of the reader."
+    finally:
+        srv.shutdown()

@@ -262,7 +262,7 @@ def test_folders_marks_position_and_pages(server, tmp_path):
 
 
 def test_settings_name_wifi_time_pictures_reset(server, tmp_path):
-    base, root = server
+    base, _ = server
     _, body = call(f"{base}/api/settings?k={CODE}")
     settings = {s["key"]: s for s in json.loads(body)["settings"]}
     assert settings["language"]["options"] == ["English", "Nederlands"]
@@ -274,9 +274,15 @@ def test_settings_name_wifi_time_pictures_reset(server, tmp_path):
     assert info(base)["name"] == "Davids reader"
     assert post(base, "/api/wifi", ssid="Thuis", password="geheim123")[0] == 200
     assert info(base)["homeWifi"] == "Thuis"
-    assert "geheim123" not in (root / "state.json").read_text()  # never stored or sent back
+    assert "geheim123" not in json.dumps(info(base))  # only the backup asks for it
+    assert json.loads(call(f"{base}/api/wifi?k={CODE}")[1]) == {
+        "ssid": "Thuis",
+        "password": "geheim123",
+    }
+    assert call(f"{base}/api/wifi?k=0000")[0] == 403
     assert call(f"{base}/api/wifi?k={CODE}", "DELETE")[0] == 200
     assert info(base)["homeWifi"] == ""
+    assert json.loads(call(f"{base}/api/wifi?k={CODE}")[1]) == {"ssid": "", "password": ""}
 
     assert post(base, "/api/time", epoch="1760000000", tz="7200")[0] == 200
     assert info(base)["stats"]["clock"] is True

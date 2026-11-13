@@ -126,7 +126,10 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
   bookmarks in `/books/.marks/<stem>.txt`, sleep pictures in `/sleep/*.bin` (one
   full-screen page each, or a square of the short side for "picture + book": told
   apart by size), fonts in `/fonts` (`storage.h`).
-- The home Wi-Fi password and the AP password never go back to the page.
+- The AP password never goes back to the page, and the home Wi-Fi password only in
+  `GET /api/wifi`, which the page calls for a settings backup the user saves
+  (⚙ Settings → Backup; David, 2026-11-13: "wifi password and ssid also included").
+  `/api/info` and everything else have the network's name only.
 - The page's "Install vX" takes releases from GitHub Pages (`kUpdateSite` in
   `index.html`: `manifest-<board>.json` + the app image at 0x10000, kept on the latest
   release by `release.yml`); github.com release downloads have no CORS headers. The

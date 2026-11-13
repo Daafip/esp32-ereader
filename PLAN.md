@@ -313,6 +313,16 @@ sends one image and refreshes with the panel's own partial waveform (Waveshare: 
 - [ ] 🧑 On the board: `docs/checkpoints.md` → "Faster page turns" (timing, ghosting, a full refresh after partial ones, light sleep: wake and current) *(2026-11-13, David: "this feels much snappier"; the numbers and the other checks are open)*
 - [ ] Still open, by what it would save per turn: act on the press instead of the release for NEXT and PREV (about 0.1 s; NEXT held would no longer mean "back", which PREV does on this board); turn the page a quarter ourselves, eight pixels at a time (0.05 s per image); a table-driven inflater (0.02 s); no bb_epaper init at a wake from deep sleep (0.15 s, the first turn only)
 
+## Phase 14 — Settings backup on the page (2026-11-13)
+
+David: "any way to save settings from the web server and upload them later to restore
+settings. Particularly handy when reflashing".
+
+- [x] ⚙ Settings → Backup: "Save to file" (`reader-settings-<board>-<date>.json`: the reader's settings by key and option number, name, home network name, book server address, the browser's typesetting choices) and "Restore from file" (only what the file has and this reader knows; a changed language shows at once). In `index.html`, with the existing API
+- [x] The home network comes with its password (David: "wifi password and ssid also included"): `GET /api/wifi`, called only for a backup; `/api/info` still has the name only. A file without the password (made by hand): the name is filled in and the page asks for it
+- [x] Browser test: save, erase, restore with an unknown setting and a value out of range, a file that isn't a backup (`#backup`, `#restore=<url>` hooks)
+- [x] 🧑 On the reader: save, flash with the settings erased, restore *(2026-11-13, David: "tested")*
+
 ---
 
 ## Decisions

@@ -274,7 +274,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         routes = {"/api/info": self.info, "/file": self.get_file, "/api/marks": self.marks,
-                  "/api/page": self.page, "/api/settings": self.settings}  # fmt: skip
+                  "/api/page": self.page, "/api/settings": self.settings,
+                  "/api/wifi": self.wifi}  # fmt: skip
         if path in routes:
             return routes[path]()
         self.path = path  # static: drop the query string
@@ -608,8 +609,15 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(200, {})
 
     def wifi(self):
+        """POST ssid=&password=: the home network. GET: it with its password, for the
+        settings backup; /api/info has the name only."""
         if not self.authorized():
             return None
+        if self.command == "GET":
+            saved = self.state()["wifi"]
+            return self.send_json(
+                200, {"ssid": saved.get("ssid", ""), "password": saved.get("password", "")}
+            )
         q = self.query()
         ssid, password = q.get("ssid", ""), q.get("password", "")
         if not 1 <= len(ssid.encode()) <= 32 or len(password.encode()) > 63:
@@ -617,7 +625,7 @@ class Handler(SimpleHTTPRequestHandler):
                 400, {"error": "network name 1-32 characters, password at most 63"}
             )
         state = self.state()
-        state["wifi"] = {"ssid": ssid}  # the dev server never keeps the password
+        state["wifi"] = {"ssid": ssid, "password": password}
         self.save_state(state)
         return self.send_json(200, {})
 
