@@ -87,6 +87,9 @@ environment; `tools/make_fdroid_repo.sh <apk> <dir>` makes the repository locall
 ## The two files
 
 The app keeps one file per button. Choose each once, and the app keeps its own copy.
+Under each pair of buttons a link opens the place to get the newest file in the browser:
+the reader's [releases page](https://github.com/Daafip/esp32-ereader/releases), and the
+(private) `esphome-scripts` repository on GitHub. The app itself downloads nothing.
 
 | Button | File |
 |---|---|

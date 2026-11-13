@@ -63,6 +63,13 @@
                 android:text="@string/choose" />
         </LinearLayout>
 
+        <Button
+            android:id="@+id/readerLink"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/link_reader" />
+
         <!-- ESPHome -->
         <TextView
             style="@style/Section"
@@ -93,6 +100,13 @@
                 android:layout_height="wrap_content"
                 android:text="@string/choose" />
         </LinearLayout>
+
+        <Button
+            android:id="@+id/esphomeLink"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/link_esphome" />
 
         <!-- Progress -->
         <TextView

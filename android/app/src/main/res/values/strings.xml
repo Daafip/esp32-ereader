@@ -7,6 +7,9 @@
     <string name="choose">Choose file</string>
     <string name="install_reader">Install e-reader</string>
     <string name="install_esphome">Install ESPHome</string>
+    <string name="link_reader">Latest releases on GitHub</string>
+    <string name="link_esphome">esphome-scripts on GitHub</string>
+    <string name="err_no_browser">No browser to open %1$s</string>
     <string name="reader_hint">No file yet. Choose the full image firebeetle-75-flash-reader-&lt;version&gt;.bin (pixi run fw-dist).</string>
     <string name="esphome_hint">No file yet. Choose the full image: firmware.factory.bin (\"Factory format\").</string>
     <string name="file_reader">%1$s\nE-reader for %2$s · %3$s</string>

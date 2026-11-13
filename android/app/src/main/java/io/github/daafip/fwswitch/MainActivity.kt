@@ -2,6 +2,7 @@ package io.github.daafip.fwswitch
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -33,9 +34,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * each to put it on the board over USB. All USB and file work runs on one worker thread.
  */
 class MainActivity : Activity() {
-    private enum class Slot(val file: String, val title: Int, val hint: Int) {
-        READER("reader.bin", R.string.reader, R.string.reader_hint),
-        ESPHOME("esphome.bin", R.string.esphome, R.string.esphome_hint),
+    /** [url]: where the newest file of this slot is to be had; the browser does the download. */
+    private enum class Slot(val file: String, val title: Int, val hint: Int, val url: String) {
+        READER("reader.bin", R.string.reader, R.string.reader_hint, "https://github.com/Daafip/esp32-ereader/releases"),
+        ESPHOME("esphome.bin", R.string.esphome, R.string.esphome_hint, "https://github.com/Daafip/esphome-scripts"),
     }
 
     private val images = EnumMap<Slot, FirmwareImage>(Slot::class.java) // touched on the UI thread only
@@ -57,6 +59,7 @@ class MainActivity : Activity() {
     private lateinit var fileViews: Map<Slot, TextView>
     private lateinit var installButtons: Map<Slot, Button>
     private lateinit var chooseButtons: Map<Slot, Button>
+    private lateinit var linkButtons: Map<Slot, Button>
 
     private val usbEvents = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) = showUsb()
@@ -91,9 +94,11 @@ class MainActivity : Activity() {
         fileViews = mapOf(Slot.READER to findViewById(R.id.readerFile), Slot.ESPHOME to findViewById(R.id.esphomeFile))
         installButtons = mapOf(Slot.READER to findViewById(R.id.readerInstall), Slot.ESPHOME to findViewById(R.id.esphomeInstall))
         chooseButtons = mapOf(Slot.READER to findViewById(R.id.readerChoose), Slot.ESPHOME to findViewById(R.id.esphomeChoose))
+        linkButtons = mapOf(Slot.READER to findViewById(R.id.readerLink), Slot.ESPHOME to findViewById(R.id.esphomeLink))
         for (s in Slot.entries) {
             installButtons.getValue(s).setOnClickListener { install(s) }
             chooseButtons.getValue(s).setOnClickListener { choose(s) }
+            linkButtons.getValue(s).setOnClickListener { openLink(s) }
         }
         cancel.setOnClickListener { flasher?.cancelled = true }
 
@@ -218,6 +223,14 @@ class MainActivity : Activity() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
         @Suppress("DEPRECATION")
         startActivityForResult(intent, s.ordinal)
+    }
+
+    private fun openLink(s: Slot) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.url)))
+        } catch (e: ActivityNotFoundException) { // no browser
+            showStep(getString(R.string.err_no_browser, s.url), true)
+        }
     }
 
     @Deprecated("Activity result API of the framework Activity")
