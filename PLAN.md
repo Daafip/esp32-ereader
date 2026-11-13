@@ -286,7 +286,7 @@ from the ereader can just choose which profile and download an ebook."
 - [ ] 🧑 Install the add-on on David's Home Assistant (local: `pixi run ha-addon`), set the profiles, enter the address on the reader's page
 - [ ] 🧑 On the boards: see "Checks on the board" in `docs/book-server.md` (FireBeetle 7.5" flash build: parts)
 
-## Phase 13 — Faster page turns on the 7.5" (2026-11-13)
+## Phase 13 — Faster page turns on the 7.5" (2026-11-13, release 2.2.1)
 
 David: "the firmware feels quite sluggish compared to esphome for example, which is much
 snappier". Both run on the same board. Where a page turn went (from the code and the
@@ -313,7 +313,7 @@ sends one image and refreshes with the panel's own partial waveform (Waveshare: 
 - [ ] 🧑 On the board: `docs/checkpoints.md` → "Faster page turns" (timing, ghosting, a full refresh after partial ones, light sleep: wake and current) *(2026-11-13, David: "this feels much snappier"; the numbers and the other checks are open)*
 - [ ] Still open, by what it would save per turn: act on the press instead of the release for NEXT and PREV (about 0.1 s; NEXT held would no longer mean "back", which PREV does on this board); turn the page a quarter ourselves, eight pixels at a time (0.05 s per image); a table-driven inflater (0.02 s); no bb_epaper init at a wake from deep sleep (0.15 s, the first turn only)
 
-## Phase 14 — Settings backup on the page (2026-11-13)
+## Phase 14 — Settings backup on the page (2026-11-13, release 2.2.1)
 
 David: "any way to save settings from the web server and upload them later to restore
 settings. Particularly handy when reflashing".

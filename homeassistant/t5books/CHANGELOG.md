@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.2.0
+## 2.2.1
 
 - No change to the add-on (its version follows the firmware's).
 
