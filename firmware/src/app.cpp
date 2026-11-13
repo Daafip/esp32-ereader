@@ -5,7 +5,8 @@
 // goes back to deep sleep with an idle timer. When that timer fires instead of
 // a button, the sleep screen is shown and only a button wakes the reader.
 // Menus run awake in loop() until a book page is shown again or the idle
-// timeout hits. Light-sleep boards (M5) nap in loop() instead.
+// timeout hits. Boards that nap between pages (kNapBetweenPages: M5, 7.5") stay
+// in loop() and light-sleep there instead; the 7.5" goes to deep sleep when idle.
 #include "app.h"
 
 #include <Arduino.h>
@@ -120,6 +121,13 @@ enum class AfterMessage : uint8_t {
   LeaveServer,  // no Wi-Fi, no server: out of the book server
 };
 AfterMessage afterMessage = AfterMessage::Restart;
+// A key pressed while the panel refreshed (display::setIdleHook): loop() takes it
+// before it reads the buttons, and a page isn't slept on while one waits.
+Key pendingKey = Key::None;
+// When the page turn in progress began, for "Wake to page" in About: the start of the
+// app (a wake from deep sleep), the wake from a nap, or the key (awake).
+uint32_t turnStartMs = 0;
+bool wokeFromNap = false;
 int wifiStep = 0;                // QR shown: 0 = automatic, 1 = join Wi-Fi, 2 = open page
 
 // Footer hints: button role, short-press action, long-press action.
@@ -145,6 +153,13 @@ void applySettings() {
 void setScreen(Screen s) {
   screen = s;
   rtc.screen = s;
+}
+
+// The display's idle hook. Repeats of a held button are left out: only a press
+// counts, and the reading screen has nothing to do with a repeat.
+void pollWhileRefreshing() {
+  const Key k = input::poll();
+  if (k != Key::None && k != Key::NextRepeat && pendingKey == Key::None) pendingKey = k;
 }
 
 uint32_t clockNow() { return uint32_t(time(nullptr)); }
@@ -355,9 +370,9 @@ void showReading(Refresh requested) {
   rtc.chapter = chapter;
   rtc.pageBattery = int8_t(batteryPct);
   prefs::setBookmark(book.id(), page);
-  rtc.imageMs = millis();
+  rtc.imageMs = millis() - turnStartMs;
   const display::Timing t = display::lastTiming();
-  Serial.printf("page %u/%u chapter %d: %s refresh, data %u ms, refresh %u ms, at %u ms\n",
+  Serial.printf("page %u/%u chapter %d: %s refresh, before it %u ms, refresh %u ms, after %u ms\n",
                 unsigned(page + 1), unsigned(book.pageCount()), chapter,
                 used == Refresh::Full ? "full" : used == Refresh::Fast ? "fast" : "partial",
                 unsigned(t.dataMs), unsigned(t.refreshMs), unsigned(rtc.imageMs));
@@ -375,13 +390,18 @@ void showLowBattery() {
   setScreen(Screen::LowBattery);
 }
 
-// Light-sleep boards (M5): sleep until a touch or button. The idle timer ends
-// in the sleep screen and power-off. Back in loop(), the touch or press that
-// woke the chip is read as usual and the panel still holds its image.
+// Boards that nap between pages (kNapBetweenPages: M5, 7.5"): light sleep until a
+// touch or button. The idle timer ends in the sleep screen and power-off (M5) or deep
+// sleep. Back in loop(), the touch or press that woke the chip is read as usual and
+// the panel still holds its image.
 void nap() {
   display::sleep(true);
-  input::waitAllReleased();
+  // Touch: a finger still down would wake the chip at once. Buttons are read on:
+  // waiting here would swallow a press made just after the page appeared.
+  if (kHasTouch) input::waitAllReleased();
   if (!power::lightSleep(uint32_t(settings.idleMinutes) * 60)) enterSleep(true);
+  turnStartMs = millis();
+  wokeFromNap = true;
   input::markActivity();
   rtc.wakes++;
   readBattery();
@@ -397,7 +417,8 @@ void nap() {
 void pageShown() {
   input::setRepeat(false);
   if (screen != Screen::Reading || !settings.deepSleep) return;
-  if (kLightSleep) {
+  if (pendingKey != Key::None) return;  // pressed during the refresh: loop() acts on it first
+  if (kNapBetweenPages) {
     nap();
   } else {
     enterSleep(false);
@@ -1507,6 +1528,8 @@ Key touchKey(const TouchEvent &t) {
 void handle(Key k) {
   if (k == Key::Touch) k = touchKey(input::lastTouch());
   if (k == Key::None) return;
+  if (!wokeFromNap) turnStartMs = millis();  // after a nap: counted from the wake
+  wokeFromNap = false;
   Serial.printf("key %d on screen %d\n", int(k), int(screen));
   switch (screen) {
     case Screen::Reading: readingKey(k); break;
@@ -1578,6 +1601,7 @@ void setup() {
   locked = prefs::locked();
   input::begin(settings.longPressMs);
   input::setFlipped(settings.orientation & 1);  // which button the wake press was
+  display::setIdleHook(pollWhileRefreshing);
   rtcclock::restore();  // M5 boards: the clock after switching off
   Key key = Key::None;
   if (wake == power::Wake::NextButton) key = input::wakePress(kBtnNext);
@@ -1662,14 +1686,17 @@ void loop() {
   if (screen == Screen::ServerBusy && srv.book.id[0] && millis() - srv.pollMs > kServerPollMs) {
     pollTypesetting();
   }
-  handle(input::poll());
+  const Key waiting = pendingKey;
+  pendingKey = Key::None;
+  handle(waiting != Key::None ? waiting : input::poll());
   uint32_t last = input::lastActivityMs();
   if (wifi && int32_t(transfer::info().lastActivityMs - last) > 0) last = transfer::info().lastActivityMs;
   const uint32_t idleMs = uint32_t(settings.idleMinutes) * 60000;
   if (millis() - last > idleMs) enterSleep(screen != Screen::Message);
-  // Light-sleep boards: woken on a page by something that wasn't a gesture
-  // (a brush of the screen): back to sleep after a few seconds.
-  if (kLightSleep && settings.deepSleep && screen == Screen::Reading && millis() - last > 3000) {
+  // Boards that nap: woken on a page by something that wasn't a gesture (a brush
+  // of the screen, a button too short to count): back to sleep after a few seconds.
+  if (kNapBetweenPages && settings.deepSleep && screen == Screen::Reading &&
+      pendingKey == Key::None && millis() - last > 3000) {
     nap();
   }
   delay(wifi ? 1 : 5);

@@ -73,13 +73,26 @@ only pins that wake the C6 from deep sleep), stops it with a message.
   board tag is `firebeetle-75-flash`, so the card build refuses its image over Wi-Fi.
   Switching builds keeps the settings (nvs at the same place) but not the books.
 
-- **Panel:** `display_bbep.cpp` with bb_epaper's 7.5" V2 sequences: full refresh
-  2.6 s, fast 1.5 s, partial 1.0 s (plus 0.23 s to send old and new image at 10 MHz).
+- **Panel:** `display_bbep.cpp` with bb_epaper's 7.5" V2 sequences for the full
+  (2.6 s) and the fast refresh (1.5 s). The partial refresh uses the panel's own
+  waveform (`kEpdOtpPartial`, `otpPartialInit()`): the sequence of Waveshare's
+  `EPD_7in5_V2` and of ESPHome's `epaper_spi`, which runs on this board. bb_epaper's
+  partial loads a LUT of 31 frames instead: 1.0 s, measured. The new one works on
+  David's panel but is not timed yet (Waveshare gives 0.4 s for the panel);
+  `kEpdOtpPartial = false` brings bb_epaper's back. The controller copies the new image to its "old" RAM itself after
+  a partial refresh, and the panel is powered off after each one. Sending one image
+  takes 0.11 s at 10 MHz (most of it bb_epaper turning the page a quarter).
   The copy of the shown image (48 KB) doesn't fit the C6's RTC memory, so it lives in
   RAM (`BOARD_SHOWN_IN_RAM`). After deep sleep the reader reads the page that is on
   the glass from the card again and sends it as the "old" image, then the new page
   with a partial refresh: the same as on the 4.7" boards. "Wake refresh: retain"
   behaves like "rewrite".
+- **Between pages: light sleep** (`BOARD_NAPS_BETWEEN_PAGES`, "Sleep after page: on").
+  The chip keeps its RAM, the open book and the panel's image, any button wakes it,
+  and a turn sends only the new page. After the idle time the sleep screen comes and
+  the chip goes to deep sleep; the first press after that starts it again (slower:
+  the file system, the book, the old page). Not measured yet: the current in light
+  sleep (the C6's data sheet: 0.18 mA; deep sleep 7 µA).
 - **No panel power pin:** RST and CS are held high through deep sleep, so the
   controller stays in its deep sleep.
 - **Shared SPI bus** (card build): the bus starts with the card's MISO before bb_epaper (which would
@@ -136,6 +149,10 @@ a sleep step; it hung while BUSY was still broken, and was removed), sleep curre
 | Page turns | partial refresh works ("partial refreshes are working") |
 | USB port | gone while the chip sleeps (the C6's USB serial is off in deep sleep): flash in download mode (BOOT + RST), or Sleep after page off for the serial log |
 
-An earlier try the same day had every turn as a full refresh, not explained yet:
+**2026-11-13, faster page turns** (the panel's own partial waveform, light sleep
+between pages): "this feels much snappier". No numbers yet.
+
+An earlier try on 2026-10-27 had every turn as a full refresh, not explained yet:
 check the turns right after a wake (Sleep after page on) again. Also open: ghosting,
-the button wake, which landscape way is upright, sleep current, the SD card.
+the button wake, which landscape way is upright, sleep current, the SD card, and the
+faster page turns of 2026-11-13 (`docs/checkpoints.md` → "Faster page turns").

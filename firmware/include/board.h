@@ -92,3 +92,10 @@ constexpr int screenForRotation(int rotation) {
 // the NEXT pin stand in for the MENU button (input.cpp). Touch-only boards have
 // neither (kBtnNext < 0).
 constexpr bool kSingleButton = kBtnNext >= 0 && kBtnMenu < 0;
+// "Sleep after page" between two pages: light sleep with everything kept (the M5
+// boards, which can only switch off otherwise; the 7.5" board), or deep sleep.
+#ifdef BOARD_NAPS_BETWEEN_PAGES
+constexpr bool kNapBetweenPages = true;
+#else
+constexpr bool kNapBetweenPages = kLightSleep;
+#endif

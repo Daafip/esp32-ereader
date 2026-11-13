@@ -286,6 +286,33 @@ from the ereader can just choose which profile and download an ebook."
 - [ ] 🧑 Install the add-on on David's Home Assistant (local: `pixi run ha-addon`), set the profiles, enter the address on the reader's page
 - [ ] 🧑 On the boards: see "Checks on the board" in `docs/book-server.md` (FireBeetle 7.5" flash build: parts)
 
+## Phase 13 — Faster page turns on the 7.5" (2026-11-13)
+
+David: "the firmware feels quite sluggish compared to esphome for example, which is much
+snappier". Both run on the same board. Where a page turn went (from the code and the
+`fb75_test` timings; the reader itself was not measured, About → "Wake to page" has it):
+
+| Part of a turn, "Sleep after page" on | About |
+|---|---|
+| Start from deep sleep, settings, panel reset + bb_epaper's init (powers the panel on) | 0.3 s |
+| File system, the book, the page on the glass and the new page inflated (30 ms each) | 0.1–0.3 s |
+| Old and new image to the panel (bb_epaper turns each a quarter, pixel by pixel) | 0.23 s |
+| bb_epaper's partial refresh: reset, power on, its LUT of 31 frames | 0.99 s |
+| After the image: the new image sent once more as "old", panel sleep, 50 ms for the buttons | 0.25 s |
+
+So about 1.7–2 s from the press to the page, and a press during the last 1.2 s was lost.
+ESPHome stays awake for a minute after a press, acts on the press (not the release),
+sends one image and refreshes with the panel's own partial waveform (Waveshare: 0.4 s).
+
+- [x] Partial refresh with the panel's own waveform (`kEpdOtpPartial`, `display_bbep.cpp otpPartialInit()`: ESPHome's sequence); the panel powered off after it; a reset before the next full or fast refresh (the waveform stays forced otherwise)
+- [x] No second copy of the image after a partial refresh on this panel (the controller copies new to old itself: bit 3 of register 0x50)
+- [x] Buttons read while the panel refreshes (`display::setIdleHook`, `pendingKey`): a press during a refresh turns the next page, also on the T5-2.13. BUSY read every 2 ms instead of every 16
+- [x] Light sleep between pages (`BOARD_NAPS_BETWEEN_PAGES`, the M5 boards' `nap()`): no restart, no file system, no old image; deep sleep after the idle time. `power::deepSleep()` clears the nap's timer and GPIO wake-up first
+- [x] The flash build no longer counts its free space at every wake (LittleFS walks every block for it)
+- [x] About → "Wake to page" counts from the wake (deep sleep or nap) or the key to the image
+- [ ] 🧑 On the board: `docs/checkpoints.md` → "Faster page turns" (timing, ghosting, a full refresh after partial ones, light sleep: wake and current) *(2026-11-13, David: "this feels much snappier"; the numbers and the other checks are open)*
+- [ ] Still open, by what it would save per turn: act on the press instead of the release for NEXT and PREV (about 0.1 s; NEXT held would no longer mean "back", which PREV does on this board); turn the page a quarter ourselves, eight pixels at a time (0.05 s per image); a table-driven inflater (0.02 s); no bb_epaper init at a wake from deep sleep (0.15 s, the first turn only)
+
 ---
 
 ## Decisions

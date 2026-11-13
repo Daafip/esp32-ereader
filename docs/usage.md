@@ -308,8 +308,9 @@ on the Wi-Fi page.
     ghosting (default: every 20). Chapter changes always get one.
   - *Hold time*: threshold between short and long press.
   - *Idle sleep*: after this long without a button, the sleep screen appears.
-  - *Sleep after page*: deep sleep between page turns (battery life). Turn off for
-    debugging over USB.
+  - *Sleep after page*: sleep between page turns (battery life). Turn off for
+    debugging over USB. The 7.5" board sleeps lightly between pages (a turn is
+    faster) and deeply after the idle time; the M5 boards the same, then switch off.
   - *Wake refresh*: how a page turn after deep sleep refreshes (`rewrite`, `retain`,
     `full`; see `docs/hardware.md`). On the T5-2.13, the T5-4.7" and the 7.5"
     "retain" behaves like "rewrite": every partial update sends the previous page

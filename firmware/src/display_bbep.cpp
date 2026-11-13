@@ -38,6 +38,9 @@ RTC_DATA_ATTR uint16_t rtcPartials = 0;
 RTC_DATA_ATTR int16_t rtcRotation = -1;  // rotation of the shown image; -1 = power-on
 
 bool panelRamValid = false;  // controller's "old" RAM equals shownImage
+bool pinsHeld = false;       // sleep() holds RST and CS: released before the next command
+bool waveformForced = false; // an OTP partial left its waveform selected (kEpdOtpPartial)
+void (*idleHook)() = nullptr;
 Timing timing;
 
 const int kHeldPins[] = {kEpdPowerEn, kEpdRst, kEpdCs};
@@ -74,10 +77,25 @@ void claimBus() {
   SPI.endTransaction();
 }
 
-void waitIdle(uint32_t limitMs) {
+// BUSY as the controller drives it: UC81xx low, SSD16xx high.
+bool busy() {
+  return digitalRead(kEpdBusy) == (panel._bbep.chip_type == BBEP_CHIP_UC81xx ? LOW : HIGH);
+}
+
+// Waits for the controller. BUSY takes a moment to show (settleMs); after that it is
+// read every 2 ms (bb_epaper's isBusy() waits 11 ms each time), and idle counts when
+// read twice. withHook: the app's hook runs in between (buttons during a refresh).
+void waitIdle(uint32_t limitMs, uint32_t settleMs = 10, bool withHook = false) {
   const uint32_t t0 = millis();
-  delay(10);
-  while (panel.isBusy() && millis() - t0 < limitMs) delay(2);
+  delay(settleMs);
+  while (millis() - t0 < limitMs) {
+    if (!busy()) {
+      delay(1);
+      if (!busy()) break;
+    }
+    if (withHook && idleHook) idleHook();
+    delay(2);
+  }
 }
 
 void command(uint8_t cmd, const uint8_t *data, int len) {
@@ -178,6 +196,58 @@ void hardwareReset() {
   delay(20);
 }
 
+// The same, and bb_epaper told about it: it would reset once more at its next
+// command (after its sleep()), and lose the registers set in between.
+void resetAwake() {
+  hardwareReset();
+  panel._bbep.is_awake = 1;
+  waitIdle(1000);
+}
+
+// UC8179 (Waveshare 7.5" V2): controller ready for a partial update with the panel's
+// own waveform, the way Waveshare's EPD_7in5_V2 (Init_Part) and ESPHome's epaper_spi
+// (model waveshare-7.5in-v2, which runs on this board) do it: registers, power on,
+// then the temperature register forced to 0x6E, which selects the partial waveform
+// in the OTP. bb_epaper's partial for this panel loads a LUT of 31 frames instead
+// (986 ms on David's panel). The reset keeps the RAM. The caller writes the old
+// image if the controller doesn't have it, the new one, and sends 0x12; bb_epaper's
+// writePlane() sets the partial window to the whole screen (0x91, 0x90).
+void otpPartialInit() {
+  static const uint8_t power[] = {0x07, 0x07, 0x3F, 0x3F};
+  static const uint8_t booster[] = {0x17, 0x17, 0x28, 0x17};
+  static const uint8_t setting[] = {0x1F};  // black/white, waveforms from the OTP
+  static const uint8_t resolution[] = {uint8_t(kEpdNativeW >> 8), uint8_t(kEpdNativeW & 0xFF),
+                                       uint8_t(kEpdNativeH >> 8), uint8_t(kEpdNativeH & 0xFF)};
+  static const uint8_t dualSpi[] = {0x00};
+  static const uint8_t tcon[] = {0x22};
+  // Border floating, the data polarity of bb_epaper's sequences, and bit 3: the
+  // controller copies new -> old RAM after the refresh, so the next partial update
+  // needs only the new image.
+  static const uint8_t interval[] = {0xA9, 0x07};
+  static const uint8_t forceTemp[] = {0x02};
+  static const uint8_t partialWaveform[] = {0x6E};
+  resetAwake();
+  command(0x01, power, sizeof(power));
+  command(0x06, booster, sizeof(booster));
+  command(0x00, setting, sizeof(setting));
+  command(0x61, resolution, sizeof(resolution));
+  command(0x15, dualSpi, sizeof(dualSpi));
+  command(0x60, tcon, sizeof(tcon));
+  panel.writeCmd(0x04);  // power on: the registers below need it
+  waitIdle(1000, 12);    // bb_epaper looks after 11 ms
+  command(0x50, interval, sizeof(interval));
+  command(0xE0, forceTemp, sizeof(forceTemp));
+  command(0xE5, partialWaveform, sizeof(partialWaveform));
+  waveformForced = true;
+}
+
+// After sleep() without a restart (a nap in light sleep): the pins are ours again.
+void wake() {
+  if (!pinsHeld) return;
+  releaseHolds();
+  pinsHeld = false;
+}
+
 }  // namespace
 
 void begin() {
@@ -202,15 +272,22 @@ void begin() {
   panel.setBuffer(fb);
   panelRamValid = rtcKeptPowered && shownImageValid;
   rtcKeptPowered = false;
+  pinsHeld = false;
+  waveformForced = false;
 }
 
 void sleep(bool keepPower) {
+  wake();
   claimBus();
   panel.sleep(keepPower ? LIGHT_SLEEP : DEEP_SLEEP);  // SSD16xx: 0x10 = 0x01 keeps RAM, 0x03 not
   rtcKeptPowered = keepPower;
   if (!keepPower && kEpdPowerEn >= 0) digitalWrite(kEpdPowerEn, LOW);
+  if (!keepPower) panelRamValid = false;  // the controller's deepest sleep loses its RAM
   holdPins(keepPower);
+  pinsHeld = true;
 }
+
+void setIdleHook(void (*hook)()) { idleHook = hook; }
 
 BBEPAPER &epd() { return panel; }
 uint8_t *framebuffer() { return fb; }
@@ -221,8 +298,16 @@ Refresh show(Refresh mode) {
   if (mode == Refresh::Partial && !shownImageValid) mode = Refresh::Full;
   if (mode == Refresh::Fast && !panel.hasFastRefresh()) mode = Refresh::Full;
 
+  wake();
   claimBus();
   const uint32_t t0 = millis();
+  const bool otpPartial = mode == Refresh::Partial && kEpdOtpPartial;
+  if (waveformForced && !otpPartial) {
+    // A full or fast refresh after an OTP partial: bb_epaper's sequences leave the
+    // forced temperature as it is, and would refresh with the partial waveform.
+    resetAwake();
+    waveformForced = false;
+  }
   if (mode == Refresh::Fast && kEpdFastInitFirst) {
     sendFastInit();  // before the image, see there
     panel.writePlane(PLANE_DUPLICATE);
@@ -233,6 +318,7 @@ Refresh show(Refresh mode) {
     panel.setBuffer(fb);
     panel.writePlane(PLANE_0);
   } else if (mode == Refresh::Partial) {
+    if (otpPartial) otpPartialInit();
     if (!panelRamValid) {  // tell the controller what is on the glass now
       panel.setBuffer(shownImage);
       panel.writePlane(PLANE_0_TO_1);
@@ -249,6 +335,8 @@ Refresh show(Refresh mode) {
   } else if (mode == Refresh::Partial && kEpdCustomPartialLut) {
     panel.writeCmd2(0x22, 0x0F);  // display mode 2 with our LUT, then power down
     panel.writeCmd(0x20);
+  } else if (otpPartial) {
+    panel.writeCmd(0x12);  // refresh, in partial mode with the whole screen as its window
   } else {
     panel.refresh(mode == Refresh::Full   ? REFRESH_FULL
                   : mode == Refresh::Fast ? REFRESH_FAST
@@ -257,16 +345,23 @@ Refresh show(Refresh mode) {
   }
   // Our own wait: bb_epaper gives up after 5 s, and commands sent while the
   // controller is busy get lost.
-  delay(10);
-  while (panel.isBusy() && millis() - t1 < kEpdBusyTimeoutMs) delay(5);
+  waitIdle(kEpdBusyTimeoutMs, 20, true);
   const uint32_t t2 = millis();
-  if (mode == Refresh::Partial && !kEpdCustomPartialLut) {
+  if (otpPartial) {
+    // The image is on the glass. Power off, as ESPHome does after every refresh:
+    // the panel shouldn't stay under voltage while the reader waits for a button.
+    // The controller copied new -> old RAM itself (otpPartialInit).
+    panel.writeCmd(0x02);
+    waitIdle(1000, 12, true);
+  } else if (mode == Refresh::Partial && !kEpdCustomPartialLut) {
     // SSD16xx may not copy new -> old RAM after a partial update; do it, so
     // the next partial update can skip resending the old image.
     panel.writePlane(PLANE_0_TO_1);
   }
+  // bb_epaper's fast refresh for this panel forces a waveform the same way.
+  if (kEpdOtpPartial && mode == Refresh::Fast) waveformForced = true;
   timing = {t1 - t0, t2 - t1};
-  Serial.printf("display: %s refresh, data %u ms, refresh %u ms\n",
+  Serial.printf("display: %s refresh, before it %u ms, refresh %u ms\n",
                 mode == Refresh::Full ? "full" : mode == Refresh::Fast ? "fast" : "partial",
                 unsigned(t1 - t0), unsigned(t2 - t1));
 

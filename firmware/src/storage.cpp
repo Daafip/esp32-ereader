@@ -92,8 +92,9 @@ bool mount() {
   // flashing this partition table (a few seconds).
   isMounted = LittleFS.begin(true, "/littlefs", 10, kFlashLabel);
   if (isMounted) {
-    Serial.printf("flash: %u KB, %u KB free\n", unsigned(LittleFS.totalBytes() >> 10),
-                  unsigned((LittleFS.totalBytes() - LittleFS.usedBytes()) >> 10));
+    // Not the free space: LittleFS walks every file's blocks to count it, and this
+    // runs at every wake from deep sleep. About and the web page ask for it.
+    Serial.printf("flash: %u KB\n", unsigned(LittleFS.totalBytes() >> 10));
   } else {
     Serial.printf("flash: no partition \"%s\" (flash this env over USB)\n", kFlashLabel);
   }

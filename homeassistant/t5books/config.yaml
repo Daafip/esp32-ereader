@@ -1,7 +1,7 @@
 # T5 book server: Home Assistant add-on (docs/book-server.md). Its version is the
 # release it belongs to: bump it with FW_VERSION (release.yml checks the tag).
 name: T5 book server
-version: "2.1.1"
+version: "2.2.0"
 slug: t5_book_server
 description: >-
   Your EPUB library for the T5 e-reader: typeset per profile (screen, font, size)

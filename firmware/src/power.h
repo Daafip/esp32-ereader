@@ -1,10 +1,12 @@
 // Battery, wake-up cause, sleep and power-off.
 //
-// T5 boards and the 7.5": deep sleep between pages and when idle; a button wakes
-// the chip (ext0/ext1) and setup() handles the press.
+// T5 boards: deep sleep between pages and when idle; a button wakes the chip
+// (ext0/ext1) and setup() handles the press.
 // M5 boards (kLightSleep): light sleep between pages (RAM and the panel's image
 // stay, a touch or button wakes, loop() goes on); "sleep" switches the device
 // off (power hold pin low / power-off pulses), the power button starts it again.
+// The 7.5" board (BOARD_NAPS_BETWEEN_PAGES): light sleep between pages like the M5
+// boards, deep sleep when idle like the T5 boards.
 #pragma once
 
 #include <stdint.h>
@@ -25,7 +27,8 @@ const char *wakeName(Wake w);
 uint32_t batteryMv();
 
 // Light sleep until a touch or button, or after `timerSeconds` (0 = no timer).
-// Returns true when woken by input, false by the timer. kLightSleep boards only.
+// Returns true when woken by input, false by the timer. Boards that nap between
+// pages (kNapBetweenPages).
 bool lightSleep(uint32_t timerSeconds);
 
 // T5 boards: deep sleep until NEXT (ext0) or MENU (ext1, two-button boards) is

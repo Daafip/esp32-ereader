@@ -22,7 +22,7 @@
 namespace display {
 
 struct Timing {
-  uint32_t dataMs = 0;     // SPI transfer
+  uint32_t dataMs = 0;     // before the refresh: panel set-up and SPI transfer
   uint32_t refreshMs = 0;  // panel update (BUSY)
 };
 
@@ -34,6 +34,10 @@ void begin();
 // SPI panels only). Otherwise the controller goes to its deepest sleep and panel
 // power is cut (T5-2.13 V2.4: GPIO12 held low).
 void sleep(bool keepPower);
+
+// Called every few ms while show() waits for the panel (SPI panels only): the app
+// reads the buttons there, so a press during a refresh isn't lost.
+void setIdleHook(void (*hook)());
 
 BBEPAPER &epd();
 uint8_t *framebuffer();

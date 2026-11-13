@@ -208,6 +208,33 @@ has only one: CLK → GPIO23, DI/MOSI → GPIO22, DO/MISO → **GPIO6** (D12), C
    (FireBeetle alone: 36 µA; the HAT and the card add to it). About → Battery should
    read about the cell voltage.
 
+### Faster page turns (2026-11-13)
+
+*David, the same day, on the board: "this feels much snappier". So the new partial
+refresh and the wake from light sleep work; the numbers and the checks below are open.*
+
+Before flashing, with the firmware that is on it: Menu → About, and note "Wake to
+page". Then flash `reader_firebeetle75_flash` and:
+
+1. Turn a few pages. **Send:** About → "Wake to page" after a turn (now counted from
+   the wake to the image), and whether a partial turn looks as clean as before. With
+   Sleep after page off and the serial monitor: the `page ... refresh N ms` lines
+   (bb_epaper's partial was 986 ms).
+2. Press NEXT twice quickly, the second time while the page still changes: two pages
+   should turn.
+3. Twenty turns, then a chapter change or the 20th turn (a full refresh): it should
+   flash and come out clean. If a "full" refresh doesn't flash, or a partial one
+   flashes: **send** which.
+4. Open the menu and move through it: each step should show in about half the time.
+5. Leave a page for the idle time (Settings → Idle sleep, shortest): the sleep screen
+   comes; a press brings the book back (slower, once).
+6. Current in series with the cell while a page is shown, right after a turn (light
+   sleep), and after the sleep screen (deep sleep).
+
+If turns don't work at all: `kEpdOtpPartial = false` and `BOARD_NAPS_BETWEEN_PAGES`
+removed in `boards/firebeetle_75.h` bring back the old partial refresh and the deep
+sleep after every page, one at a time.
+
 ## Compressed pages (`.t5b` version 2, firmware 2.0.0) — works (2026-11-08)
 
 Books made now are compressed (about 5× smaller); older books still open.

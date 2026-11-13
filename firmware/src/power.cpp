@@ -104,6 +104,9 @@ void deepSleep(uint32_t timerSeconds) {
     lightSleep(0);
     esp_restart();
   }
+  // Only what is set below wakes the chip: a nap before this (lightSleep()) left its
+  // idle timer and GPIO wake-up on.
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
   if (kBtnActiveHigh || !kHasExt0) {
     // Every button on ext1: "any high" (all chips have it), or "any low" on chips
     // without ext0 (the 7.5" board's C6, wired with plain buttons to GND; mode 0).

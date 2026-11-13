@@ -77,7 +77,11 @@ constexpr int kEpdPanel = EP75_800x480_GEN2;  // TESTED
 constexpr int kEpdXOffsetBytes = 0;
 constexpr uint32_t kEpdBusyTimeoutMs = 15000;  // a full refresh takes 2.6 s
 constexpr bool kEpdPartialWorks = true;        // TESTED
-constexpr bool kEpdCustomPartialLut = false;   // bb_epaper's own (T5-2.13: display_bbep.cpp)
+constexpr bool kEpdCustomPartialLut = false;   // (T5-2.13: display_bbep.cpp)
+// Partial refresh with the panel's own waveform (display_bbep.cpp otpPartialInit(),
+// as ESPHome's epaper_spi does on this board) instead of bb_epaper's 31-frame LUT
+// (986 ms). false: bb_epaper's again. VERIFY: timing and ghosting on the panel
+constexpr bool kEpdOtpPartial = true;
 constexpr bool kEpdFastInitFirst = false;
 constexpr int kEpdNativeW = 800;
 constexpr int kEpdNativeH = 480;
@@ -108,7 +112,11 @@ constexpr bool kBtnNextPullup = true;   // plain button to GND. VERIFY: pull-ups
 #endif
 
 // --- Power ----------------------------------------------------------------------
-constexpr bool kLightSleep = false;   // between pages: deep sleep, any button wakes (ext1)
+constexpr bool kLightSleep = false;   // asleep: deep sleep, any button wakes (ext1)
+// Between pages: light sleep, so a turn doesn't start the chip, the file system and
+// the panel's "old" image again; deep sleep with the sleep screen, after the idle
+// time. VERIFY: light sleep on the board (wake by a button, current)
+#define BOARD_NAPS_BETWEEN_PAGES 1
 constexpr int kPowerHoldPin = -1;     // no software power switch
 constexpr int kPowerOffPulsePin = -1;
 

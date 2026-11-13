@@ -27,6 +27,7 @@ void begin() {
   panel.setBuffer(fb);
 }
 void sleep(bool) {}
+void setIdleHook(void (*)()) {}
 BBEPAPER &epd() { return panel; }
 uint8_t *framebuffer() { return fb; }
 void clear() { memset(fb, 0xFF, sizeof(fb)); }

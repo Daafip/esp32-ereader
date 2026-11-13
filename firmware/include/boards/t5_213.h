@@ -40,6 +40,7 @@ constexpr uint32_t kEpdBusyTimeoutMs = 15000;
 // display_bbep.cpp loadPartialLut). Without it, partial requests become fast ones.
 constexpr bool kEpdPartialWorks = true;
 constexpr bool kEpdCustomPartialLut = true;
+constexpr bool kEpdOtpPartial = false;  // the 7.5" panel's (display_bbep.cpp)
 // Fast refresh with the preparation sent before the image (display_bbep.cpp
 // sendFastInit): bb_epaper's order lost the image unless the previous refresh
 // was a full one (refresh_test, 2026-10-13).

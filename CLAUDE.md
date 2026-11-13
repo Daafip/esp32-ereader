@@ -77,7 +77,11 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 - Touch boards (`BOARD_HAS_TOUCH`): `touch_gt911.cpp` reports fingers, `TouchTracker`
   (lib/core) makes gestures, `app.cpp touchKey()` maps them per screen via `ui::hit()`
   (rows, footer buttons, the Go to bar). Light-sleep boards (`kLightSleep`) nap between
-  pages and switch off instead of deep sleep (`power.h`).
+  pages and switch off instead of deep sleep (`power.h`); the 7.5" board naps between
+  pages too (`BOARD_NAPS_BETWEEN_PAGES`, `kNapBetweenPages`) and deep-sleeps when idle.
+- While `display::show()` waits for an SPI panel it calls the app's hook
+  (`display::setIdleHook`): a key pressed then is kept in `pendingKey` and handled
+  next, so nothing that runs after a refresh may sleep or swallow presses first.
 - Every firmware carries `T5READER-BOARD:<BOARD_NAME>`; Wi-Fi updates with another
   board's tag are refused. Release files are `<BOARD_NAME>-reader-<version>.bin`
   (T5-2.13: `t5-reader-…`).

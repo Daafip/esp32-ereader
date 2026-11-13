@@ -48,6 +48,7 @@ void sleep(bool keepPower) {
   }
 }
 
+void setIdleHook(void (*)()) {}  // the panel drivers block: nothing to call it from
 BBEPAPER &epd() { return canvas; }
 uint8_t *framebuffer() { return fb; }
 void clear() { memset(fb, 0xFF, kPageBytes); }
