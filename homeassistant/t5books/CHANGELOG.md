@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1
+
+- No change to the add-on (its version follows the firmware's).
+
 ## 2.1.0
 
 - First version: the EPUB/TXT books in a folder (Calibre's OPF beside a book for its
