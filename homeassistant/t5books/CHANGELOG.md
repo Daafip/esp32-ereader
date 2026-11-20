@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0
+
+- A book in parts now comes with the whole book's contents (`toc` records), so a part
+  on the reader knows where it lies in the book: reading position sync over MQTT
+  (firmware 2.3.0) finds the same place on another reader.
+
 ## 2.2.1
 
 - No change to the add-on (its version follows the firmware's).

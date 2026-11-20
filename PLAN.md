@@ -323,7 +323,7 @@ settings. Particularly handy when reflashing".
 - [x] Browser test: save, erase, restore with an unknown setting and a value out of range, a file that isn't a backup (`#backup`, `#restore=<url>` hooks)
 - [x] 🧑 On the reader: save, flash with the settings erased, restore *(2026-11-13, David: "tested")*
 
-## Phase 15 — Reading position sync over MQTT (planned 2026-11-15, built 2026-11-20)
+## Phase 15 — Reading position sync over MQTT (planned 2026-11-15, built 2026-11-20, release 2.3.0)
 
 David: "add mqtt support to sync progress across books ... it should be an option to sync
 when connected to a home wifi"; then: "i have mosquitto. drop koreader"; then "implement".
