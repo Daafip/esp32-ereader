@@ -271,7 +271,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   </div>
 </dialog>
 
-<!-- reader settings, name, home Wi-Fi, book server, backup, factory reset -->
+<!-- reader settings, name, home Wi-Fi, book server, MQTT broker, backup, factory reset -->
 <dialog id="settings">
   <div class="sheet">
     <div class="sheet-head">
@@ -302,6 +302,16 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
           <label class="field"><span data-t="serverAddress">Address</span><input type="text" id="server-address" maxlength="96" autocomplete="off" inputmode="url" placeholder="http://192.168.1.10:8484"></label>
         </div>
         <div class="row"><span class="grow hint" id="server-saved"></span><button type="button" class="btn small quiet" id="server-forget" data-t="forget">Forget</button><button class="btn small" data-t="save">Save</button></div>
+      </form>
+      <h3 data-t="syncTitle">Reading position sync</h3>
+      <p class="hint" data-t="syncHint"></p>
+      <form id="set-mqtt">
+        <div class="controls">
+          <label class="field"><span data-t="mqttBroker">MQTT broker</span><input type="text" id="mqtt-broker" maxlength="96" autocomplete="off" inputmode="url" placeholder="homeassistant.local"></label>
+          <label class="field"><span data-t="mqttUser">User</span><input type="text" id="mqtt-user" maxlength="64" autocomplete="off"></label>
+          <label class="field"><span data-t="password">Password</span><input type="password" id="mqtt-pass" maxlength="64" autocomplete="new-password"></label>
+        </div>
+        <div class="row"><span class="grow hint" id="mqtt-saved"></span><button type="button" class="btn small quiet" id="mqtt-forget" data-t="forget">Forget</button><button class="btn small" data-t="save">Save</button></div>
       </form>
       <h3 data-t="backup">Backup</h3>
       <p class="hint" data-t="backupHint"></p>
@@ -400,8 +410,11 @@ const T = {
     bookServer: "Book server",
     bookServerHint: "Books from the T5 book server add-on in Home Assistant, typeset for this reader: on the reader, Menu → Book server (over the home Wi-Fi above). Its address is in the add-on's log, like http://192.168.1.10:8484.",
     serverAddress: "Address", serverSaved: "Saved: {0}", serverNone: "None saved.",
+    syncTitle: "Reading position sync",
+    syncHint: "Readers that use the same MQTT broker know where the others are in a book: Mosquitto in Home Assistant, with a user for the readers. Switch it on above, at Sync position: with Wi-Fi syncs whenever the reader is on the home Wi-Fi anyway (book server, this page) and with Menu → Sync now; automatic also when you stop and start reading. Before the reader jumps to another reader's page it asks. The password stays on the reader; only a backup file (below) has it.",
+    mqttBroker: "MQTT broker", mqttUser: "User", mqttSaved: "Saved: {0}", mqttNone: "None saved.",
     backup: "Backup",
-    backupHint: "A file with the settings on this sheet, to put them back later (after flashing the reader, for example): the reader's name and settings, the home network with its password, the book server's address and this browser's typesetting choices. No books, bookmarks or pictures. The Wi-Fi password is readable in the file: keep it to yourself.",
+    backupHint: "A file with the settings on this sheet, to put them back later (after flashing the reader, for example): the reader's name and settings, the home network and the MQTT broker with their passwords, the book server's address and this browser's typesetting choices. No books, bookmarks or pictures. The passwords are readable in the file: keep it to yourself.",
     saveFile: "Save to file", restoreFile: "Restore from file", restoreBad: "Not a settings file of the reader.",
     restoreDone: "Restored.", restoreSkipped: "Restored, except {0} that this reader doesn't have.",
     restoreWifi: "Enter the password of {0} and press Save: the file doesn't have it.",
@@ -468,8 +481,11 @@ const T = {
     bookServer: "Boekenserver",
     bookServerHint: "Boeken van de add-on T5 book server in Home Assistant, opgemaakt voor deze lezer: op de lezer Menu → Boekenserver (via de wifi thuis hierboven). Het adres staat in het logboek van de add-on, zoals http://192.168.1.10:8484.",
     serverAddress: "Adres", serverSaved: "Bewaard: {0}", serverNone: "Niets bewaard.",
+    syncTitle: "Leespositie delen",
+    syncHint: "Lezers met dezelfde MQTT-broker weten waar de andere in een boek zijn: Mosquitto in Home Assistant, met een gebruiker voor de lezers. Zet het hierboven aan bij Positie delen: met wifi deelt als de lezer toch al op de wifi thuis zit (boekenserver, deze pagina) en met Menu → Positie nu delen; automatisch ook als je stopt en begint met lezen. Voordat de lezer naar de pagina van een andere lezer springt, vraagt hij het. Het wachtwoord blijft op de lezer; alleen een reservekopie (hieronder) bevat het.",
+    mqttBroker: "MQTT-broker", mqttUser: "Gebruiker", mqttSaved: "Bewaard: {0}", mqttNone: "Niets bewaard.",
     backup: "Reservekopie",
-    backupHint: "Een bestand met de instellingen op dit blad, om ze later terug te zetten (bijvoorbeeld na het flashen van de lezer): de naam en de instellingen van de lezer, het thuisnetwerk met zijn wachtwoord, het adres van de boekenserver en de opmaakkeuzes van deze browser. Geen boeken, bladwijzers of afbeeldingen. Het wifi-wachtwoord staat leesbaar in het bestand: houd het voor jezelf.",
+    backupHint: "Een bestand met de instellingen op dit blad, om ze later terug te zetten (bijvoorbeeld na het flashen van de lezer): de naam en de instellingen van de lezer, het thuisnetwerk en de MQTT-broker met hun wachtwoorden, het adres van de boekenserver en de opmaakkeuzes van deze browser. Geen boeken, bladwijzers of afbeeldingen. De wachtwoorden staan leesbaar in het bestand: houd het voor jezelf.",
     saveFile: "Opslaan als bestand", restoreFile: "Terugzetten uit bestand", restoreBad: "Geen instellingenbestand van de lezer.",
     restoreDone: "Teruggezet.", restoreSkipped: "Teruggezet, op {0} na die deze lezer niet kent.",
     restoreWifi: "Vul het wachtwoord van {0} in en druk op Bewaren: het staat niet in het bestand.",
@@ -562,7 +578,7 @@ function fitCanvas(canvas, sc = screen()) {
 // --- reader API -------------------------------------------------------------------
 
 const demoData = {
-  version: "demo", board: "t5-213", lang, name: "", homeWifi: "", bookServer: "", locked: false, battery: 72, free: 7.2e9, total: 7.9e9, fonts: [], pictures: [],
+  version: "demo", board: "t5-213", lang, name: "", homeWifi: "", bookServer: "", mqttBroker: "", mqttUser: "", locked: false, battery: 72, free: 7.2e9, total: 7.9e9, fonts: [], pictures: [],
   screen: B.screenFor(params.get("screen") || "t5-213"), // demo of another reader: ?screen=4.7in
   stats: { pages: 3412, seconds: 220320, daysRead: 41, streak: 6, bestStreak: 14, todayPages: 23, todaySeconds: 1860, clock: true },
   books: [
@@ -1109,6 +1125,7 @@ $("#s-upload").addEventListener("click", async () => {
   try {
     busy(t("typesetting"), 0);
     let parts = await buildParts();
+    let whole = null;  // a part: where it lies in the whole book (the reader's position sync)
     // Too big (a reader without a card has room for a few hundred pages): leave out the
     // original first, then let the user choose the part that fits. Without the
     // original, the reader can't restyle it: that would typeset the whole book again.
@@ -1119,6 +1136,7 @@ $("#s-upload").addEventListener("click", async () => {
         busy(null);
         const part = await choosePart(parts, room);
         if (!part) return;
+        whole = { first: part.start, pages: parts.streams.length, starts: parts.toc.map((e) => e.startPage) };
         parts = B.partOf(parts, part.start, part.count);
       }
     }
@@ -1126,6 +1144,9 @@ $("#s-upload").addEventListener("click", async () => {
     const extra = (original ? original.size : 0) + meta.size;
     checkSpace(bytes.length + extra);
     await upload("book", new Blob([bytes]), name, (p) => busy(t("sending", Math.round(p * 100), size(bytes.length)), p), c.folder);
+    if (whole) {
+      await api("/api/part", form({ file: c.folder ? c.folder + "/" + name : name, first: whole.first, whole: whole.pages, starts: whole.starts.join(",") }));
+    }
     if (original) {
       busy(t("savingOriginal"), 1);
       await upload("source", original, base + ext(c.source.name));
@@ -1287,6 +1308,10 @@ async function openSettings() {
   $("#wifi-saved").textContent = info.homeWifi ? t("wifiSaved", info.homeWifi) : t("wifiNone");
   $("#server-address").value = info.bookServer || "";
   $("#server-saved").textContent = info.bookServer ? t("serverSaved", info.bookServer) : t("serverNone");
+  $("#mqtt-broker").value = info.mqttBroker || "";
+  $("#mqtt-user").value = info.mqttUser || "";
+  $("#mqtt-pass").value = "";
+  $("#mqtt-saved").textContent = info.mqttBroker ? t("mqttSaved", info.mqttBroker) : t("mqttNone");
   $("#backup-note").textContent = "";
   if (!$("#settings").open) $("#settings").showModal();
   try {
@@ -1353,8 +1378,29 @@ $("#server-forget").addEventListener("click", async () => {
     $("#server-saved").textContent = t("serverNone");
   } catch (err) { alert(err.message); }
 });
+$("#set-mqtt").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const broker = $("#mqtt-broker").value.trim();
+  if (!broker) return;
+  try {
+    await api("/api/mqtt", form({ broker, user: $("#mqtt-user").value.trim(), password: $("#mqtt-pass").value }));
+    $("#mqtt-pass").value = "";
+    info.mqttBroker = broker;
+    info.mqttUser = $("#mqtt-user").value.trim();
+    $("#mqtt-saved").textContent = t("mqttSaved", broker);
+  } catch (err) { alert(err.message); }
+});
+$("#mqtt-forget").addEventListener("click", async () => {
+  try {
+    await api("/api/mqtt", { method: "DELETE" });
+    info.mqttBroker = info.mqttUser = "";
+    $("#mqtt-broker").value = $("#mqtt-user").value = $("#mqtt-pass").value = "";
+    $("#mqtt-saved").textContent = t("mqttNone");
+  } catch (err) { alert(err.message); }
+});
 // Backup: the settings of this sheet in a file, and back from it. The home network
-// comes with its password (GET /api/wifi, asked for only here); the typesetting
+// and the MQTT broker come with their passwords (GET /api/wifi and /api/mqtt, asked
+// for only here); the typesetting
 // choices (size, margins, ... per screen) are this browser's.
 const kBackupType = "t5-reader-settings";
 const kTypesetPrefix = "t5:settings";
@@ -1362,6 +1408,7 @@ const kTypesetPrefix = "t5:settings";
 async function backupData() {
   const { settings } = await api("/api/settings");
   const wifi = await api("/api/wifi");  // demo: {}
+  const mqtt = await api("/api/mqtt");
   const typeset = {};
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -1372,6 +1419,7 @@ async function backupData() {
   return {
     type: kBackupType, version: 1, saved: new Date().toISOString(), board: info.board, firmware: info.version,
     name: info.name || "", homeWifi: wifi.ssid || "", homeWifiPassword: wifi.password || "", bookServer: info.bookServer || "",
+    mqttBroker: mqtt.broker || "", mqttUser: mqtt.user || "", mqttPassword: mqtt.password || "",
     settings: Object.fromEntries(settings.map((s) => [s.key, s.value])),  // option numbers, as the reader stores them
     typeset,
   };
@@ -1393,6 +1441,10 @@ async function restoreBackup(data) {
   if (typeof data.name === "string" && data.name && data.name !== info.name) await api("/api/name", form({ name: data.name }));
   if (typeof data.bookServer === "string" && data.bookServer && data.bookServer !== info.bookServer) {
     await api("/api/bookserver", form({ address: data.bookServer }));
+  }
+  if (typeof data.mqttBroker === "string" && data.mqttBroker) {
+    const text = (v) => (typeof v === "string" ? v : "");
+    await api("/api/mqtt", form({ broker: data.mqttBroker, user: text(data.mqttUser), password: text(data.mqttPassword) }));
   }
   if (data.typeset && typeof data.typeset === "object") {
     for (const [k, v] of Object.entries(data.typeset)) {

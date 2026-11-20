@@ -184,7 +184,25 @@ enum class Lang : uint8_t { En, Nl, Count };
   X(DownloadFailed, "Download failed", "Downloaden mislukt")                               \
   X(ConnectionLost, "connection lost", "verbinding verbroken")                             \
   X(CannotWrite, "cannot write the file", "kan het bestand niet schrijven")                \
-  X(TookTooLong, "took too long", "duurde te lang")
+  X(TookTooLong, "took too long", "duurde te lang")                                        \
+  /* reading position sync over MQTT (src/syncer.h) */                                      \
+  X(SetSync, "Sync position", "Positie delen")                                             \
+  X(SyncWithWifi, "with Wi-Fi", "met wifi")                                                \
+  X(SyncAutomatic, "automatic", "automatisch")                                             \
+  X(SyncNow, "Sync now", "Positie nu delen")                                               \
+  X(Synced, "Position synced", "Positie gedeeld")                                          \
+  X(SyncedCounts, "%u sent  \xC2\xB7  %u received", "%u verstuurd  \xC2\xB7  %u ontvangen") \
+  X(SyncElsewhere, "Read on elsewhere", "Elders verder gelezen")                           \
+  X(SyncWhere, "%u%% on %s", "%u%% op %s")                                                 \
+  X(SyncGoToPage, "Go to page %u?", "Naar pagina %u?")                                    \
+  X(SyncOtherPart, "in another part: page %u", "in een ander deel: pagina %u")            \
+  X(SyncStay, "stay", "blijf")                                                             \
+  X(AnotherReader, "another reader", "een andere lezer")                                   \
+  X(NoBrokerSet, "No MQTT broker set", "Geen MQTT-broker ingesteld")                       \
+  X(BadBroker, "Bad MQTT broker address", "Ongeldig adres van de MQTT-broker")             \
+  X(BrokerUnreachable, "MQTT broker unreachable", "MQTT-broker onbereikbaar")             \
+  X(LoginRefused, "MQTT login refused", "MQTT-login geweigerd")                            \
+  X(CheckUserOnPage, "Check user and password on the page", "Controleer gebruiker en wachtwoord")
 
 enum class S : uint16_t {
 #define T5_STRING_ID(id, en, nl) id,

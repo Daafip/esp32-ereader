@@ -313,6 +313,70 @@ def test_book_server_address(server):
     assert info(base)["bookServer"] == ""
 
 
+def test_mqtt_broker_and_parts(server, tmp_path):
+    base, root = server
+    assert (info(base)["mqttBroker"], info(base)["mqttUser"]) == ("", "")
+    assert (
+        post(base, "/api/mqtt", broker=" homeassistant.local ", user="t5", password="geheim")[0]
+        == 200
+    )
+    assert (info(base)["mqttBroker"], info(base)["mqttUser"]) == ("homeassistant.local", "t5")
+    assert "geheim" not in json.dumps(info(base))  # only the backup asks for it
+    assert json.loads(call(f"{base}/api/mqtt?k={CODE}")[1]) == {
+        "broker": "homeassistant.local",
+        "user": "t5",
+        "password": "geheim",
+    }
+    status, body = post(base, "/api/mqtt", broker="mqtts://ha:8883")
+    assert status == 400 and "1883" in json.loads(body)["error"]
+    assert call(f"{base}/api/mqtt?k=0000")[0] == 403
+    assert call(f"{base}/api/mqtt?k={CODE}", "DELETE")[0] == 200
+    assert json.loads(call(f"{base}/api/mqtt?k={CODE}")[1]) == {
+        "broker": "",
+        "user": "",
+        "password": "",
+    }
+
+    # "Send a part": the upload, then where it lies in the whole book (2 of 300 pages)
+    assert upload(base, "book", "deel.t5b", t5b_bytes(tmp_path))[0] == 200
+    sync = root / "sd" / "books" / ".sync" / "deel.txt"
+    starts = ",".join(str(i * 10) for i in range(20))
+    assert (
+        post(base, "/api/part", file="deel.t5b", first="150", whole="300", starts=starts)[0] == 200
+    )
+    lines = sync.read_text().splitlines()
+    assert lines[0] == "part\t150\t300"
+    assert lines[1].split("\t")[1:] == [str(i * 10) for i in range(16)]
+    assert len(lines) == 3
+    assert post(base, "/api/part", file="deel.t5b", first="299", whole="300")[0] == 400
+    assert post(base, "/api/part", file="deel.t5b", first="0", whole="300", starts="5,2")[0] == 400
+    assert post(base, "/api/part", file="nope.t5b", first="0", whole="300")[0] == 404
+    # named without its folder (the reader chose it: where the book of that name is)
+    assert post(base, "/api/move", file="deel.t5b", folder="Delen")[0] == 200
+    assert post(base, "/api/part", file="deel.t5b", first="10", whole="300")[0] == 200
+    assert sync.read_text().splitlines() == ["part\t10\t300"]
+    assert post(base, "/api/move", file="Delen/deel.t5b", folder="")[0] == 200
+    sync.write_text(sync.read_text() + "synced\t3\t160\t300\n")  # the reader's own lines
+    assert upload(base, "book", "deel.t5b", t5b_bytes(tmp_path))[0] == 200  # whole again
+    assert sync.read_text() == "synced\t3\t160\t300\n"
+    assert call(f"{base}/api/book?file=deel.t5b&k={CODE}", "DELETE")[0] == 200
+    assert not sync.exists()
+
+
+@pytest.mark.parametrize(("text", "parsed"), [
+    ("192.168.1.10", ("192.168.1.10", 1883)),
+    (" homeassistant.local:1884 ", ("homeassistant.local", 1884)),
+    ("MQTT://core-mosquitto:1883/", ("core-mosquitto", 1883)),
+    *((bad, None) for bad in ("mqtts://host", "http://host", "", ":1883", "host:0", "host:65536",
+                              "host:18x3", "host/topic", "user@host")),
+])  # fmt: skip
+def test_mqtt_brokers_match_the_firmware(text, parsed):
+    # the same cases as test_sync_parse_broker in firmware/test/test_core/test_main.cpp
+    from bookprep.devserver import parse_broker
+
+    assert parse_broker(text) == parsed
+
+
 @pytest.mark.parametrize(("text", "parsed"), [
     ("192.168.68.101", ("192.168.68.101", 8484, "")),  # no scheme: the add-on's port
     (" http://192.168.68.101:8484/ ", ("192.168.68.101", 8484, "")),

@@ -97,7 +97,7 @@ an `error<TAB>message` record.
 | `GET /api/profiles?screen=7.5in` | `profile id name` per profile for that screen |
 | `GET /api/books?sort=new\|title&offset=&count=`, or `?author=<id>` | `total n`, then `book id title author file` |
 | `GET /api/authors?offset=&count=` | `total n`, then `author id name books` |
-| `GET /api/prepare?profile=&book=&room=<bytes>` | `busy percent ahead`, `error message`, or `ready pages bytes file` plus, when bytes > room, `part first last bytes` per part that fits (none: no room for a page) |
+| `GET /api/prepare?profile=&book=&room=<bytes>` | `busy percent ahead`, `error message`, or `ready pages bytes file` plus, when bytes > room, `part first last bytes` per part that fits (none: no room for a page) and then `toc page` per contents entry of the whole book (where a part lies, for the position sync: `docs/progress-sync.md`; add-on 2.3.0 and later) |
 | `GET /api/download?profile=&book=[&first=&last=]` | the `.t5b` (409 when not typeset yet) |
 
 Plus `/` (a page for browsers: books, profiles, download links) and `/health`.

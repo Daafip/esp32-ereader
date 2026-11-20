@@ -41,6 +41,11 @@ bool takeChanged();
 // ("" if none is set). False: none set, or not reachable (Wi-Fi is off again).
 // Also used by the book server (bookserver.cpp).
 bool joinHomeWifi(char *ssid, size_t ssidSize);
+// The same in two steps (position sync, syncer.cpp: the join runs while the panel
+// refreshes): begin returns at once (false: no network set), wait waits at most
+// timeoutMs, calling `idle` meanwhile (false: not joined, Wi-Fi is off again).
+bool beginHomeWifi(char *ssid, size_t ssidSize);
+bool waitHomeWifi(uint32_t timeoutMs, void (*idle)() = nullptr);
 
 // A book written to `tmp` (uploaded, or downloaded from the book server) becomes
 // `finalPath`. It is checked as the library checks it (Invalid: `why` says what is

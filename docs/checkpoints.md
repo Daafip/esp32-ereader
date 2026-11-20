@@ -272,6 +272,39 @@ Untested features from the Pala One ideas (`PLAN.md` Phase 9). Each is quick to 
    name, folders (upload into one, move a book), Open + search + "Read from here",
    restyle keeps bookmarks, factory reset (wipes the card's books and the settings).
 
+## Position sync (Phase 15: MQTT)
+
+Needs Mosquitto in Home Assistant with a user for the readers, and two readers with the
+same book from the same EPUB (`docs/progress-sync.md`). Tried on the PC against
+Mosquitto 2.0.20 (packets, 1,000 retained records before the marker, login refused = 5);
+not on a board yet.
+
+1. **Set up:** on both readers' pages: broker, user, password, a name; *Sync position*
+   automatic. Menu → Sync now on each: "Position synced", "n sent". In
+   Home Assistant (MQTT → Configure → Listen to
+   `t5reader/#`) a retained record per book read.
+2. **Wrong password:** "MQTT login refused"; wrong address: "MQTT broker unreachable";
+   any key back to the book.
+3. **Two readers:** read 20 pages on the T5-2.13, let it sleep (the sleep screen comes,
+   then a few seconds of Wi-Fi). Wake the 7.5": the page first, then "Read on elsewhere
+   ... Go to page n?". NEXT: is it the right text (a page or so early is expected the
+   other way round, from the 7.5" to the T5-2.13)? Then the other way, and MENU (stay):
+   the other reader asks next.
+4. **Parts (7.5" without a card):** a book in parts from the book server; read further
+   on the T5-2.13 than the part goes: "in another part: page n"; download that part: the
+   question comes when it opens, and it lands on the right page.
+5. **Away from home** (home Wi-Fi off, or the router unplugged): wake and sleep a few
+   times: the first time about 8 s of Wi-Fi, the next ones skipped (serial log:
+   `sync:`); back home, it syncs again.
+6. **Time and power:** serial log `sync: Wi-Fi after n ms`, `sync: done after n ms` at
+   both ends of a session; About → Wake to page with and without sync
+   (should be the same); on the battery, Wi-Fi joining while the panel refreshes: no
+   reset (brown-out) on the T5-2.13.
+7. **A press during the sync:** right after the sleep screen appears: the reader wakes
+   up again; right after the page appears: the page turns once the sync is done.
+8. Dutch: the question with a long reader name on the T5-2.13 (ui-preview 41-44 say it
+   fits).
+
 ## Book server (Phase 12: Home Assistant add-on)
 
 Needs the add-on running (`docs/book-server.md` → "Installing the add-on") and home

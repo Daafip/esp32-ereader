@@ -28,7 +28,9 @@ no JSON parser). Page numbers are 1-based.
                                              busy <percent> <jobs ahead> | error <message> |
                                              ready <pages> <bytes> <file>, and if it is bigger
                                              than room: part <first> <last> <bytes> for parts
-                                             that fit, one after the other (none: no room)
+                                             that fit, one after the other (none: no room),
+                                             and toc <page> for each contents entry of the
+                                             whole book (the position sync of a part)
     GET /api/download?profile=&book=[&first=&last=]   the .t5b (or that part of it)
 
 Plus / (a page for people: books, profiles, downloads in a browser) and /health.
@@ -598,7 +600,10 @@ class Handler(BaseHTTPRequestHandler):
         rows = [["ready", t5b.header.page_count, size, book.file_name]]
         room = int_arg(q, "room", 0)
         if room and size > room:
-            rows += [["part", a + 1, b, part_size(t5b, a, b)] for a, b in plan_parts(t5b, room)]
+            parts = plan_parts(t5b, room)
+            rows += [["part", a + 1, b, part_size(t5b, a, b)] for a, b in parts]
+            if parts:  # where a part lies in the whole book (firmware/src/syncer.h)
+                rows += [["toc", e.start_page + 1] for e in t5b.toc]
         self.lines(rows)
 
     def api_download(self, q: dict) -> None:

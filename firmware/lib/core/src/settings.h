@@ -22,6 +22,10 @@ enum class StatusBarMode : uint8_t { Full, Minimal, Hidden };
 // The second gesture of MENU while reading (two buttons: hold MENU; one button:
 // long hold; touch: long press).
 enum class HoldAction : uint8_t { Sleep, Bookmark, Lock, Menu };
+// Reading position sync over MQTT (docs/progress-sync.md): never; whenever Wi-Fi is on
+// anyway (book server, Wi-Fi transfer at home) and Menu -> Sync now; or also when a
+// reading session ends and starts (the sleep screen, the first press after it).
+enum class SyncMode : uint8_t { Off, WithWifi, Automatic };
 
 struct Settings {
   SleepScreen sleepScreen = SleepScreen::Book;
@@ -37,6 +41,7 @@ struct Settings {
   uint8_t idleMinutes = 10;    // awake/idle time before the sleep screen
   bool deepSleep = true;       // sleep after every page turn
   WakeRefresh wakeRefresh = WakeRefresh::Rewrite;
+  SyncMode sync = SyncMode::Off;
 };
 
 enum class SettingId : uint8_t {
@@ -51,6 +56,7 @@ enum class SettingId : uint8_t {
   IdleMinutes,
   DeepSleep,
   WakeRefresh,
+  Sync,
   Count
 };
 

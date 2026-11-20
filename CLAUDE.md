@@ -20,6 +20,9 @@ and ESPHome over a USB-OTG cable (ROM loader protocol as esptool `--no-stub`;
 Phase 12: a book server, a Home Assistant add-on (`homeassistant/t5books/`, running
 `bookprep/bookserver.py`): the reader downloads books typeset per profile itself
 (Menu → Book server; `docs/book-server.md`).
+Phase 15: reading position sync over MQTT (Mosquitto): one retained record per book,
+the place as contents entry + fraction, a question before a jump (`docs/progress-sync.md`;
+`lib/core/src/position_sync.*`, `mqtt_packet.*`, `src/syncer.*`). Not tried on a board yet.
 
 ## Current phase
 
@@ -105,7 +108,10 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
   backslash-u escape), never as literal invisible characters (`normalize.py` handles
   soft hyphens, zero-width and odd spaces).
 - The book server's text protocol (`bookprep/bookserver.py`) is parsed by
-  `lib/core/src/catalog.*` and `src/bookserver.cpp`: change them together. The add-on
+  `lib/core/src/catalog.*` and `src/bookserver.cpp`: change them together.
+- The position sync's record and state file (`docs/progress-sync.md`) are written and
+  parsed by `lib/core/src/position_sync.*` only; the topic and record are a protocol
+  between readers of different firmware versions: add records, don't change them. The add-on
   (`homeassistant/t5books/`) gets bookprep from the release tag of its version, or
   bundled by `pixi run ha-addon`. No other file in the repo may be called
   `config.yaml`/`.yml`/`.json`: the Supervisor takes each one for an add-on.
@@ -123,13 +129,15 @@ intended); the web page opens in demo mode straight from disk (`?screen=4.7in`).
 - Files on the card go through `storage::files()` (SD, or LittleFS in the flash
   build), never `SD` directly.
 - Card layout: books in `/books` and one folder level, originals in `/books/.src`,
-  bookmarks in `/books/.marks/<stem>.txt`, sleep pictures in `/sleep/*.bin` (one
+  bookmarks in `/books/.marks/<stem>.txt`, position sync state in
+  `/books/.sync/<stem>.txt`, sleep pictures in `/sleep/*.bin` (one
   full-screen page each, or a square of the short side for "picture + book": told
   apart by size), fonts in `/fonts` (`storage.h`).
 - The AP password never goes back to the page, and the home Wi-Fi password only in
   `GET /api/wifi`, which the page calls for a settings backup the user saves
   (⚙ Settings → Backup; David, 2026-11-13: "wifi password and ssid also included").
-  `/api/info` and everything else have the network's name only.
+  `/api/info` and everything else have the network's name only. The MQTT broker's
+  password likewise: only `GET /api/mqtt`, for the backup.
 - The page's "Install vX" takes releases from GitHub Pages (`kUpdateSite` in
   `index.html`: `manifest-<board>.json` + the app image at 0x10000, kept on the latest
   release by `release.yml`); github.com release downloads have no CORS headers. The

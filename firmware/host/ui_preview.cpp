@@ -373,6 +373,21 @@ int main(int argc, char **argv) {
               {Button::Menu, tr(S::MoreAction), nullptr});
   save("32-server-downloaded");
 
+  // --- position sync (app.cpp askSynced(), showSyncResult()) ---
+  char who[72], where[48], counts[48];
+  snprintf(who, sizeof(who), tr(S::SyncWhere), 43u, "Keuken");
+  snprintf(where, sizeof(where), tr(S::SyncGoToPage), 212u);
+  ui::message(ui::Icon::Book, tr(S::SyncElsewhere), who, where, {Button::Next, tr(S::Go), nullptr},
+              {Button::Menu, tr(S::SyncStay), nullptr});
+  save("38-sync-ask");
+  snprintf(counts, sizeof(counts), tr(S::SyncedCounts), 3u, 1u);
+  ui::message(ui::Icon::Book, tr(S::Synced), counts, "homeassistant.local:1883",
+              tr(S::BackAnyButton));
+  save("39-synced");
+  list.reset(kSettingCount, ui::menuRows(), kSettingCount - 1);
+  ui::menu("Settings", list, settingItem, nullptr, kNext, {Button::Menu, "edit", "back"}, 72);
+  save("40-settings-sync");
+
   setLanguage(Lang::Nl);
   list.reset(kSettingCount, ui::menuRows(), 0);
   ui::menu(tr(S::Settings), list, settingItem, nullptr, kNext,
@@ -417,6 +432,23 @@ int main(int argc, char **argv) {
   ui::message(ui::Icon::Book, tr(S::NoBooksYet), tr(S::NoBooksLine1), tr(S::NoBooksLine2),
               {Button::Next, tr(S::WifiTransfer), nullptr}, {Button::Menu, tr(S::BookServer), nullptr});
   save("37-no-books-server-nl");
+  // position sync in Dutch, with the longest name the page allows (32 bytes)
+  snprintf(who, sizeof(who), tr(S::SyncWhere), 100u, "De lezer naast de leesstoel boven");
+  snprintf(where, sizeof(where), tr(S::SyncGoToPage), 1234u);
+  ui::message(ui::Icon::Book, tr(S::SyncElsewhere), who, where, {Button::Next, tr(S::Go), nullptr},
+              {Button::Menu, tr(S::SyncStay), nullptr});
+  save("41-sync-ask-nl");
+  snprintf(who, sizeof(who), tr(S::SyncWhere), 61u, tr(S::AnotherReader));
+  snprintf(where, sizeof(where), tr(S::SyncOtherPart), 2876u);
+  ui::message(ui::Icon::Book, tr(S::SyncElsewhere), who, where, tr(S::BackAnyButton));
+  save("42-sync-other-part-nl");
+  ui::message(ui::Icon::Warning, tr(S::LoginRefused), "homeassistant.local:1883",
+              tr(S::CheckUserOnPage), tr(S::BackAnyButton));
+  save("43-sync-refused-nl");
+  list.reset(kSettingCount, ui::menuRows(), kSettingCount - 1);
+  ui::menu(tr(S::Settings), list, settingItem, nullptr, kNext,
+           {Button::Menu, tr(S::Edit), tr(S::Back)}, 72);
+  save("44-settings-sync-nl");
   setLanguage(Lang::En);
   return 0;
 }

@@ -61,6 +61,22 @@ void setBookServer(const char *address) {
   }
 }
 
+String mqttBroker() { return store.getString("mqttBroker", ""); }
+String mqttUser() { return store.getString("mqttUser", ""); }
+String mqttPassword() { return store.getString("mqttPass", ""); }
+
+void setMqtt(const char *broker, const char *user, const char *password) {
+  if (!broker || !*broker) {
+    store.remove("mqttBroker");
+    store.remove("mqttUser");
+    store.remove("mqttPass");
+    return;
+  }
+  store.putString("mqttBroker", broker);
+  store.putString("mqttUser", user ? user : "");
+  store.putString("mqttPass", password ? password : "");
+}
+
 String deviceName() { return store.getString("name", ""); }
 void setDeviceName(const char *name) { store.putString("name", name); }
 

@@ -55,6 +55,14 @@ FireBeetle 7.5" without a card reads a whole novel. Add this repository under Se
 → Add-ons → Add-on store → Repositories, or install it as a local add-on with
 `pixi run ha-addon`. How: [docs/book-server.md](docs/book-server.md).
 
+## Reading position sync over MQTT
+
+Readers that share an MQTT broker (Mosquitto in Home Assistant) keep each other's place
+in a book: when one goes to sleep it tells the broker where it is, when another wakes it
+asks "Read on elsewhere: go to page 212?". Pages differ per screen, so the place travels
+as a contents entry and how far into it. Off by default; set up on the reader's page.
+How: [docs/progress-sync.md](docs/progress-sync.md).
+
 ## Android app: switch between the reader and ESPHome
 
 The FireBeetle 7.5" can run ESPHome too (a Home Assistant dashboard, say). The Android

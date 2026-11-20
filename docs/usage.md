@@ -198,6 +198,22 @@ part replaces the last, and the list starts on the next one. That is how a FireB
 7.5" without a card reads a whole novel. Hold MENU in the lists to go back; at the top
 it turns Wi-Fi off and returns to the library.
 
+## Reading position sync (between readers)
+
+With an MQTT broker on the home network (Mosquitto in Home Assistant), readers keep
+track of each other's place in a book (`docs/progress-sync.md`). Once, on the page
+(⚙ Settings): **Home Wi-Fi**, **Reading position sync** (broker, user, password),
+a **Name**, and *Sync position* under "On the reader": **with Wi-Fi** (when the Wi-Fi is
+on anyway: book server, Wi-Fi transfer at home, and Menu → **Sync
+now**) or **automatic** (also when the sleep screen comes and with the first press
+after it).
+
+When another reader went on in the open book, the reader asks: "Read on elsewhere /
+43% on Keuken / Go to page 212?". NEXT goes there, MENU stays (and this reader's page
+then goes to the other readers). In a part of the book that isn't on this reader (a
+7.5" without a card), it says which page; download that part from the book server and
+the question comes again when it opens.
+
 ## Buttons
 
 The footer of each menu shows the keys. On the T5 boards the chips name the
@@ -265,7 +281,8 @@ reading does what Settings → *Long hold* / *Long press* says: **sleep** (sleep
 
 Without an open book (none yet, or one that couldn't be read), going back from the
 library (hold MENU; touch: long press or the "menu" button) opens a short menu instead:
-Library, Book server, Statistics, Wi-Fi transfer, Settings, About and Sleep.
+Library, Book server, Statistics, Wi-Fi transfer, Sync now (with the position sync on),
+Settings, About and Sleep.
 
 A book that can't be read shows "Read error" with the reason; any button goes back to
 the library, and that book is no longer opened at start-up. Delete it or send it again
@@ -287,6 +304,9 @@ on the Wi-Fi page.
   (then open the page once), the M5 boards keep it in their clock chip.
 - **Book server**: books from Home Assistant, see above.
 - **Wi-Fi transfer**: see above.
+- **Sync now** (only with *Sync position* on and a broker set): the reading position of
+  every book with the other readers now, see above. Ends with what it sent and
+  received, or the question.
 - **Settings** (select changes the value; the page's ⚙ Settings has the same list):
   - *Sleep screen*: what shows while the reader sleeps: **book** (title, author,
     progress), **cover** (the same with the book's cover; books without one fall back
@@ -320,6 +340,8 @@ on the Wi-Fi page.
   - *Sleep after page*: sleep between page turns (battery life). Turn off for
     debugging over USB. The 7.5" board sleeps lightly between pages (a turn is
     faster) and deeply after the idle time; the M5 boards the same, then switch off.
+  - *Sync position*: **off**, **with Wi-Fi** or **automatic**: see "Reading position
+    sync" above.
   - *Wake refresh*: how a page turn after deep sleep refreshes (`rewrite`, `retain`,
     `full`; see `docs/hardware.md`). On the T5-2.13, the T5-4.7" and the 7.5"
     "retain" behaves like "rewrite": every partial update sends the previous page

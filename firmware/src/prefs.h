@@ -1,5 +1,6 @@
 // Persistent state in NVS: settings, last opened book, reading position per
-// book, device name, home Wi-Fi, statistics, lock and clock zone.
+// book, device name, home Wi-Fi, book server, MQTT broker, statistics, lock and
+// clock zone.
 #pragma once
 
 #include <Arduino.h>
@@ -34,6 +35,14 @@ void setHomeWifi(const char *ssid, const char *password);  // empty ssid: forget
 // BOOK_SERVER, see bookserver.h).
 String bookServer();
 void setBookServer(const char *address);  // empty: forget
+
+// The MQTT broker for the reading position sync ("" = none; then secrets.h's
+// MQTT_BROKER, see syncer.h): "host[:port]", a user and a password (both may be
+// empty). The password goes back to the page only for a settings backup.
+String mqttBroker();
+String mqttUser();
+String mqttPassword();
+void setMqtt(const char *broker, const char *user, const char *password);  // empty broker: forget
 
 // Shown as the library title ("" = default).
 String deviceName();

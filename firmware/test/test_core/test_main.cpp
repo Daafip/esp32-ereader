@@ -15,7 +15,9 @@
 #include "i18n.h"
 #include "inflater.h"
 #include "menu.h"
+#include "mqtt_packet.h"
 #include "policy.h"
+#include "position_sync.h"
 #include "reading_stats.h"
 #include "rtc_time.h"
 #include "settings.h"
@@ -1192,6 +1194,430 @@ void test_catalog_parts_and_room() {
   TEST_ASSERT_EQUAL_UINT32(0xFFFFFFFFu, catalog::downloadRoom(int64_t(64) << 30, 0));
 }
 
+// --- position sync (lib/core/src/position_sync.*) ------------------------------------
+
+void test_sync_book_key() {
+  char a[9], b[9];
+  possync::bookKey("abc", a);
+  TEST_ASSERT_EQUAL_STRING("1a47e90b", a);  // FNV-1a 32 of "abc"
+  possync::bookKey("ABC", b);
+  TEST_ASSERT_EQUAL_STRING(a, b);  // the stem's case doesn't matter (FAT)
+  possync::bookKey("Max_Havelaar", a);
+  possync::bookKey("Max_Havelaar_", b);
+  TEST_ASSERT_TRUE(strcmp(a, b) != 0);
+}
+
+void test_sync_parse_broker() {
+  char host[64];
+  uint16_t port = 0;
+  TEST_ASSERT_TRUE(possync::parseBroker("192.168.1.10", host, sizeof(host), port));
+  TEST_ASSERT_EQUAL_STRING("192.168.1.10", host);
+  TEST_ASSERT_EQUAL_UINT16(1883, port);
+  TEST_ASSERT_TRUE(possync::parseBroker(" homeassistant.local:1884 ", host, sizeof(host), port));
+  TEST_ASSERT_EQUAL_STRING("homeassistant.local", host);
+  TEST_ASSERT_EQUAL_UINT16(1884, port);
+  TEST_ASSERT_TRUE(possync::parseBroker("MQTT://core-mosquitto:1883/", host, sizeof(host), port));
+  TEST_ASSERT_EQUAL_STRING("core-mosquitto", host);
+  TEST_ASSERT_FALSE(possync::parseBroker("mqtts://host", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("http://host", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker(":1883", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("host:0", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("host:65536", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("host:18x3", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("host/topic", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("user@host", host, sizeof(host), port));
+  TEST_ASSERT_FALSE(possync::parseBroker("a-very-long-host-name", host, 8, port));
+}
+
+void test_sync_part_range() {
+  uint32_t first = 0, last = 0;
+  TEST_ASSERT_TRUE(possync::partRange("Dieren eten (152\xE2\x80\x93" "297)", first, last));
+  TEST_ASSERT_EQUAL_UINT32(152, first);
+  TEST_ASSERT_EQUAL_UINT32(297, last);
+  TEST_ASSERT_TRUE(possync::partRange("Boek (1) deel (1\xE2\x80\x93" "20)", first, last));
+  TEST_ASSERT_EQUAL_UINT32(1, first);
+  TEST_ASSERT_FALSE(possync::partRange("Dieren eten (152-297)", first, last));  // en dash only
+  TEST_ASSERT_FALSE(possync::partRange("Dieren eten (20\xE2\x80\x93" "1)", first, last));
+  TEST_ASSERT_FALSE(possync::partRange("(1\xE2\x80\x93" "2)", first, last));
+  TEST_ASSERT_FALSE(possync::partRange("Dieren eten (1\xE2\x80\x93" "2x)", first, last));
+  TEST_ASSERT_FALSE(possync::partRange("Dieren eten", first, last));
+}
+
+void test_sync_position_same_layout_is_exact() {
+  const uint32_t starts[] = {0, 1, 10, 100, 2000, 3595};
+  possync::Layout l;
+  l.pages = l.wholePages = 3596;
+  l.starts = starts;
+  l.tocCount = 6;
+  for (uint32_t w = 0; w < l.wholePages; w++) {
+    TEST_ASSERT_EQUAL_UINT32(w, possync::wholePageFor(l, possync::positionOf(l, w)));
+  }
+  l.tocCount = 0;  // the fraction of the book alone
+  for (uint32_t w = 0; w < l.wholePages; w++) {
+    TEST_ASSERT_EQUAL_UINT32(w, possync::wholePageFor(l, possync::positionOf(l, w)));
+  }
+  const possync::Position p = possync::positionOf(l, 5000);  // past the end: the last page
+  TEST_ASSERT_EQUAL_UINT32(3595, possync::wholePageFor(l, p));
+}
+
+void test_sync_position_across_screens() {
+  // A: 100 pages; B: the same book in 50, chapter 1 shorter there.
+  const uint32_t a[] = {0, 10, 50};
+  const uint32_t b[] = {0, 20, 30};
+  possync::Layout la, lb;
+  la.pages = la.wholePages = 100;
+  la.starts = a;
+  la.tocCount = 3;
+  lb.pages = lb.wholePages = 50;
+  lb.starts = b;
+  lb.tocCount = 3;
+  possync::Position p = possync::positionOf(la, 30);  // halfway chapter 1
+  TEST_ASSERT_EQUAL_INT32(1, p.chapter);
+  TEST_ASSERT_EQUAL_UINT32(500000, p.chapterPpm);
+  TEST_ASSERT_EQUAL_UINT32(300000, p.ppm);
+  TEST_ASSERT_EQUAL_UINT32(25, possync::wholePageFor(lb, p));  // by chapter
+  TEST_ASSERT_EQUAL_UINT32(30, possync::wholePageFor(lb, possync::positionOf(la, 50)));  // chapter 2 starts
+  lb.tocCount = 2;  // other contents: the fraction of the book
+  TEST_ASSERT_EQUAL_UINT32(15, possync::wholePageFor(lb, p));
+  p = possync::positionOf(la, 5);  // before the first entry with a heading at 0: chapter 0
+  TEST_ASSERT_EQUAL_INT32(0, p.chapter);
+  const uint32_t late[] = {4, 60};  // pages before the first entry
+  la.starts = late;
+  la.tocCount = 2;
+  p = possync::positionOf(la, 2);
+  TEST_ASSERT_EQUAL_INT32(-1, p.chapter);
+  TEST_ASSERT_EQUAL_UINT32(500000, p.chapterPpm);
+  const uint32_t lateB[] = {2, 30};
+  lb.starts = lateB;
+  lb.tocCount = 2;
+  TEST_ASSERT_EQUAL_UINT32(1, possync::wholePageFor(lb, p));
+}
+
+void test_sync_position_in_parts() {
+  // The whole book: 468 pages; the part on this reader: pages 151..296 (0-based).
+  const uint32_t whole[] = {0, 100, 200, 400};
+  possync::Layout part;
+  part.pages = 146;
+  part.first = 151;
+  part.wholePages = 468;
+  part.starts = whole;
+  part.tocCount = 4;
+  TEST_ASSERT_TRUE(possync::contains(part, 151));
+  TEST_ASSERT_TRUE(possync::contains(part, 296));
+  TEST_ASSERT_FALSE(possync::contains(part, 150));
+  TEST_ASSERT_FALSE(possync::contains(part, 297));
+  const possync::Position p = possync::positionOf(part, part.first + 49);  // its page 49
+  TEST_ASSERT_EQUAL_INT32(2, p.chapter);
+  TEST_ASSERT_EQUAL_UINT32(0, p.chapterPpm);
+  // The same book on a screen with twice the pages.
+  const uint32_t big[] = {0, 200, 400, 800};
+  possync::Layout other;
+  other.pages = other.wholePages = 936;
+  other.starts = big;
+  other.tocCount = 4;
+  TEST_ASSERT_EQUAL_UINT32(400, possync::wholePageFor(other, p));
+  // And back: page 500 there (chapter 2, a quarter in) is whole page 250 here.
+  const uint32_t w = possync::wholePageFor(part, possync::positionOf(other, 500));
+  TEST_ASSERT_EQUAL_UINT32(250, w);
+  TEST_ASSERT_TRUE(possync::contains(part, w));
+  // A part without the whole book's contents: the fraction of the book.
+  part.starts = nullptr;
+  part.tocCount = 0;
+  const possync::Position q = possync::positionOf(part, 234);
+  TEST_ASSERT_EQUAL_UINT16(0, q.tocCount);
+  TEST_ASSERT_EQUAL_UINT32(468, possync::wholePageFor(other, q));
+}
+
+void test_sync_record() {
+  possync::Record r;
+  r.rev = 12;
+  r.pos.ppm = 431000;
+  r.pos.chapter = 7;
+  r.pos.chapterPpm = 250000;
+  r.pos.tocCount = 31;
+  strcpy(r.device, "0a1b2c3d");
+  strcpy(r.name, "Keuken");
+  strcpy(r.title, "De meeste\tmensen deugen");
+  const std::string text = possync::formatRecord(r);
+  TEST_ASSERT_EQUAL_STRING(
+      "T5SYNC\t1\nposition\t12\t431000\t7\t250000\t31\t0a1b2c3d\tKeuken\tDe meeste mensen deugen\n",
+      text.c_str());
+  possync::Record back;
+  TEST_ASSERT_TRUE(possync::parseRecord(text.data(), text.size(), back));
+  TEST_ASSERT_EQUAL_UINT32(12, back.rev);
+  TEST_ASSERT_EQUAL_UINT32(431000, back.pos.ppm);
+  TEST_ASSERT_EQUAL_INT32(7, back.pos.chapter);
+  TEST_ASSERT_EQUAL_UINT32(250000, back.pos.chapterPpm);
+  TEST_ASSERT_EQUAL_UINT16(31, back.pos.tocCount);
+  TEST_ASSERT_EQUAL_STRING("0a1b2c3d", back.device);
+  TEST_ASSERT_EQUAL_STRING("Keuken", back.name);
+  TEST_ASSERT_EQUAL_STRING("De meeste mensen deugen", back.title);
+  const char crlf[] = "T5SYNC\t1\r\nbattery\t80\r\nposition\t3\t10\t-1\t5\t2\tabc\tx\r\n";
+  TEST_ASSERT_TRUE(possync::parseRecord(crlf, strlen(crlf), back));  // unknown records skipped
+  TEST_ASSERT_EQUAL_UINT32(3, back.rev);
+  TEST_ASSERT_EQUAL_INT32(-1, back.pos.chapter);
+  TEST_ASSERT_EQUAL_STRING("x", back.name);
+  TEST_ASSERT_EQUAL_STRING("", back.title);
+  const char outOfRange[] = "T5SYNC\t1\nposition\t3\t2000000\t9\t5\t2\tabc\n";
+  TEST_ASSERT_TRUE(possync::parseRecord(outOfRange, strlen(outOfRange), back));
+  TEST_ASSERT_EQUAL_UINT32(1000000, back.pos.ppm);
+  TEST_ASSERT_EQUAL_INT32(-1, back.pos.chapter);  // chapter 9 of 2: the fraction only
+  TEST_ASSERT_EQUAL_UINT16(0, back.pos.tocCount);
+  const char other[] = "T5SYNC\t2\nposition\t3\t10\t-1\t5\t2\tabc\n";
+  TEST_ASSERT_FALSE(possync::parseRecord(other, strlen(other), back));
+  const char noPosition[] = "T5SYNC\t1\n";
+  TEST_ASSERT_FALSE(possync::parseRecord(noPosition, strlen(noPosition), back));
+  TEST_ASSERT_FALSE(possync::parseRecord("", 0, back));
+}
+
+void test_sync_state_file() {
+  possync::BookState s;
+  possync::markSynced(s, 4, 151, 468);
+  std::vector<uint32_t> starts;
+  for (uint32_t i = 0; i < 40; i++) starts.push_back(i * 11);
+  possync::setPart(s, 151, 468, starts);
+  possync::Record r;
+  r.rev = 5;
+  r.pos.ppm = 123;
+  strcpy(r.device, "deadbeef");
+  strcpy(r.name, "Kitchen reader");
+  strcpy(r.title, "Dieren eten");
+  possync::markAsk(s, r);
+  std::string text = possync::formatState(s);
+  text += "something new\tlater\n";  // a newer firmware's line: skipped
+  possync::BookState back;
+  possync::parseState(text.data(), text.size(), back);
+  TEST_ASSERT_TRUE(back.synced);
+  TEST_ASSERT_EQUAL_UINT32(4, back.rev);
+  TEST_ASSERT_EQUAL_UINT32(151, back.page);
+  TEST_ASSERT_EQUAL_UINT32(468, back.pages);
+  TEST_ASSERT_FALSE(back.dirty);
+  TEST_ASSERT_TRUE(back.part);
+  TEST_ASSERT_EQUAL_UINT32(151, back.first);
+  TEST_ASSERT_EQUAL_UINT32(468, back.wholePages);
+  TEST_ASSERT_EQUAL(40, int(back.starts.size()));
+  TEST_ASSERT_EQUAL_UINT32(39 * 11, back.starts[39]);
+  TEST_ASSERT_TRUE(back.hasRemote);
+  TEST_ASSERT_TRUE(back.ask);
+  TEST_ASSERT_EQUAL_UINT32(5, back.remote.rev);
+  TEST_ASSERT_EQUAL_STRING("Kitchen reader", back.remote.name);
+  possync::markStay(back);
+  text = possync::formatState(back);
+  possync::parseState(text.data(), text.size(), s);
+  TEST_ASSERT_TRUE(s.dirty);
+  TEST_ASSERT_FALSE(s.ask);
+  TEST_ASSERT_EQUAL_UINT32(5, s.rev);
+  possync::setWhole(s);
+  text = possync::formatState(s);
+  possync::parseState(text.data(), text.size(), back);
+  TEST_ASSERT_FALSE(back.part);
+  TEST_ASSERT_EQUAL(0, int(back.starts.size()));
+  possync::parseState("", 0, back);  // no file: never synced
+  TEST_ASSERT_FALSE(back.synced);
+  TEST_ASSERT_FALSE(back.hasRemote);
+}
+
+void test_sync_decide() {
+  using possync::Action;
+  const char *me = "11111111";
+  possync::Record other;
+  strcpy(other.device, "22222222");
+  other.rev = 5;
+  possync::BookState s;
+  // Nothing on the broker: tell it, unless the book was never read here.
+  TEST_ASSERT_EQUAL(int(Action::Nothing), int(possync::decide(s, 0, 300, nullptr, 0, me)));
+  TEST_ASSERT_EQUAL(int(Action::Publish), int(possync::decide(s, 12, 300, nullptr, 0, me)));
+  TEST_ASSERT_EQUAL_UINT32(1, possync::newRev(s, nullptr));
+  // Another reader's record, never synced here: the same page, or a question.
+  TEST_ASSERT_EQUAL(int(Action::Seen), int(possync::decide(s, 40, 300, &other, 40, me)));
+  TEST_ASSERT_EQUAL(int(Action::Ask), int(possync::decide(s, 0, 300, &other, 40, me)));
+  possync::markAsk(s, other);
+  TEST_ASSERT_EQUAL(int(Action::Nothing), int(possync::decide(s, 0, 300, &other, 40, me)));
+  other.rev = 6;  // it went on while the question was open: ask about that instead
+  TEST_ASSERT_EQUAL(int(Action::Ask), int(possync::decide(s, 0, 300, &other, 45, me)));
+  // Answered "go": in step with the broker.
+  possync::markSynced(s, 6, 45, 300);
+  TEST_ASSERT_EQUAL(int(Action::Nothing), int(possync::decide(s, 45, 300, &other, 45, me)));
+  TEST_ASSERT_EQUAL(int(Action::Publish), int(possync::decide(s, 50, 300, &other, 45, me)));
+  TEST_ASSERT_EQUAL_UINT32(7, possync::newRev(s, &other));
+  TEST_ASSERT_EQUAL(int(Action::Publish), int(possync::decide(s, 45, 310, &other, 45, me)));  // restyled
+  other.rev = 4;  // the broker lost the newer record
+  TEST_ASSERT_EQUAL(int(Action::Publish), int(possync::decide(s, 45, 300, &other, 45, me)));
+  // This reader's own record: in step, or moved on since.
+  possync::Record mine = other;
+  strcpy(mine.device, me);
+  mine.rev = 9;
+  TEST_ASSERT_EQUAL(int(Action::Seen), int(possync::decide(s, 45, 300, &mine, 45, me)));
+  TEST_ASSERT_EQUAL(int(Action::Publish), int(possync::decide(s, 46, 300, &mine, 45, me)));
+  TEST_ASSERT_EQUAL_UINT32(10, possync::newRev(s, &mine));
+  // Answered "stay": this reader's page goes out over the other one's.
+  other.rev = 8;
+  possync::markAsk(s, other);
+  possync::markStay(s);
+  TEST_ASSERT_EQUAL(int(Action::Publish), int(possync::decide(s, 45, 300, &other, 90, me)));
+  TEST_ASSERT_EQUAL_UINT32(9, possync::newRev(s, &other));
+  // In a part not on the reader: left alone, asked again when another part arrives.
+  possync::BookState p;
+  other.rev = 3;
+  possync::markAsk(p, other);
+  possync::markElsewhere(p, 10, 300);
+  TEST_ASSERT_TRUE(p.elsewhere);
+  TEST_ASSERT_EQUAL(int(Action::Nothing), int(possync::decide(p, 10, 300, &other, 200, me)));
+  possync::setPart(p, 151, 300, std::vector<uint32_t>());
+  TEST_ASSERT_TRUE(p.ask);
+  TEST_ASSERT_FALSE(p.elsewhere);
+  TEST_ASSERT_EQUAL(int(Action::Nothing), int(possync::decide(p, 151, 300, &other, 200, me)));
+}
+
+void test_sync_backoff() {
+  possync::Backoff b = {0, 0};
+  TEST_ASSERT_TRUE(possync::shouldTry(b));
+  const int skips[] = {1, 2, 4, 8, 16, 16};
+  for (int n : skips) {
+    possync::failed(b);
+    for (int i = 0; i < n; i++) TEST_ASSERT_FALSE(possync::shouldTry(b));
+    TEST_ASSERT_TRUE(possync::shouldTry(b));
+  }
+  possync::succeeded(b);
+  possync::failed(b);
+  TEST_ASSERT_FALSE(possync::shouldTry(b));
+  TEST_ASSERT_TRUE(possync::shouldTry(b));
+}
+
+// --- MQTT packets (lib/core/src/mqtt_packet.*) ---------------------------------------
+
+void test_mqtt_remaining_length() {
+  uint8_t b[4];
+  TEST_ASSERT_EQUAL(1, int(mqtt::encodeLength(0, b)));
+  TEST_ASSERT_EQUAL_HEX8(0x00, b[0]);
+  TEST_ASSERT_EQUAL(1, int(mqtt::encodeLength(127, b)));
+  TEST_ASSERT_EQUAL_HEX8(0x7F, b[0]);
+  TEST_ASSERT_EQUAL(2, int(mqtt::encodeLength(128, b)));  // the spec's table, 2.2.3
+  TEST_ASSERT_EQUAL_HEX8(0x80, b[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x01, b[1]);
+  TEST_ASSERT_EQUAL(2, int(mqtt::encodeLength(16383, b)));
+  TEST_ASSERT_EQUAL_HEX8(0xFF, b[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x7F, b[1]);
+  TEST_ASSERT_EQUAL(3, int(mqtt::encodeLength(16384, b)));
+  TEST_ASSERT_EQUAL(4, int(mqtt::encodeLength(268435455, b)));
+  const uint8_t max[] = {0xFF, 0xFF, 0xFF, 0x7F};
+  TEST_ASSERT_EQUAL_HEX8_ARRAY(max, b, 4);
+  TEST_ASSERT_EQUAL(0, int(mqtt::encodeLength(268435456, b)));
+}
+
+void test_mqtt_packets_out() {
+  uint8_t buf[64];
+  size_t n = mqtt::buildConnect(buf, sizeof(buf), "t5", "u", "p", 30);
+  const uint8_t connect[] = {0x10, 20, 0, 4, 'M', 'Q', 'T', 'T', 4, 0xC2, 0, 30,
+                             0,    2,  't', '5', 0, 1, 'u', 0, 1, 'p'};
+  TEST_ASSERT_EQUAL(int(sizeof(connect)), int(n));
+  TEST_ASSERT_EQUAL_HEX8_ARRAY(connect, buf, sizeof(connect));
+  n = mqtt::buildConnect(buf, sizeof(buf), "t5", "", "p", 30);  // no user: no password either
+  TEST_ASSERT_EQUAL(16, int(n));
+  TEST_ASSERT_EQUAL_HEX8(0x02, buf[9]);
+  TEST_ASSERT_EQUAL(0, int(mqtt::buildConnect(buf, 10, "t5", "u", "p", 30)));  // too small
+
+  const char *filters[] = {"a/+", "s/x"};
+  n = mqtt::buildSubscribe(buf, sizeof(buf), 1, filters, 2);
+  const uint8_t subscribe[] = {0x82, 14, 0, 1, 0, 3, 'a', '/', '+', 0, 0, 3, 's', '/', 'x', 0};
+  TEST_ASSERT_EQUAL(int(sizeof(subscribe)), int(n));
+  TEST_ASSERT_EQUAL_HEX8_ARRAY(subscribe, buf, sizeof(subscribe));
+
+  const uint8_t hi[] = {'h', 'i'};
+  n = mqtt::buildPublish(buf, sizeof(buf), "t", hi, 2, 1, true, 7);
+  const uint8_t retained[] = {0x33, 7, 0, 1, 't', 0, 7, 'h', 'i'};
+  TEST_ASSERT_EQUAL(int(sizeof(retained)), int(n));
+  TEST_ASSERT_EQUAL_HEX8_ARRAY(retained, buf, sizeof(retained));
+  n = mqtt::buildPublish(buf, sizeof(buf), "t", hi, 2, 0, false, 0);
+  const uint8_t plain[] = {0x30, 5, 0, 1, 't', 'h', 'i'};
+  TEST_ASSERT_EQUAL(int(sizeof(plain)), int(n));
+  TEST_ASSERT_EQUAL_HEX8_ARRAY(plain, buf, sizeof(plain));
+  TEST_ASSERT_EQUAL(0, int(mqtt::buildPublish(buf, sizeof(buf), "t", hi, 2, 2, false, 1)));
+  std::vector<uint8_t> big(200, 'x');  // a two-byte remaining length
+  std::vector<uint8_t> out(300);
+  n = mqtt::buildPublish(out.data(), out.size(), "t", big.data(), big.size(), 0, true, 0);
+  TEST_ASSERT_EQUAL(1 + 2 + 3 + 200, int(n));
+  TEST_ASSERT_EQUAL_HEX8(0x31, out[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x80 | (203 % 128), out[1]);
+  TEST_ASSERT_EQUAL_HEX8(203 / 128, out[2]);
+
+  n = mqtt::buildPuback(buf, sizeof(buf), 0x1234);
+  const uint8_t puback[] = {0x40, 2, 0x12, 0x34};
+  TEST_ASSERT_EQUAL_HEX8_ARRAY(puback, buf, sizeof(puback));
+  n = mqtt::buildDisconnect(buf, sizeof(buf));
+  TEST_ASSERT_EQUAL(2, int(n));
+  TEST_ASSERT_EQUAL_HEX8(0xE0, buf[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x00, buf[1]);
+}
+
+void test_mqtt_packets_in() {
+  uint8_t buf[32];
+  mqtt::Parser p(buf, sizeof(buf));
+  // CONNACK, accepted
+  const uint8_t connack[] = {0x20, 2, 0, 0};
+  for (size_t i = 0; i < sizeof(connack); i++) {
+    TEST_ASSERT_EQUAL(i + 1 == sizeof(connack), p.push(connack[i]));
+  }
+  TEST_ASSERT_EQUAL(mqtt::kConnack, p.type());
+  TEST_ASSERT_EQUAL(0, mqtt::connackCode(p.body(), p.length()));
+  // SUBACK, then a retained PUBLISH at QoS 1, in one stream
+  const uint8_t stream[] = {0x90, 3, 0, 1, 0, 0x33, 11, 0, 3, 'a', '/', 'b', 0, 9, 'x', 'y', 'z', '!'};
+  int packets = 0;
+  for (uint8_t b : stream) {
+    if (!p.push(b)) continue;
+    packets++;
+    if (packets == 1) {
+      uint16_t id = 0;
+      uint8_t granted = 0xFF;
+      TEST_ASSERT_EQUAL(mqtt::kSuback, p.type());
+      TEST_ASSERT_TRUE(mqtt::ackId(p.body(), p.length(), id, &granted));
+      TEST_ASSERT_EQUAL_UINT16(1, id);
+      TEST_ASSERT_EQUAL_HEX8(0, granted);
+    } else {
+      mqtt::Message m;
+      TEST_ASSERT_EQUAL(mqtt::kPublish, p.type());
+      TEST_ASSERT_TRUE(mqtt::parsePublish(p.flags(), p.body(), p.length(), m));
+      TEST_ASSERT_EQUAL(3, int(m.topicLen));
+      TEST_ASSERT_EQUAL_MEMORY("a/b", m.topic, 3);
+      TEST_ASSERT_EQUAL(1, m.qos);
+      TEST_ASSERT_TRUE(m.retain);
+      TEST_ASSERT_EQUAL_UINT16(9, m.packetId);
+      TEST_ASSERT_EQUAL(4, int(m.payloadLen));
+      TEST_ASSERT_EQUAL_MEMORY("xyz!", m.payload, 4);
+    }
+  }
+  TEST_ASSERT_EQUAL(2, packets);
+  // Too big for the buffer: skipped, and the next one still comes through.
+  std::vector<uint8_t> big = {0x30, 40, 0, 1, 't'};
+  big.resize(2 + 40, 'x');
+  big.push_back(0xD0);  // PINGRESP
+  big.push_back(0);
+  packets = 0;
+  for (uint8_t b : big) {
+    if (p.push(b)) {
+      packets++;
+      TEST_ASSERT_EQUAL(mqtt::kPingresp, p.type());
+      TEST_ASSERT_EQUAL(0, int(p.length()));
+    }
+  }
+  TEST_ASSERT_EQUAL(1, packets);
+  TEST_ASSERT_EQUAL_UINT32(1, p.dropped());
+  // Malformed: a remaining length of five bytes.
+  const uint8_t bad[] = {0x30, 0xFF, 0xFF, 0xFF, 0xFF, 0x01};
+  for (uint8_t b : bad) TEST_ASSERT_FALSE(p.push(b));
+  TEST_ASSERT_TRUE(p.bad());
+  // Bodies that don't add up.
+  mqtt::Message m;
+  const uint8_t shortTopic[] = {0, 9, 'a'};
+  TEST_ASSERT_FALSE(mqtt::parsePublish(0, shortTopic, sizeof(shortTopic), m));
+  const uint8_t noId[] = {0, 1, 'a', 0};
+  TEST_ASSERT_FALSE(mqtt::parsePublish(2, noId, sizeof(noId), m));  // QoS 1 needs an id
+  TEST_ASSERT_EQUAL(-1, mqtt::connackCode(connack, 1));
+  const uint8_t refused[] = {0, 5};
+  TEST_ASSERT_EQUAL(5, mqtt::connackCode(refused, 2));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_golden_header_from_python_writer);
@@ -1249,5 +1675,18 @@ int main() {
   RUN_TEST(test_catalog_split_fields);
   RUN_TEST(test_catalog_http_lines);
   RUN_TEST(test_catalog_parts_and_room);
+  RUN_TEST(test_sync_book_key);
+  RUN_TEST(test_sync_parse_broker);
+  RUN_TEST(test_sync_part_range);
+  RUN_TEST(test_sync_position_same_layout_is_exact);
+  RUN_TEST(test_sync_position_across_screens);
+  RUN_TEST(test_sync_position_in_parts);
+  RUN_TEST(test_sync_record);
+  RUN_TEST(test_sync_state_file);
+  RUN_TEST(test_sync_decide);
+  RUN_TEST(test_sync_backoff);
+  RUN_TEST(test_mqtt_remaining_length);
+  RUN_TEST(test_mqtt_packets_out);
+  RUN_TEST(test_mqtt_packets_in);
   return UNITY_END();
 }

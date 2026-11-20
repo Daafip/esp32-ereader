@@ -172,9 +172,13 @@ def test_prepare_download_and_parts(server):
     assert len(wait_ready(base, f"{query}&room={size}")) == 1
     room = part_size(t5b, 0, 1) + 10
     rows = wait_ready(base, f"{query}&room={room}")
-    parts = [(int(r[1]), int(r[2]), int(r[3])) for r in rows[1:]]
+    parts = [(int(r[1]), int(r[2]), int(r[3])) for r in rows[1:] if r[0] == "part"]
     assert rows[1][0] == "part" and parts[0][0] == 1 and parts[-1][1] == pages
     assert all(b <= room for _, _, b in parts)
+    # and the whole book's contents, 1-based, so a part knows where it lies (the sync)
+    toc = [int(r[1]) for r in rows[1:] if r[0] == "toc"]
+    assert toc == [e.start_page + 1 for e in t5b.toc] and toc
+    assert [r[0] for r in rows[1:]] == ["part"] * len(parts) + ["toc"] * len(toc)
     first, last, nbytes = parts[-1]
     status, data = get(f"{base}/api/download?{query}&first={first}&last={last}")
     assert status == 200 and len(data) == nbytes

@@ -27,12 +27,14 @@
 #include "input.h"
 #include "menu.h"
 #include "policy.h"
+#include "position_sync.h"
 #include "power.h"
 #include "prefs.h"
 #include "rtc_clock.h"
 #include "reading_stats.h"
 #include "settings.h"
 #include "storage.h"
+#include "syncer.h"
 #include "text_util.h"
 #include "touch.h"
 #include "transfer.h"
@@ -62,10 +64,12 @@ enum class Screen : uint8_t {
   ServerList,  // book server: profiles, Newest/Authors/Titles, books, parts
   ServerBusy,  // book server: typesetting on the server (downloads block)
   ServerDone,  // book server: downloaded, read it or get more
+  SyncAsk,     // position sync: another reader went elsewhere; go there or stay
+  Syncing,     // position sync: Menu -> Sync now running (keys wait)
 };
 
 // What the panel shows and where we are, kept through deep sleep (RTC RAM).
-constexpr uint32_t kRtcMagic = 0x54354233;
+constexpr uint32_t kRtcMagic = 0x54354234;  // changed with the layout below
 struct RtcState {
   uint32_t magic;
   char bookPath[128];
@@ -77,6 +81,8 @@ struct RtcState {
   uint32_t imageMs;    // app start -> image refreshed, last time
   ReadingStats stats;  // flushed to NVS every kStatsFlushPages pages and before sleep
   uint16_t statsUnsaved;
+  bool sessionEnded;              // the sleep screen came: the next press starts a session
+  possync::Backoff syncBackoff;   // automatic syncs after failed joins
 };
 RTC_DATA_ATTR RtcState rtc;
 // A constructor would run on every wake and reset what deep sleep kept (it did:
@@ -110,8 +116,12 @@ constexpr int kMainCount = sizeof(kMainItems) / sizeof(kMainItems[0]);
 const S kHomeItems[] = {S::Library,  S::BookServer, S::Statistics, S::WifiTransfer,
                         S::Settings, S::About,      S::Sleep};
 constexpr int kHomeCount = sizeof(kHomeItems) / sizeof(kHomeItems[0]);
-const S *mainItems() { return book.isOpen() ? kMainItems : kHomeItems; }
-int mainCount() { return book.isOpen() ? kMainCount : kHomeCount; }
+// The menu shown: the open book's or the short one, with "Sync now" after Wi-Fi
+// transfer when the position sync is on (buildMainItems()).
+S menuItems[kMainCount + 1];
+int menuItemCount = 0;
+const S *mainItems() { return menuItems; }
+int mainCount() { return menuItemCount; }
 // What a key does on a message screen.
 enum class AfterMessage : uint8_t {
   Restart,      // start again (card inserted, book copied)
@@ -119,6 +129,7 @@ enum class AfterMessage : uint8_t {
   Library,      // "Made for landscape", read errors: back to the library
   ServerList,   // a book the server couldn't make or the reader can't hold: back to the list
   LeaveServer,  // no Wi-Fi, no server: out of the book server
+  Back,         // back to the book (or the library without one)
 };
 AfterMessage afterMessage = AfterMessage::Restart;
 // A key pressed while the panel refreshed (display::setIdleHook): loop() takes it
@@ -163,6 +174,30 @@ void pollWhileRefreshing() {
 }
 
 uint32_t clockNow() { return uint32_t(time(nullptr)); }
+
+// --- position sync (syncer.h) --------------------------------------------------
+
+constexpr uint32_t kAutoJoinMs = 8000;  // automatic: away from home it gives up soon
+constexpr uint32_t kJoinMs = 15000;     // Menu -> Sync now
+// A reading session started (the first press after the sleep screen): sync once its
+// page is up (pageShown()); the Wi-Fi joined while the page refreshed.
+bool syncAfterPage = false;
+
+bool syncOn() { return settings.sync != SyncMode::Off && syncer::configured(); }
+
+// An automatic sync now? Not when the last joins failed (away from home): see Backoff.
+bool autoSyncDue() {
+  return settings.sync == SyncMode::Automatic && syncer::configured() && storage::mounted() &&
+         possync::shouldTry(rtc.syncBackoff);
+}
+
+void noteAutoSync(const syncer::Report &r) {
+  if (r.result == syncer::Result::WifiFailed || r.result == syncer::Result::Unreachable) {
+    possync::failed(rtc.syncBackoff);
+  } else {
+    possync::succeeded(rtc.syncBackoff);
+  }
+}
 
 void flushStats() {
   if (!rtc.statsUnsaved) return;
@@ -230,12 +265,19 @@ void drawSleepScreen() {
   free(coverBits);
 }
 
+void loop_();
+
 [[noreturn]] void enterSleep(bool withSleepScreen) {
   transfer::stop();
   bookserver::disconnect();
   flushStats();
+  // A reading session ends: the automatic sync tells the broker where this reader is.
+  // The Wi-Fi joins while the sleep screen is drawn; the exchange comes after it.
+  const bool sync = withSleepScreen && autoSyncDue();
+  if (sync) syncer::beginJoin();
   uint32_t timer = 0;
   if (withSleepScreen) {
+    rtc.sessionEnded = true;
     if (settings.lockOnSleep && book.isOpen()) setLocked(true);
     if (settings.sleepScreen == SleepScreen::Page && book.isOpen()) {
       // Keep the page: the next press just turns it. Drawn again if a menu was
@@ -250,6 +292,18 @@ void drawSleepScreen() {
   } else if (rtc.screen == Screen::Reading) {
     timer = uint32_t(settings.idleMinutes) * 60;  // the idle timer brings up the sleep screen
   }
+  if (sync) {
+    noteAutoSync(syncer::run(kAutoJoinMs, pollWhileRefreshing));
+    // Pressed while it ran: awake again, the press handled as a wake's (locked: only
+    // the unlock gesture counts, anything else goes back to sleep).
+    if (pendingKey != Key::None && !(locked && pendingKey != Key::MenuLong)) {
+      rtc.sessionEnded = false;
+      input::markActivity();
+      for (;;) loop_();  // until a page or the idle time puts the reader to sleep again
+    }
+    pendingKey = Key::None;
+  }
+  syncer::endJoin();
   const bool reading = rtc.screen == Screen::Reading;
   display::sleep(reading && settings.wakeRefresh == WakeRefresh::Retain);
   input::waitAllReleased();
@@ -395,6 +449,7 @@ void showLowBattery() {
 // sleep. Back in loop(), the touch or press that woke the chip is read as usual and
 // the panel still holds its image.
 void nap() {
+  syncer::endJoin();
   display::sleep(true);
   // Touch: a finger still down would wake the chip at once. Buttons are read on:
   // waiting here would swallow a press made just after the page appeared.
@@ -414,8 +469,15 @@ void nap() {
 }
 
 // After a page is on the panel: sleep right away, or stay awake (setting).
+bool askSynced();
+
 void pageShown() {
   input::setRepeat(false);
+  if (syncAfterPage && screen == Screen::Reading) {  // a session starts: where are the others?
+    syncAfterPage = false;
+    noteAutoSync(syncer::run(kAutoJoinMs, pollWhileRefreshing));
+    if (askSynced()) return;
+  }
   if (screen != Screen::Reading || !settings.deepSleep) return;
   if (pendingKey != Key::None) return;  // pressed during the refresh: loop() acts on it first
   if (kNapBetweenPages) {
@@ -426,6 +488,7 @@ void pageShown() {
 }
 
 void resume() {
+  if (askSynced()) return;     // another reader went elsewhere in this book
   showReading(Refresh::Full);  // full: clears the menu's ghosting
   pageShown();
 }
@@ -445,7 +508,7 @@ Refresh menuRefresh() {
 void mainItem(int i, ui::Item &it, void *) {
   const S id = mainItems()[i];
   strlcpy(it.label, tr(id), sizeof(it.label));
-  it.chevron = id != S::Resume && id != S::Sleep && id != S::Lock;
+  it.chevron = id != S::Resume && id != S::Sleep && id != S::Lock && id != S::SyncNow;
   if (id == S::Resume) snprintf(it.detail, sizeof(it.detail), "%d%%", percentRead());
   if (id == S::Bookmarks && marks.count()) snprintf(it.detail, sizeof(it.detail), "%d", marks.count());
 }
@@ -457,8 +520,19 @@ void renderMainMenu() {
   display::show(menuRefresh());
 }
 
+void buildMainItems() {
+  const S *items = book.isOpen() ? kMainItems : kHomeItems;
+  const int count = book.isOpen() ? kMainCount : kHomeCount;
+  menuItemCount = 0;
+  for (int i = 0; i < count; i++) {
+    menuItems[menuItemCount++] = items[i];
+    if (items[i] == S::WifiTransfer && syncOn()) menuItems[menuItemCount++] = S::SyncNow;
+  }
+}
+
 void openMainMenu() {
   input::setRepeat(true);
+  buildMainItems();
   list.reset(mainCount(), ui::menuRows(), 0);
   setScreen(Screen::MainMenu);
   renderMainMenu();
@@ -734,7 +808,10 @@ void startTransfer() {
   book.close();  // uploads may replace or delete it; reopened when done
   input::setRepeat(false);
   wifiStep = 0;
+  syncer::endJoin();  // the transfer runs the Wi-Fi now
+  syncAfterPage = false;
   transfer::start(batteryPct);
+  if (syncOn() && !transfer::info().ownNetwork) syncer::run(0, nullptr);  // at home anyway
   transfer::takeChanged();
   setScreen(Screen::WifiTransfer);
   renderTransfer();
@@ -1044,6 +1121,12 @@ void downloadBook(uint32_t first, uint32_t last, uint32_t bytes) {
     return;
   }
   Serial.printf("book server: saved %s (%u pages)\n", path.c_str(), unsigned(h.pageCount));
+  // Where it lies in the whole book, for the position sync (a part's own pages start at 1).
+  if (first) {
+    syncer::installedPart(storage::stemOf(path), first - 1, srv.prep.pages, srv.prep.starts);
+  } else {
+    syncer::installedWhole(storage::stemOf(path));
+  }
   srv.saved = path;
   if (!onReader(srv.book.file)) srv.onReader.push_back(srv.book.file);
   ui::message(ui::Icon::Book, tr(S::Downloaded), h.title, h.author,
@@ -1138,6 +1221,8 @@ void startServer() {
   book.close();  // a download may replace it; reopened when done
   input::setRepeat(false);
   srv = ServerState();
+  syncer::endJoin();  // the book server runs the Wi-Fi now
+  syncAfterPage = false;
   const String address = bookserver::address();
   ui::message(ui::Icon::Book, tr(S::BookServer), tr(S::Connecting), address.c_str(), nullptr);
   display::show(menuRefresh());
@@ -1158,6 +1243,7 @@ void startServer() {
       return serverMessage(ui::Icon::Warning, tr(S::WifiNotJoined), ssid, tr(S::OutOfReach),
                            AfterMessage::LeaveServer);
   }
+  if (syncOn()) syncer::run(0, nullptr);  // on the home Wi-Fi anyway
   std::vector<storage::BookEntry> books;
   storage::listAllBooks(books);
   for (const storage::BookEntry &b : books) {
@@ -1190,6 +1276,143 @@ void serverBack() {
     case ServerView::Parts: openServerView(srv.bookFrom, srv.listSelected); break;
     default: openServerView(ServerView::Top, srv.topSelected); break;
   }
+}
+
+// --- position sync: the question, Sync now ---------------------------------------
+
+possync::BookState askState;  // the open book's, while its question is up
+uint32_t askPage = 0;         // the page the question offers (in this file)
+
+std::vector<uint32_t> openContents() {
+  std::vector<uint32_t> starts;
+  starts.reserve(size_t(book.tocCount()));
+  for (int i = 0; i < book.tocCount(); i++) starts.push_back(book.chapterStart(i));
+  return starts;
+}
+
+// Another reader's place in the open book, fetched by a sync and not answered yet: ask
+// whether to go there, or say it is in another part. Nothing when this reader is there
+// already. True if the question (or the message) is on the screen.
+bool askSynced() {
+  if (!book.isOpen() || settings.sync == SyncMode::Off) return false;
+  syncer::load(book.stem(), askState);
+  if (!askState.ask) return false;
+  const std::vector<uint32_t> contents = askState.part ? std::vector<uint32_t>() : openContents();
+  const possync::Layout l = syncer::layout(askState, book.pageCount(), contents);
+  const uint32_t local = l.first + page;
+  const uint32_t mapped = possync::wholePageFor(l, askState.remote.pos);
+  if (mapped == local) {
+    possync::markSynced(askState, askState.remote.rev, local, l.wholePages);
+    syncer::save(book.stem(), askState);
+    return false;
+  }
+  pendingKey = Key::None;  // pressed for the page: not an answer to this
+  input::setRepeat(false);
+  const possync::Record &r = askState.remote;
+  char who[72], where[48];
+  snprintf(who, sizeof(who), tr(S::SyncWhere), unsigned(r.pos.ppm / 10000),
+           r.name[0] ? r.name : tr(S::AnotherReader));  // the percentage first: a long name is cut
+  Serial.printf("sync: %s is at whole page %u, this reader at %u\n", r.name, unsigned(mapped + 1),
+                unsigned(local + 1));
+  if (!possync::contains(l, mapped)) {  // a part on a reader without a card
+    snprintf(where, sizeof(where), tr(S::SyncOtherPart), unsigned(mapped + 1));
+    possync::markElsewhere(askState, local, l.wholePages);
+    syncer::save(book.stem(), askState);
+    ui::message(ui::Icon::Book, tr(S::SyncElsewhere), who, where, tr(S::BackAnyButton));
+    display::show(menuRefresh());
+    setScreen(Screen::Message);
+    afterMessage = AfterMessage::Back;
+    return true;
+  }
+  askPage = mapped - l.first;
+  snprintf(where, sizeof(where), tr(S::SyncGoToPage), unsigned(askPage + 1));
+  ui::message(ui::Icon::Book, tr(S::SyncElsewhere), who, where, {Button::Next, tr(S::Go), nullptr},
+              {Button::Menu, tr(S::SyncStay), nullptr});
+  display::show(menuRefresh());
+  setScreen(Screen::SyncAsk);
+  return true;
+}
+
+void syncAskKey(Key k) {
+  possync::BookState &st = askState;
+  switch (k) {
+    case Key::NextShort:
+    case Key::NextLong: {  // go there
+      const uint32_t first = st.part ? st.first : 0;
+      const uint32_t whole = st.part ? st.wholePages : book.pageCount();
+      page = askPage < book.pageCount() ? askPage : book.pageCount() - 1;
+      possync::markSynced(st, st.remote.rev, first + page, whole);
+      syncer::save(book.stem(), st);
+      resume();
+      break;
+    }
+    case Key::MenuShort:
+    case Key::MenuLong:  // stay: this reader's page goes to the broker next time
+      possync::markStay(st);
+      syncer::save(book.stem(), st);
+      resume();
+      break;
+    default: break;
+  }
+}
+
+void showSyncResult(const syncer::Report &r) {
+  ui::Icon icon = ui::Icon::Warning;
+  const char *headline = tr(S::BrokerUnreachable);
+  const char *line1 = r.detail;
+  const char *line2 = tr(S::NoAnswer);
+  char counts[48];
+  switch (r.result) {
+    case syncer::Result::Ok:
+      if (askSynced()) return;
+      snprintf(counts, sizeof(counts), tr(S::SyncedCounts), unsigned(r.sent), unsigned(r.received));
+      icon = ui::Icon::Book;
+      headline = tr(S::Synced);
+      line1 = counts;
+      line2 = r.detail;
+      break;
+    case syncer::Result::NoBroker:
+      headline = tr(S::NoBrokerSet);
+      line1 = tr(S::SetOnPage1);
+      line2 = tr(S::SetOnPage2);
+      break;
+    case syncer::Result::BadAddress:
+      headline = tr(S::BadBroker);
+      line2 = tr(S::SetOnPage2);
+      break;
+    case syncer::Result::NoWifi:
+      headline = tr(S::NoHomeWifi);
+      line1 = tr(S::SetOnPage1);
+      line2 = tr(S::SetOnPage2);
+      break;
+    case syncer::Result::WifiFailed:
+      headline = tr(S::WifiNotJoined);
+      line2 = tr(S::OutOfReach);
+      break;
+    case syncer::Result::Unreachable: break;
+    case syncer::Result::Refused:
+      headline = tr(S::LoginRefused);
+      line2 = tr(S::CheckUserOnPage);
+      break;
+    case syncer::Result::Failed: line2 = tr(S::ConnectionLost); break;
+  }
+  ui::message(icon, headline, line1, line2, tr(S::BackAnyButton));
+  display::show(menuRefresh());
+  setScreen(Screen::Message);
+  afterMessage = AfterMessage::Back;
+}
+
+// Menu -> Sync now: every book on the reader, whatever the setting says beyond "on".
+void syncNow() {
+  flushStats();
+  input::setRepeat(false);
+  ui::message(ui::Icon::Book, tr(S::SyncNow), tr(S::Connecting), syncer::broker().c_str(),
+              nullptr);
+  display::show(menuRefresh());
+  setScreen(Screen::Syncing);
+  const syncer::Report r = syncer::run(kJoinMs, pollWhileRefreshing);
+  pendingKey = Key::None;  // pressed while waiting: not meant for what comes next
+  showSyncResult(r);
 }
 
 // --- key handling --------------------------------------------------------------
@@ -1340,6 +1563,7 @@ void mainMenuKey(Key k) {
         case S::Statistics: openStatistics(); break;
         case S::WifiTransfer: startTransfer(); break;
         case S::BookServer: startServer(); break;
+        case S::SyncNow: syncNow(); break;
         case S::Settings: openSettings(); break;
         case S::About: openAbout(); break;
         case S::Lock:
@@ -1545,6 +1769,8 @@ void handle(Key k) {
     case Screen::ServerList: serverListKey(k); break;
     case Screen::ServerBusy: serverBusyKey(k); break;
     case Screen::ServerDone: serverDoneKey(k); break;
+    case Screen::SyncAsk: syncAskKey(k); break;
+    case Screen::Syncing: break;  // Sync now: keys wait (pollWhileRefreshing drops them)
     case Screen::Message:
       switch (afterMessage) {
         case AfterMessage::NoBooks:
@@ -1557,6 +1783,7 @@ void handle(Key k) {
         case AfterMessage::Library: openLibrary(libraryFolder); break;
         case AfterMessage::ServerList: openServerView(srv.bookFrom, srv.listSelected); break;
         case AfterMessage::LeaveServer: leaveServer(); break;
+        case AfterMessage::Back: backToBook(); break;
         case AfterMessage::Restart: ESP.restart();  // retry from the start (card inserted, ...)
       }
       break;
@@ -1664,6 +1891,14 @@ void setup() {
   }
 
   if (wake == power::Wake::Timer) enterSleep(true);  // idle while a page was shown
+  // The first press after the sleep screen starts a reading session, as switching on
+  // does (the M5 boards switch off instead of sleeping): the automatic sync asks where
+  // the other readers are once the page is up (its Wi-Fi joins meanwhile).
+  if (key != Key::None || wake == power::Wake::PowerOn) {
+    syncAfterPage = (rtc.sessionEnded || wake == power::Wake::PowerOn) && autoSyncDue();
+    rtc.sessionEnded = false;
+    if (syncAfterPage) syncer::beginJoin();
+  }
   if (locked && key == Key::MenuLong) {  // the unlock gesture woke us
     setLocked(false);
     resume();
@@ -1677,7 +1912,10 @@ void setup() {
   readingKey(key);
 }
 
-void loop() {
+void loop() { loop_(); }
+
+namespace {
+void loop_() {
   const bool wifi = screen == Screen::WifiTransfer;
   if (wifi) {
     transfer::loop();
@@ -1701,5 +1939,6 @@ void loop() {
   }
   delay(wifi ? 1 : 5);
 }
+}  // namespace
 
 }  // namespace app

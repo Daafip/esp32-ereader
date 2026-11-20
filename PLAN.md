@@ -323,6 +323,40 @@ settings. Particularly handy when reflashing".
 - [x] Browser test: save, erase, restore with an unknown setting and a value out of range, a file that isn't a backup (`#backup`, `#restore=<url>` hooks)
 - [x] 🧑 On the reader: save, flash with the settings erased, restore *(2026-11-13, David: "tested")*
 
+## Phase 15 — Reading position sync over MQTT (planned 2026-11-15, built 2026-11-20)
+
+David: "add mqtt support to sync progress across books ... it should be an option to sync
+when connected to a home wifi"; then: "i have mosquitto. drop koreader"; then "implement".
+So: our own format on David's Mosquitto (Home Assistant), no KOReader compatibility (its
+sync is HTTP/JSON, keyed by the EPUB's MD5, with a place inside the EPUB: the reader has
+neither). Only its model is kept: one record per book, synced when a reading session
+starts and ends, and a question before the page jumps. `docs/progress-sync.md`.
+
+Measured first (2026-11-15, on the PC, three of David's books typeset for `t5-213` and
+`7.5in`, every page of one mapped onto the other and compared with the page that really
+holds its first line): by contents entry and fraction within it, T5-2.13 → 7.5"
+74-81% the same page, all within one, 0.2 pages off on average; 7.5" → T5-2.13
+23-32% the same page, 53-61% within one, 1.4-1.8 off on average (up to 7 early, 3 late).
+By the fraction of the whole book: 0.8-2 and 5.7-14 pages off (up to 22). So the record
+carries both; the chapter is used when both copies have as many contents entries.
+
+- [x] Measurement above (script in the session's scratchpad, not kept: the numbers are here and in the doc)
+- [x] `lib/core/src/position_sync.*`: book key (FNV-1a over the stem, lower-cased), broker address, part titles, place → position and back (whole book and part; rounded so a copy maps onto itself exactly), the record (`T5SYNC<TAB>1`, `position` line), the state file, the decision (publish / ask / seen / nothing, by a rev per book, not the clock), answers (go, stay, in another part), back-off (skip 1, 2, 4, 8, 16 automatic syncs after a failed join). 10 Unity tests
+- [x] `lib/core/src/mqtt_packet.*`: MQTT 3.1.1 CONNECT, SUBSCRIBE, PUBLISH, PUBACK, DISCONNECT out, a byte-at-a-time parser in. 3 Unity tests (the spec's length table, byte sequences). Tried against Mosquitto 2.0.20 in Docker (not an automated test): 300 and 1,000 retained records all before the marker, our QoS 1 records acked, a wrong password = CONNACK 5. It found a bug fixed in `syncer.cpp`: a SUBACK and the first records in one TCP read lost the rest of the read
+- [x] `src/syncer.*`: one session for every book on the reader (join the home Wi-Fi or use it, mDNS for `.local`, CONNECT, SUBSCRIBE `t5reader/progress/+` and a marker topic, records until the marker comes back, decide, PUBLISH retained QoS 1, PUBACKs, DISCONNECT), `idle` called while waiting (keys into `pendingKey`); state per book in `/books/.sync/<stem>.txt`, removed with the book. `transfer::beginHomeWifi`/`waitHomeWifi` (the join split in two)
+- [x] Parts: the book server sends the whole book's contents with the parts (`toc` records; `bookserver.py`, `bookserver.cpp`, test), the reader keeps first page, whole page count and contents at a download; the page sends them after "Send a part" (`POST /api/part`, name with or without its folder; `transfer.cpp`, `devserver.py`, tests, e2e). A part whose place is unknown (made before, or `bookprep --first-page`) isn't synced: its title says it is a part
+- [x] Broker on the page: ⚙ Settings → Reading position sync (broker, user, password); `POST`/`DELETE`/`GET /api/mqtt` (`GET` with the password, for the backup only; `/api/info` has broker and user); in the settings backup with the password, as the home Wi-Fi's (my assumption: ask David); `MQTT_BROKER`/`MQTT_USER`/`MQTT_PASSWORD` in `secrets.h`. `devserver.py`, tests
+- [x] Setting *Sync position* (off / with Wi-Fi / automatic, key `sync`; devserver's `SETTINGS`); Menu → Sync now (with the setting on and a broker); hooks in `app.cpp`: `enterSleep(true)` (join while the sleep screen refreshes, then the exchange; a press during it wakes the reader up again), the first press after the sleep screen or switching on (`setup()`: join while the page refreshes, `pageShown()`: the exchange, then the question), the book server and Wi-Fi transfer at home (with Wi-Fi). The question (`askSynced()` in `resume()`: "Read on elsewhere / 43% on Keuken / Go to page 212?", NEXT go, MENU stay; in another part: says which page). Strings en/nl; ui-preview 38-44. `kRtcMagic` changed (new RTC fields)
+- [ ] Optional: the reader in Home Assistant (MQTT discovery, a state topic with book, percentage, battery). Not done
+- [x] `docs/progress-sync.md`, `docs/usage.md`, README, CLAUDE.md, `docs/book-server.md` (`toc`), `docs/checkpoints.md` → "Position sync"
+- [ ] Release 2.3.0: `FW_VERSION` and the add-on's `config.yaml` (the add-on needs it for the `toc` records; not bumped yet: the add-on store would offer a version whose tag doesn't exist)
+- [ ] 🧑 A user for the readers in Mosquitto; broker entered on both readers' pages; "Sync now" on each
+- [ ] 🧑 Two readers, automatic: read on one, let it sleep, wake the other: asked, and the page it goes to is the right one (both ways; the 7.5" flash build with a part, also a place in another part)
+- [ ] 🧑 Time and power: how long the join and the exchange take, "Wake to page" with and without sync, Wi-Fi during a panel refresh on the battery (no reset), away from home (no wait after the first failed join). All in `docs/checkpoints.md` → "Position sync"
+
+Open for David: always ask before the page jumps (built so), or go forward without asking
+as KOReader can; the broker password in the settings backup (built so, as the Wi-Fi's).
+
 ---
 
 ## Decisions

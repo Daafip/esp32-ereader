@@ -241,6 +241,9 @@ bool prepare(const char *profile, const char *book, uint32_t room, Prepared &out
       p.last = uint32_t(strtoul(f[2], nullptr, 10));
       p.bytes = uint32_t(strtoul(f[3], nullptr, 10));
       out.parts.push_back(p);
+    } else if (strcmp(f[0], "toc") == 0 && n >= 2) {  // with parts: the whole book's contents
+      const uint32_t page = uint32_t(strtoul(f[1], nullptr, 10));
+      if (page >= 1 && out.starts.size() < 2048) out.starts.push_back(page - 1);
     } else if (strcmp(f[0], "error") == 0 && n >= 2) {
       out.state = Prepared::State::Failed;
       setError(f[1]);

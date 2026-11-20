@@ -11,8 +11,9 @@ reader:
     pixi run web-dev --screen 7.5in     # the 7.5" (7.5in-landscape: turned to landscape)
 
 The card layout matches the reader's (firmware/src/storage.h): /books (one folder
-level), /books/.src, /books/.marks, /sleep, /fonts. Reader settings, the device
-name, home Wi-Fi, positions and the clock live in <root>/state.json. A firmware
+level), /books/.src, /books/.marks, /books/.sync, /sleep, /fonts. Reader settings, the
+device name, home Wi-Fi, book server, MQTT broker, positions and the clock live in
+<root>/state.json. A firmware
 update is kept in <root>/firmware/<name>.
 
 Unlike the reader, /api/info can name the page's update site (--update-site, e.g.
@@ -69,6 +70,7 @@ SETTINGS = [
     ("idleMinutes", "Idle sleep", ["2 min", "5 min", "10 min", "20 min", "30 min", "60 min"], 2),
     ("deepSleep", "Sleep after page", ["off", "on"], 1),
     ("wakeRefresh", "Wake refresh", ["rewrite", "retain", "full"], 0),
+    ("sync", "Sync position", ["off", "with Wi-Fi", "automatic"], 0),
 ]  # fmt: skip
 # "flip" on boards that turn (setOrientationCount(4) in settings.cpp)
 ORIENTATION = ("flip", "Orientation", ["portrait", "portrait 180\N{DEGREE SIGN}", "landscape",
@@ -124,6 +126,22 @@ def parse_book_server(text: str) -> tuple[str, int, str] | None:
             return None
     base = (m.group(3) or "").rstrip("/")
     return (m.group(1), port, base) if len(base) < 48 else None
+
+
+def parse_broker(text: str) -> tuple[str, int] | None:
+    """(host, port) of an MQTT broker address, or None: possync::parseBroker() in
+    firmware/lib/core/src/position_sync.cpp. Port 1883 if none; mqtt:// may lead."""
+    text = text.strip(" ")
+    if text[:7].lower() == "mqtt://":
+        text = text[7:]
+    if "://" in text:
+        return None
+    text = text.rstrip(" /")
+    m = re.fullmatch(r"([^\s:/@]+)(?::([0-9]{1,5}))?", text)
+    if not m or len(m.group(1).encode()) > 63:
+        return None
+    port = int(m.group(2)) if m.group(2) is not None else 1883
+    return (m.group(1), port) if 1 <= port <= 65535 else None
 
 
 def is_safe_folder(name: str) -> bool:
@@ -212,6 +230,27 @@ class Handler(SimpleHTTPRequestHandler):
     def marks_file(self, stem: str) -> Path:
         return self.card() / "books" / ".marks" / f"{stem}.txt"
 
+    def sync_file(self, stem: str) -> Path:
+        """The position sync's state of a book (syncer.h; possync::formatState())."""
+        return self.card() / "books" / ".sync" / f"{stem}.txt"
+
+    def set_part(self, stem: str, part: tuple[int, int, list[int]] | None) -> None:
+        """syncer::installedWhole() / installedPart(): the part lines replaced, the
+        rest of the book's sync state kept."""
+        f = self.sync_file(stem)
+        lines = f.read_text().splitlines() if f.exists() else []
+        lines = [x for x in lines if not x.startswith(("part\t", "toc\t"))]
+        if part is not None:
+            first, whole, starts = part
+            lines.append(f"part\t{first}\t{whole}")
+            for i in range(0, len(starts), 16):
+                lines.append("toc\t" + "\t".join(str(v) for v in starts[i : i + 16]))
+        if lines:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text("".join(x + "\n" for x in lines))
+        else:
+            f.unlink(missing_ok=True)
+
     def state(self) -> dict:
         path = self.root / "state.json"
         state = json.loads(path.read_text()) if path.exists() else {}
@@ -275,7 +314,7 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         routes = {"/api/info": self.info, "/file": self.get_file, "/api/marks": self.marks,
                   "/api/page": self.page, "/api/settings": self.settings,
-                  "/api/wifi": self.wifi}  # fmt: skip
+                  "/api/wifi": self.wifi, "/api/mqtt": self.mqtt}  # fmt: skip
         if path in routes:
             return routes[path]()
         self.path = path  # static: drop the query string
@@ -305,6 +344,7 @@ class Handler(SimpleHTTPRequestHandler):
         routes = {"/api/move": self.move, "/api/marks": self.marks, "/api/position": self.position,
                   "/api/settings": self.settings, "/api/name": self.name, "/api/wifi": self.wifi,
                   "/api/bookserver": self.book_server, "/api/time": self.set_time,
+                  "/api/mqtt": self.mqtt, "/api/part": self.part,
                   "/api/reset": self.reset}  # fmt: skip
         if path in routes:
             return routes[path]()
@@ -324,6 +364,7 @@ class Handler(SimpleHTTPRequestHandler):
             for extra in self.sd("source").glob(book_path.stem + ".*"):
                 extra.unlink()
             self.marks_file(book_path.stem).unlink(missing_ok=True)
+            self.sync_file(book_path.stem).unlink(missing_ok=True)
             if book_path.parent != self.sd("book"):
                 with contextlib.suppress(OSError):
                     book_path.parent.rmdir()  # only when empty
@@ -348,6 +389,11 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/bookserver":
             state = self.state()
             state.pop("bookServer", None)
+            self.save_state(state)
+            return self.send_json(200, {})
+        if path == "/api/mqtt":
+            state = self.state()
+            state.pop("mqtt", None)
             self.save_state(state)
             return self.send_json(200, {})
         return self.send_json(404, {"error": "not found"})
@@ -397,6 +443,8 @@ class Handler(SimpleHTTPRequestHandler):
             "lang": "nl" if state["settings"].get("language") == 1 else "en",
             "name": state["name"], "homeWifi": state["wifi"].get("ssid", ""), "locked": False,
             "bookServer": state.get("bookServer", ""),
+            "mqttBroker": state.get("mqtt", {}).get("broker", ""),  # never the password
+            "mqttUser": state.get("mqtt", {}).get("user", ""),
             "screen": screen, "battery": -1, "total": total, "free": free, "ota": self.ota,
             "stats": stats, "books": books, "fonts": fonts, "pictures": pictures,
             **({"updateSite": self.update_site} if self.update_site else {}),
@@ -480,6 +528,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(400, {"error": str(e)})
             if dest.exists():  # replacing a book (restyled): positions move along
                 self.remap_positions(dest, book.header.page_count)
+            self.set_part(dest.stem, None)  # a part: the page sends /api/part next
         tmp.replace(dest)
         return self.send_json(200, {"ok": 1, "title": title, "free": self.card_space()[1]})
 
@@ -639,6 +688,56 @@ class Handler(SimpleHTTPRequestHandler):
         state = self.state()
         state["bookServer"] = address
         self.save_state(state)
+        return self.send_json(200, {})
+
+    def mqtt(self):
+        """POST broker=&user=&password=: the MQTT broker of the position sync. GET: with
+        the password, for the settings backup; /api/info has broker and user only."""
+        if not self.authorized():
+            return None
+        if self.command == "GET":
+            saved = self.state().get("mqtt", {})
+            return self.send_json(
+                200, {k: saved.get(k, "") for k in ("broker", "user", "password")}
+            )
+        q = self.query()
+        broker = q.get("broker", "").strip(" ")
+        user, password = q.get("user", ""), q.get("password", "")
+        if len(broker.encode()) > 96 or parse_broker(broker) is None:
+            msg = "not a broker address like 192.168.1.10 or homeassistant.local:1883"
+            return self.send_json(400, {"error": msg})
+        if len(user) > 64 or len(password) > 64:
+            return self.send_json(400, {"error": "user and password: 64 characters at most"})
+        state = self.state()
+        state["mqtt"] = {"broker": broker, "user": user, "password": password}
+        self.save_state(state)
+        return self.send_json(200, {})
+
+    def part(self):
+        """POST file=&first=&whole=&starts=: the book just uploaded is pages first..
+        (0-based) of a book of `whole` pages with these contents ("Send a part")."""
+        if not self.authorized():
+            return None
+        name = self.query().get("file", "")
+        if "/" not in name and not (self.sd("book") / name).exists():  # the reader chose the folder
+            found = next((rel for rel, p, _ in self.books() if p.name == name), None)
+            if found:
+                self._form["file"] = found
+        got = self.book_arg()
+        if not got:
+            return None
+        _, path, book = got
+        q = self.query()
+        try:
+            first, whole = int(q.get("first", "")), int(q.get("whole", ""))
+            starts = [int(x) for x in q.get("starts", "").split(",") if x != ""]
+        except ValueError:
+            return self.send_json(400, {"error": "bad numbers"})
+        if first < 0 or whole <= 0 or first + book.header.page_count > whole:
+            return self.send_json(400, {"error": "the part doesn't fit in the book"})
+        if any(not 0 <= v < whole for v in starts) or starts != sorted(starts):
+            return self.send_json(400, {"error": "bad contents"})
+        self.set_part(path.stem, (first, whole, starts[:4096]))
         return self.send_json(200, {})
 
     def set_time(self):

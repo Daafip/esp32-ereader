@@ -215,6 +215,9 @@ def test_page_sends_the_first_pages_that_fit(tmp_path, sample_epub):
     assert [e.title for e in book.toc] == ["Hoofdstuk 1"]
     assert not (sd / ".src" / "testboek.epub").exists()
     assert (sd / ".src" / "testboek.json").exists()
+    # where the part lies in the whole book, for the reader's position sync
+    sync = (sd / ".sync" / "testboek.txt").read_text().splitlines()
+    assert sync[0] == "part\t0\t3" and sync[1].startswith("toc\t0\t"), sync
 
 
 def test_page_sends_a_part_from_where_you_choose(tmp_path, sample_epub):
@@ -228,6 +231,8 @@ def test_page_sends_a_part_from_where_you_choose(tmp_path, sample_epub):
     assert book.header.title == "Testboek (2\N{EN DASH}3)"
     assert book.header.page_count == 2
     assert [(e.start_page, e.title) for e in book.toc] == [(0, "Hoofdstuk 1"), (1, "Hoofdstuk 2")]
+    sync = (tmp_path / "sd" / "books" / ".sync" / "testboek.txt").read_text().splitlines()
+    assert sync == ["part\t1\t3", "toc\t0\t2"], sync  # pages 2-3 of 3; chapters at 1 and 3
 
 
 def test_page_says_to_update_over_usb_without_an_update_slot(tmp_path):
@@ -377,11 +382,14 @@ def test_page_saves_and_restores_the_settings(tmp_path):
         post("/api/name", name="Leeshoek")
         post("/api/wifi", ssid="Thuis", password="geheim123")
         post("/api/bookserver", address="http://192.168.1.10:8484")
+        post("/api/mqtt", broker="homeassistant.local", user="t5", password="mqttgeheim")
         backup = json.loads(body_data("backup", "backup")[0])
         assert backup["type"] == "t5-reader-settings" and backup["board"] == "firebeetle-75"
         assert (backup["name"], backup["homeWifi"]) == ("Leeshoek", "Thuis")
         assert backup["homeWifiPassword"] == "geheim123"
         assert backup["bookServer"] == "http://192.168.1.10:8484"
+        assert (backup["mqttBroker"], backup["mqttUser"]) == ("homeassistant.local", "t5")
+        assert backup["mqttPassword"] == "mqttgeheim"
         assert backup["settings"]["statusBar"] == 2 and backup["settings"]["idleMinutes"] == 4
 
         post("/api/reset", confirm="erase")
@@ -398,6 +406,12 @@ def test_page_saves_and_restores_the_settings(tmp_path):
         info = get("/api/info")
         assert (info["name"], info["bookServer"]) == ("Leeshoek", "http://192.168.1.10:8484")
         assert get("/api/wifi") == {"ssid": "Thuis", "password": "geheim123"}
+        assert get("/api/mqtt") == {
+            "broker": "homeassistant.local",
+            "user": "t5",
+            "password": "mqttgeheim",
+        }
+        assert "mqttgeheim" not in json.dumps(info)
         assert info["homeWifi"] == "Thuis" and "geheim123" not in json.dumps(info)
         now = {s["key"]: s["value"] for s in get("/api/settings")["settings"]}
         restored = {k: now[k] for k in ("statusBar", "idleMinutes", "flip", "sleepScreen")}

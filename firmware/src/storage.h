@@ -4,6 +4,7 @@
 //   /books/*.t5b, /books/<folder>/*.t5b   books (file stems unique across folders)
 //   /books/.src/<stem>.epub|.txt|.json    originals and converter settings (Restyle)
 //   /books/.marks/<stem>.txt              bookmarks, one page number per line
+//   /books/.sync/<stem>.txt               position sync state (syncer.h)
 //   /sleep/*.bin                          sleep pictures: full screen (kPageBytes) or
 //                                         square beside the book (kSquareBytes)
 //   /sleep/<screen id>/*.bin              the same for a turned screen (7.5" landscape)

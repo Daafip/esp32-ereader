@@ -49,6 +49,7 @@ int settingOptionCount(SettingId id) {
     case SettingId::IdleMinutes: return count(kIdle);
     case SettingId::DeepSleep: return 2;
     case SettingId::WakeRefresh: return 3;
+    case SettingId::Sync: return 3;
     case SettingId::Count: break;
   }
   return 0;
@@ -68,6 +69,7 @@ int settingIndex(const Settings &s, SettingId id) {
     case SettingId::IdleMinutes: i = indexOf(kIdle, s.idleMinutes); break;
     case SettingId::DeepSleep: i = s.deepSleep ? 1 : 0; break;
     case SettingId::WakeRefresh: i = int(s.wakeRefresh); break;
+    case SettingId::Sync: i = int(s.sync); break;
     case SettingId::Count: break;
   }
   return i >= 0 && i < settingOptionCount(id) ? i : 0;
@@ -87,6 +89,7 @@ void setSettingIndex(Settings &s, SettingId id, int i) {
     case SettingId::IdleMinutes: s.idleMinutes = kIdle[i]; break;
     case SettingId::DeepSleep: s.deepSleep = i == 1; break;
     case SettingId::WakeRefresh: s.wakeRefresh = WakeRefresh(i); break;
+    case SettingId::Sync: s.sync = SyncMode(i); break;
     case SettingId::Count: break;
   }
 }
@@ -109,6 +112,7 @@ const char *settingKey(SettingId id) {
     case SettingId::IdleMinutes: return "idleMinutes";
     case SettingId::DeepSleep: return "deepSleep";
     case SettingId::WakeRefresh: return "wakeRefresh";
+    case SettingId::Sync: return "sync";
     case SettingId::Count: break;
   }
   return "";
@@ -137,6 +141,7 @@ const char *settingLabel(SettingId id, S holdLabel) {
     case SettingId::IdleMinutes: return tr(S::SetIdleSleep);
     case SettingId::DeepSleep: return tr(S::SetSleepAfterPage);
     case SettingId::WakeRefresh: return tr(S::SetWakeRefresh);
+    case SettingId::Sync: return tr(S::SetSync);
     case SettingId::Count: break;
   }
   return "?";
@@ -151,6 +156,7 @@ void settingOptionText(SettingId id, int i, char *out, size_t n) {
   static const S kBars[] = {S::BarFull, S::BarMinimal, S::BarHidden};
   static const S kHolds[] = {S::HoldSleep, S::HoldBookmark, S::HoldLock, S::HoldOpenMenu};
   static const S kWakes[] = {S::WakeRewrite, S::WakeRetain, S::WakeFull};
+  static const S kSyncs[] = {S::Off, S::SyncWithWifi, S::SyncAutomatic};
   static const S kTurns[] = {S::OrientPortrait, S::OrientPortraitFlip, S::OrientLandscape,
                              S::OrientLandscapeFlip};
   switch (id) {
@@ -173,6 +179,7 @@ void settingOptionText(SettingId id, int i, char *out, size_t n) {
     case SettingId::LongPress: snprintf(out, n, "%u ms", unsigned(kLongPress[i])); break;
     case SettingId::IdleMinutes: snprintf(out, n, "%u min", unsigned(kIdle[i])); break;
     case SettingId::WakeRefresh: snprintf(out, n, "%s", tr(kWakes[i])); break;
+    case SettingId::Sync: snprintf(out, n, "%s", tr(kSyncs[i])); break;
     case SettingId::Count: break;
   }
 }

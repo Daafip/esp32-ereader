@@ -55,6 +55,8 @@ struct Prepared {
   uint32_t pages = 0, bytes = 0;  // Ready: the whole book
   char file[68] = "";             // Ready: its name on the reader
   std::vector<Part> parts;        // Ready and bigger than `room`: parts that fit
+  std::vector<uint32_t> starts;   // with parts: the whole book's contents (0-based pages;
+                                  // empty from an add-on before 2.3.0), for the sync
 };
 // Asks for a book typeset with a profile; the server starts if it hasn't yet. `room`:
 // bytes the reader has for it (0: unknown). False: no answer (error()); a failed

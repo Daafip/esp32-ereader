@@ -18,12 +18,14 @@
 #include "bookmarks.h"
 #include "display.h"
 #include "i18n.h"
+#include "position_sync.h"
 #include "prefs.h"
 #include "rtc_clock.h"
 #include "ui.h"
 #include "reading_stats.h"
 #include "settings.h"
 #include "storage.h"
+#include "syncer.h"
 #include "t5b_format.h"
 #include "web_assets.h"
 #include "web_util.h"
@@ -273,6 +275,8 @@ void handleInfo() {
   addString(out, "name", prefs::deviceName().c_str());
   addString(out, "homeWifi", prefs::homeSsid().c_str());  // never the password
   addString(out, "bookServer", prefs::bookServer().c_str());
+  addString(out, "mqttBroker", prefs::mqttBroker().c_str());  // never the password
+  addString(out, "mqttUser", prefs::mqttUser().c_str());
   addBool(out, "locked", prefs::locked());
   // This reader's screen now: the page typesets books for it (see bookprep.js,
   // screens). The 7.5" turns (Settings -> Orientation): portrait or landscape.
@@ -482,6 +486,7 @@ void handleUploadData() {
         case Install::Invalid: return failUpload(400, why);
         case Install::CannotStore: return failUpload(500, why);
       }
+      syncer::installedWhole(stemOf(upFinal));  // a part: the page sends /api/part next
       strlcpy(upTitle, h.title[0] ? h.title : baseName(upFinal.c_str()), sizeof(upTitle));
       char event[80];
       snprintf(event, sizeof(event), tr(S::Received), upTitle);
@@ -585,6 +590,7 @@ void handleDelete() {
     storage::files().remove(String(kSourceDir) + "/" + stem + ext);
   }
   storage::writeMarks(stem, PageList());
+  syncer::forget(stem);
   const String dir = path.substring(0, path.lastIndexOf('/'));
   if (dir != storage::kBooksDir) storage::files().rmdir(dir);  // only succeeds when empty
   char event[80];
@@ -806,6 +812,85 @@ void handleBookServer() {
   sendJson(200, "{}");
 }
 
+// POST broker=&user=&password=: the MQTT broker for the reading position sync
+// (syncer.h). DELETE: forget. GET: with the password, for the settings backup the
+// user saves on the page, as GET /api/wifi; /api/info has broker and user only.
+void handleMqtt() {
+  if (!authorized()) return sendError(403, "wrong code");
+  if (server.method() == HTTP_GET) {
+    char esc[64 * 6 + 1];
+    String out = "{";
+    addString(out, "broker", prefs::mqttBroker().c_str());
+    addString(out, "user", prefs::mqttUser().c_str());
+    jsonEscape(prefs::mqttPassword().c_str(), esc, sizeof(esc));
+    addKey(out, "password");
+    out += kQuote;
+    out += esc;
+    out += kQuote;
+    out += '}';
+    return sendJson(200, out);
+  }
+  if (server.method() == HTTP_DELETE) {
+    prefs::setMqtt("", "", "");
+  } else {
+    String broker = server.arg("broker");
+    broker.trim();
+    const String user = server.arg("user");
+    const String pass = server.arg("password");
+    char host[64];
+    uint16_t port = 0;
+    if (broker.length() > 96 || !possync::parseBroker(broker.c_str(), host, sizeof(host), port)) {
+      return sendError(400, "not a broker address like 192.168.1.10 or homeassistant.local:1883");
+    }
+    if (user.length() > 64 || pass.length() > 64) {
+      return sendError(400, "user and password: 64 characters at most");
+    }
+    prefs::setMqtt(broker.c_str(), user.c_str(), pass.c_str());
+  }
+  touch();
+  sendJson(200, "{}");
+}
+
+// POST file=&first=&whole=&starts=: the book just uploaded is pages first.. (0-based)
+// of a book of `whole` pages whose contents start at `starts` (comma-separated, may
+// be empty): "Send a part" on the page. The position sync needs it (syncer.h).
+void handlePart() {
+  if (!authorized()) return sendError(403, "wrong code");
+  // The page names the book as it sent it: with its folder, or by name only when the
+  // reader chose the folder (where a book of that name was).
+  const String name = server.arg("file");
+  String path = bookPathArg();
+  if (!path.length()) return sendError(400, "bad file name");
+  if (!storage::files().exists(path) && name.indexOf('/') < 0) {
+    path = storage::bookDirFor(name) + "/" + name;
+  }
+  t5b::Header h;
+  fs::File f = storage::files().open(path, FILE_READ);
+  const bool ok = f && storage::checkBook(f, h) == t5b::Error::None;
+  if (f) f.close();
+  if (!ok) return sendError(404, "no such book");
+  const long first = server.arg("first").toInt();
+  const long whole = server.arg("whole").toInt();
+  if (first < 0 || whole <= 0 || uint64_t(first) + h.pageCount > uint64_t(whole)) {
+    return sendError(400, "the part doesn't fit in the book");
+  }
+  std::vector<uint32_t> starts;
+  const String list = server.arg("starts");
+  for (int i = 0; i < int(list.length()) && starts.size() < 4096;) {
+    int comma = list.indexOf(',', i);
+    if (comma < 0) comma = list.length();
+    const long v = list.substring(i, comma).toInt();
+    if (v < 0 || v >= whole || (!starts.empty() && uint32_t(v) < starts.back())) {
+      return sendError(400, "bad contents");
+    }
+    starts.push_back(uint32_t(v));
+    i = comma + 1;
+  }
+  syncer::installedPart(stemOf(path), uint32_t(first), uint32_t(whole), starts);
+  touch();
+  sendJson(200, "{}");
+}
+
 // POST epoch=&tz=: the phone's clock (for the reading statistics' days).
 void handleTime() {
   if (!authorized()) return sendError(403, "wrong code");
@@ -899,6 +984,10 @@ void addRoutes() {
   server.on("/api/wifi", HTTP_DELETE, handleHomeWifi);
   server.on("/api/bookserver", HTTP_POST, handleBookServer);
   server.on("/api/bookserver", HTTP_DELETE, handleBookServer);
+  server.on("/api/mqtt", HTTP_GET, handleMqtt);
+  server.on("/api/mqtt", HTTP_POST, handleMqtt);
+  server.on("/api/mqtt", HTTP_DELETE, handleMqtt);
+  server.on("/api/part", HTTP_POST, handlePart);
   server.on("/api/time", HTTP_POST, handleTime);
   server.on("/api/picture", HTTP_DELETE, handleDeletePicture);
   server.on("/api/reset", HTTP_POST, handleReset);
@@ -946,7 +1035,7 @@ void startOwnNetwork() {
 }  // namespace
 
 // Home Wi-Fi: entered on the page (NVS), else include/secrets.h, else none.
-bool joinHomeWifi(char *ssidOut, size_t ssidSize) {
+bool beginHomeWifi(char *ssidOut, size_t ssidSize) {
   String ssid = prefs::homeSsid();
   String pass = prefs::homePassword();
 #ifdef WIFI_SSID
@@ -960,12 +1049,23 @@ bool joinHomeWifi(char *ssidOut, size_t ssidSize) {
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(kHostname);
   WiFi.begin(ssid.c_str(), pass.c_str());
+  return true;
+}
+
+bool waitHomeWifi(uint32_t timeoutMs, void (*idle)()) {
   const uint32_t start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < kJoinTimeoutMs) delay(100);
+  while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
+    if (idle) idle();
+    delay(idle ? 10 : 100);
+  }
   if (WiFi.status() == WL_CONNECTED) return true;
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
   return false;
+}
+
+bool joinHomeWifi(char *ssidOut, size_t ssidSize) {
+  return beginHomeWifi(ssidOut, ssidSize) && waitHomeWifi(kJoinTimeoutMs);
 }
 
 Install installBook(const String &tmp, const String &finalPath, KeepPosition keep,
